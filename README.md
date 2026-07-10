@@ -35,17 +35,49 @@ Categories: T-shirts · Sweatshirts & Hoodies · Tank Tops · Leggings · Sweatp
 Cut & Sew knit only. Brands route to their sheet; Wonder Nation / Weekend Academy
 split Girls/Boys by department.
 
-## Files
-- `manifest.json` — MV3 config
-- `content.js` — scrape + auto-paginate + spec fetch + build/download
-- `pipeline.js` — classification / routing / provenance / Excel fill (shared logic)
-- `popup.html` / `popup.js` — the button UI
-- `xlsx.full.min.js` — SheetJS (Excel writer)
-- `template.xlsx` — your workbook template (edit/replace to change output shape)
+## Architecture (site-adapter)
+The engine is site-agnostic; per-store knowledge is isolated in **adapters**.
+
+- `content.js` — **generic engine**. Picks `SITES.active(url)` and drives it:
+  scrape each page → auto-paginate → (optional) fetch detail → build → download.
+  Robust pagination: stops when there's no next page, when a page adds **0 new
+  items** (global dedupe by id/url), or at a safety cap (200p) — a changed layout
+  can never loop forever.
+- `sites.js` — **adapter registry**. The Walmart adapter lives here plus shared,
+  hardened extraction helpers (see below). **To add another store, add one adapter
+  object** — the engine doesn't change.
+- `pipeline.js` — Walmart classification / routing / provenance / Excel fill, plus
+  a generic flat-sheet exporter (`fillGeneric`) for future non-Walmart adapters.
+- `popup.html` / `popup.js` — the button UI (shows the detected site + page count).
+- `xlsx.full.min.js` — SheetJS (Excel writer).
+- `template.xlsx` — the knit-DB workbook template (Walmart adapter only).
+
+### Why the scrape is hard to break
+`sites.js` extraction tries, in order of reliability:
+1. `__NEXT_DATA__` JSON, 2. every `application/json` / `ld+json` script,
+3. inline redux/preloaded state (`__WML_REDUX_INITIAL_STATE__`,
+`__PRELOADED_STATE__`, …) recovered by brace-balanced slicing,
+4. a DOM fallback over product tiles.
+It deep-searches **all** of that for product arrays and **merges + dedupes** them
+(Walmart splits results across several `itemStacks`), so it keeps working even
+when Walmart renames or moves its data blob.
+
+## Adding a new site later
+In `sites.js`, add an adapter with `match / context / scrapeList / totalPages /
+nextPageUrl / fetchComposition / buildWorkbook`, register it in `ADAPTERS`, and add
+the site's URL patterns to `manifest.json` (`content_scripts.matches` +
+`host_permissions`). Reuse the shared helpers under `SITES.shared`. A non-Walmart
+adapter can set `templateUrl: null` and use `WPB.fillGeneric` for a plain export.
 
 ## Limits (honest)
 - New rows are written as data; heavy cell styling from the template may not carry
   to new rows (SheetJS community). Data + sheet structure are preserved.
-- If Walmart changes its page structure, the scrape may break → see VERIFY.md
-  (Codex can fix selectors in minutes).
-- Keep collection at a human pace (built-in delays) to avoid anti-bot flags.
+- The Excel "Thumbnail" column holds the image **URL/reference**, not an embedded
+  picture (embedding images into cells is a separate feature — say the word).
+- Walmart's page structure still needs a **one-time live check** (see VERIFY.md).
+  The layered fallbacks make breakage far less likely, but the sandbox that built
+  this has no Chrome, so the field names are confirmed against Walmart's known
+  JSON shape, not a live capture.
+- Keep collection at a human pace (built-in delays) to avoid anti-bot flags. The
+  optional detail-fetch step can be blocked by Walmart's bot wall; the code guards
+  for that and leaves the field blank rather than inventing a value.

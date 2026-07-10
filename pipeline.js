@@ -69,6 +69,9 @@
     const blob = `${name} ${category}`;
     if (has(pubFabric, KNIT_FABRIC) && !has(pubFabric, EXCLUDE_KNIT)) return "Verified";
     if (has(pubFabric, EXCLUDE_KNIT)) return "EXCLUDE";
+    // Name-first exclusion: the product's OWN name outranks the page/category title,
+    // so a "Denim Jacket" on a "Tops & Tees" shelf can't inherit "tee" and slip through.
+    if (has(name, EXCLUDE_KNIT) && !has(name, KNIT_GARMENT)) return "EXCLUDE";
     if (has(blob, EXCLUDE_KNIT) && !has(blob, KNIT_GARMENT)) return "EXCLUDE";
     if (has(blob, KNIT_GARMENT)) return "Visual Observation";
     return "Needs Review";
@@ -149,7 +152,30 @@
     return { bytes: out, kept: buckets, dropped };
   }
 
-  const api = { CATEGORY_RULES, MATERIAL_KEYS, BRANDS, COLS, categorize, department, route, knitScope, derive, buildRow, fillWorkbook };
+  // Generic flat export — for non-Walmart adapters that just want every
+  // collected product dumped to one sheet (no knit routing / scope filtering).
+  // Creates a fresh workbook so no template is required.
+  const GENERIC_COLS = ["Brand", "Category", "Product Name", "Price",
+    "Product URL", "Image URL", "Fabric Composition", "Product ID"];
+  function fillGeneric(XLSX, _templateArrayBuffer, records, opts = {}) {
+    const seen = new Set(), rows = [], dropped = [];
+    for (const rec of records) {
+      if (opts.dedupe) {
+        const k = (rec.id || rec.product_url || rec.name || "").toLowerCase();
+        if (k && seen.has(k)) { dropped.push([rec.name, "duplicate"]); continue; }
+        if (k) seen.add(k);
+      }
+      rows.push([rec.brand || "", rec.category || "", rec.name || "", rec.price || "",
+        rec.product_url || "", rec.image_url || "", rec.fabric_composition || "", rec.id || ""]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet([GENERIC_COLS, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products");
+    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    return { bytes: out, kept: { Products: rows }, dropped };
+  }
+
+  const api = { CATEGORY_RULES, MATERIAL_KEYS, BRANDS, COLS, GENERIC_COLS, categorize, department, route, knitScope, derive, buildRow, fillWorkbook, fillGeneric };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.WPB = api;
 })(typeof self !== "undefined" ? self : this);

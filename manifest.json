@@ -8,8 +8,14 @@
   "action": { "default_popup": "popup.html", "default_title": "Walmart PB Collector" },
   "content_scripts": [
     {
-      "matches": ["https://www.walmart.com/browse/*", "https://www.walmart.com/search*"],
-      "js": ["xlsx.full.min.js", "pipeline.js", "content.js"],
+      "matches": [
+        "https://www.walmart.com/browse/*",
+        "https://www.walmart.com/search*",
+        "https://www.walmart.com/shop/*",
+        "https://www.walmart.com/cp/*",
+        "https://www.walmart.com/c/*"
+      ],
+      "js": ["xlsx.full.min.js", "pipeline.js", "sites.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

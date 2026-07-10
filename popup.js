@@ -3,12 +3,16 @@ const send = (id, msg) => new Promise(r => chrome.tabs.sendMessage(id, msg, res 
 
 async function refresh() {
   const tab = await tabQ();
-  if (!tab || !/walmart\.com\/(browse|search)/.test(tab.url || "")) {
-    document.getElementById("ctx").textContent = "Walmart 카테고리 페이지에서 열어주세요.";
-    document.getElementById("go").disabled = true; return;
+  const ctxEl = document.getElementById("ctx");
+  const goEl = document.getElementById("go");
+  // content script only loads on supported sites; if messaging fails, it's unsupported
+  const ctx = tab ? await send(tab.id, { type: "context" }).catch(() => null) : null;
+  if (!ctx || !ctx.site) {
+    ctxEl.textContent = "지원 사이트의 카테고리 페이지에서 열어주세요.";
+    goEl.disabled = true; return;
   }
-  const ctx = await send(tab.id, { type: "context" }).catch(() => null);
-  if (ctx) document.getElementById("ctx").textContent = `브랜드: ${ctx.brand || "?"} · 총 ${ctx.totalPages || "?"}페이지 (현재 ${ctx.page})`;
+  goEl.disabled = false;
+  ctxEl.textContent = `${ctx.site} · ${ctx.brand || "브랜드?"} · ${ctx.totalPages ? "총 " + ctx.totalPages + "p" : "페이지 자동 감지"} (현재 ${ctx.page || 1})`;
   const st = await send(tab.id, { type: "status" }).catch(() => null);
   if (st && st.status) document.getElementById("status").textContent = st.status;
 }

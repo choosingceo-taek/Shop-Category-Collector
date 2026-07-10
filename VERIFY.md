@@ -1,32 +1,48 @@
-# VERIFY — finish & maintain with Codex/ChatGPT
+# VERIFY — one-time live check & maintenance
 
-The logic (classification, routing, Excel fill) is tested. Two browser-side hooks
-must be confirmed once on a live Walmart page, because the sandbox that built this
-has no Chrome. Ask Codex to help with each.
+The shared logic (extraction, dedupe, pagination stop-conditions, classification,
+routing, Excel fill, generic export) is unit-tested in Node against Walmart's known
+JSON shape. The extraction now has 4 layered fallbacks (see README), so it should
+survive most Walmart changes. Still, confirm once on a live page — the sandbox that
+built this has no Chrome. All Walmart logic is in **`sites.js`** (the `walmart`
+adapter); `content.js` is the site-agnostic engine.
 
-## 1. Product-list extraction  (content.js → scrapeList / findItems)
-On a category page, open DevTools console and run:
+## 0. Load & smoke
+`chrome://extensions` → Load unpacked → open a Walmart category page → click the
+icon. The popup should show `Walmart · <brand> · 총 Np (현재 1)`. If it says
+"지원 사이트가 아닙니다", the URL isn't matched — add its pattern to `manifest.json`.
+
+## 1. Product-list extraction  (sites.js → walmart.scrapeList)
+On a category page, DevTools console:
 ```js
-JSON.parse(document.getElementById('__NEXT_DATA__').textContent)
+// what the extractor sees, in priority order:
+JSON.parse(document.getElementById('__NEXT_DATA__')?.textContent || 'null')      // 1
+[...document.querySelectorAll('script[type="application/json"]')].map(s=>s.textContent) // 2
 ```
-Find the array of products and confirm the field names used in `scrapeList`
-(`name`, `priceInfo.linePrice`, `canonicalUrl`, `imageInfo.thumbnailUrl`, `usItemId`).
-If Walmart uses different keys, update `scrapeList()`. A DOM fallback exists but the
-`__NEXT_DATA__` path is more reliable.
+Find the product array and confirm the fields `scrapeList` reads: `name`,
+`priceInfo.linePrice|currentPrice`, `canonicalUrl`, `imageInfo.thumbnailUrl`,
+`usItemId`. The extractor is tolerant (also tries `title`, `productUrl`, `id`,
+inline `__PRELOADED_STATE__`, and a DOM fallback), so it usually just works — only
+touch it if a live run collects 0 items.
 
-## 2. Fabric composition  (content.js → fetchComposition)
-Open a product page, run the same `__NEXT_DATA__` parse, and find where the spec
-lives (look for "Fabric Material" / "Material"). Update the regex/path in
-`fetchComposition()` if needed.
+## 2. Fabric composition  (sites.js → walmart.fetchComposition)
+Open a product page, parse `__NEXT_DATA__`, find where the spec lives (search for
+"Fabric Material" / "Material" / "Composition"). `fetchComposition` deep-searches
+for `{name, value}` spec pairs across the whole blob, so new nesting is usually
+fine. If Walmart's bot wall blocks the raw fetch, the field is left blank (never
+invented) — that's the zero-hallucination rule.
 
-## 3. Pagination count  (content.js → totalPages)
-Confirm `maxPage`/`numberOfPages` exists in `__NEXT_DATA__`; else the DOM fallback
-reads numbered pagination links. Adjust if the site markup differs.
+## 3. Pagination  (sites.js → walmart.totalPages / nextPageUrl + engine)
+`totalPages` is only a display hint now. The engine keeps advancing `?page=N` until
+a page adds **no new items** or a next page doesn't exist, so it collects every page
+even if the count is wrong. Confirm Walmart still uses `?page=` (it does on
+`/browse` and `/search`); if a shelf uses infinite scroll instead, tell Codex to add
+a scroll-and-collect branch to the `list` phase.
 
 ## Prompts you can give Codex
-- "Open Walmart Time&Tru Tops&Tees, read __NEXT_DATA__, and fix scrapeList field paths in content.js."
-- "The composition regex misses some products — make fetchComposition parse the specifications array instead."
-- "Add Sweatpants keyword synonyms to CATEGORY_RULES in pipeline.js."
+- "On live Walmart Time&Tru Tops&Tees, confirm walmart.scrapeList in sites.js reads the right fields; fix if 0 items."
+- "fetchComposition misses some products — widen the spec-key list / nesting in sites.js."
+- "Add a second adapter to sites.js for <store>: implement match/scrapeList/totalPages/nextPageUrl and register it."
 
 ## Rule to keep (zero-hallucination)
 Only mark `Verified` when a value is literally on the page. Never let the code
