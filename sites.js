@@ -209,17 +209,24 @@
       }
       return out;
     }
-    function resultsFromStacks(blobs) {
-      const scoped = [];
-      const findContainer = (o, d) => {
-        if (!o || d > 14 || typeof o !== "object") return;
-        if (Array.isArray(o)) { o.forEach(v => findContainer(v, d + 1)); return; }
-        if (o.searchResult) scoped.push(...stacksItems(o.searchResult));
-        if (o.browseResult) scoped.push(...stacksItems(o.browseResult));
-        for (const k in o) findContainer(o[k], d + 1);
+    // Find the ONE main results container (searchResult / browseResult). Item
+    // list, page count and result total are all read from here — never from the
+    // whole page — so recommendation modules can't inflate any of them.
+    function mainContainer(blobs) {
+      let found = null;
+      const walk = (o, d) => {
+        if (found || !o || d > 14 || typeof o !== "object") return;
+        if (Array.isArray(o)) { for (const v of o) { walk(v, d + 1); if (found) return; } return; }
+        if (o.searchResult && Array.isArray(o.searchResult.itemStacks)) { found = o.searchResult; return; }
+        if (o.browseResult && Array.isArray(o.browseResult.itemStacks)) { found = o.browseResult; return; }
+        for (const k in o) { walk(o[k], d + 1); if (found) return; }
       };
-      blobs.forEach(b => findContainer(b, 0));
-      if (scoped.length) return scoped;
+      blobs.forEach(b => { if (!found) walk(b, 0); });
+      return found;
+    }
+    function resultsFromStacks(blobs) {
+      const c = mainContainer(blobs);
+      if (c) return stacksItems(c);
       // fallback: any itemStacks (older/other layouts) — may include carousels
       const any = [];
       const walk = (o, d) => {
@@ -235,9 +242,16 @@
     function scrapeList(doc, url) {
       doc = doc || document;
       const blobs = jsonBlobs(doc);
+      const container = mainContainer(blobs);
+      // On a 404 / "This page couldn't be found" page there's no results container;
+      // don't scrape it (its recommendation carousels would be mistaken for results).
+      if (!container) {
+        const body = (doc.body && doc.body.textContent) || "";
+        if (/couldn't be found|page not found|sorry about that/i.test(body)) return [];
+      }
       // Prefer the main results grid; only fall back to the broad merge-all sweep
       // (which can over-collect carousels) if the grid can't be located.
-      let raw = resultsFromStacks(blobs);
+      let raw = container ? stacksItems(container) : [];
       if (!raw.length) {
         const arrays = [];
         blobs.forEach(b => collectProductArrays(b, 0, arrays));
@@ -284,14 +298,15 @@
 
     function totalPages(doc) {
       doc = doc || document;
-      const blobs = jsonBlobs(doc);
-      for (const b of blobs) {
-        const n = findNumber(b, ["maxPage", "numberOfPages", "totalPages", "pageCount"]);
+      const c = mainContainer(jsonBlobs(doc));
+      if (c) {
+        const n = findNumber(c, ["maxPage", "numberOfPages", "totalPages", "pageCount"]);
         if (n) return n;
-        // derive from result count + page size
-        const total = findNumber(b, ["totalResultCount", "totalCount", "recordCount"]);
-        const size = findNumber(b, ["pageSize", "resultsPerPage", "perPage"]);
+        const total = findNumber(c, ["totalResultCount", "totalCount", "recordCount"]);
+        const size = findNumber(c, ["pageSize", "resultsPerPage", "perPage"]);
         if (total && size) return Math.ceil(total / size);
+        // container present but no page info -> treat as a single page
+        if (Array.isArray(c.itemStacks)) return 1;
       }
       const nums = [...(doc.querySelectorAll
         ? doc.querySelectorAll('nav[aria-label*="pagination" i] a, [data-testid*="pagination" i] a, ul.paginator a')
@@ -311,9 +326,9 @@
     // even when the page-count hint is wrong.
     function resultCount(doc) {
       doc = doc || document;
-      const blobs = jsonBlobs(doc);
-      for (const b of blobs) {
-        const n = findNumber(b, ["totalResultCount", "recordCount", "totalCount", "count"]);
+      const c = mainContainer(jsonBlobs(doc));
+      if (c) {
+        const n = findNumber(c, ["totalResultCount", "recordCount", "totalCount", "count"]);
         if (n) return n;
       }
       // DOM fallback: the "(43)" next to the results heading
