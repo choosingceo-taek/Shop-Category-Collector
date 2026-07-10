@@ -292,27 +292,33 @@
       return u.toString();
     }
 
+    // Returns { value, reason }. value is the literal on-page composition (or "").
+    // reason explains an empty value: "blocked" | "timeout" | "not_found" | "error".
     async function fetchComposition(url) {
+      let html;
       try {
-        // hard timeout so one stalled product page can't freeze the whole run
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 12000);
-        let html;
         try {
           const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
           html = await res.text();
         } finally { clearTimeout(timer); }
-        // bot-wall guard: Walmart returns a captcha/blocked shell with no product JSON
-        if (/Robot or human|px-captcha|blocked/i.test(html) && !/__NEXT_DATA__/.test(html)) return "";
+      } catch (e) {
+        return { value: "", reason: (e && e.name === "AbortError") ? "timeout" : "error" };
+      }
+      // bot-wall guard: Walmart returns a captcha/blocked shell with no product JSON
+      if (/Robot or human|px-captcha|blocked/i.test(html) && !/__NEXT_DATA__/.test(html)) {
+        return { value: "", reason: "blocked" };
+      }
+      try {
         const doc = new DOMParser().parseFromString(html, "text/html");
         const blobs = jsonBlobs(doc);
         const keys = ["Fabric Material", "Material", "Fabric Content", "Composition",
           "Fabric", "Shell", "Body", "Fabric Composition"];
-        for (const b of blobs) { const v = findKeyedValue(b, keys); if (v) return v; }
-        // last resort: regex the raw html for a spec pair
+        for (const b of blobs) { const v = findKeyedValue(b, keys); if (v) return { value: v, reason: "" }; }
         const m = html.match(/"(?:Fabric Material|Material|Fabric Content|Composition)"\s*,\s*"value"\s*:\s*"([^"]+)"/);
-        return m ? m[1] : "";
-      } catch (e) { return ""; }
+        return m ? { value: m[1], reason: "" } : { value: "", reason: "not_found" };
+      } catch (e) { return { value: "", reason: "error" }; }
     }
 
     function context(doc) {

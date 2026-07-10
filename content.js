@@ -127,8 +127,11 @@ async function runStep(j) {
       j.specIdx = i;
       const it = j.items[i];
       if (!it._specDone && !(it.fabric_composition)) {
-        try { it.fabric_composition = await a.fetchComposition(it.product_url); }
-        catch (e) { it.fabric_composition = ""; }   // never let one product stall the run
+        try {
+          const d = await a.fetchComposition(it.product_url);
+          if (d && typeof d === "object") { it.fabric_composition = d.value || ""; it._compReason = d.reason || ""; }
+          else { it.fabric_composition = d || ""; }   // string-returning adapters
+        } catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run
       }
       it._specDone = true;
       await report(`원단 조성 수집… ${i + 1}/${total}`);   // update every item so progress is visible
@@ -141,6 +144,8 @@ async function runStep(j) {
   // -------- phase: build (export) --------
   if (j.phase === "build") {
     await report("엑셀 생성 중… (썸네일 이미지 포함, 잠시 걸립니다)");
+    // if composition was never collected, mark the cause so the cell can explain it
+    if (!j.withSpec) j.items.forEach(it => { if (!it.fabric_composition && !it._compReason) it._compReason = "not_collected"; });
     try {
       const ctx = {
         ExcelJS: self.ExcelJS, WPB: self.WPB, XLSX: self.XLSX,
