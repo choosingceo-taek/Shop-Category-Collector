@@ -197,25 +197,39 @@
       return uniq.length ? uniq.join("; ") : "";
     }
 
-    // Walmart's MAIN search/browse results live in `itemStacks[].items`. Pulling
-    // those only keeps us off the "recommended / sponsored / you-might-also-like"
-    // carousels that otherwise inflate the count (e.g. 308 vs 81 real results).
+    // Walmart's MAIN results live in `searchResult.itemStacks[].items` (browse
+    // pages use the same key). We scope to that container ONLY — reading every
+    // `itemStacks` anywhere also pulls the "you might also like / explore more"
+    // recommendation modules that inflate the count (e.g. 106 vs 11 real, or
+    // 308 vs 81). Falls back to any itemStacks if the container isn't found.
+    function stacksItems(sr) {
+      const out = [];
+      if (sr && Array.isArray(sr.itemStacks)) {
+        sr.itemStacks.forEach(st => { if (st && Array.isArray(st.items)) out.push(...st.items.filter(looksProduct)); });
+      }
+      return out;
+    }
     function resultsFromStacks(blobs) {
-      const items = [];
+      const scoped = [];
+      const findContainer = (o, d) => {
+        if (!o || d > 14 || typeof o !== "object") return;
+        if (Array.isArray(o)) { o.forEach(v => findContainer(v, d + 1)); return; }
+        if (o.searchResult) scoped.push(...stacksItems(o.searchResult));
+        if (o.browseResult) scoped.push(...stacksItems(o.browseResult));
+        for (const k in o) findContainer(o[k], d + 1);
+      };
+      blobs.forEach(b => findContainer(b, 0));
+      if (scoped.length) return scoped;
+      // fallback: any itemStacks (older/other layouts) — may include carousels
+      const any = [];
       const walk = (o, d) => {
-        if (!o || d > 12) return;
+        if (!o || d > 14 || typeof o !== "object") return;
         if (Array.isArray(o)) { o.forEach(v => walk(v, d + 1)); return; }
-        if (typeof o === "object") {
-          for (const k in o) {
-            if (k === "itemStacks" && Array.isArray(o[k])) {
-              o[k].forEach(st => { if (st && Array.isArray(st.items)) items.push(...st.items.filter(looksProduct)); });
-            }
-            walk(o[k], d + 1);
-          }
-        }
+        if (Array.isArray(o.itemStacks)) any.push(...stacksItems(o));
+        for (const k in o) walk(o[k], d + 1);
       };
       blobs.forEach(b => walk(b, 0));
-      return items;
+      return any;
     }
 
     function scrapeList(doc, url) {
