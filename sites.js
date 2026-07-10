@@ -182,12 +182,39 @@
       return (h1.textContent || "").replace(/\(\d[\d,]*\).*/, "").trim();
     }
 
+    // Walmart's MAIN search/browse results live in `itemStacks[].items`. Pulling
+    // those only keeps us off the "recommended / sponsored / you-might-also-like"
+    // carousels that otherwise inflate the count (e.g. 308 vs 81 real results).
+    function resultsFromStacks(blobs) {
+      const items = [];
+      const walk = (o, d) => {
+        if (!o || d > 12) return;
+        if (Array.isArray(o)) { o.forEach(v => walk(v, d + 1)); return; }
+        if (typeof o === "object") {
+          for (const k in o) {
+            if (k === "itemStacks" && Array.isArray(o[k])) {
+              o[k].forEach(st => { if (st && Array.isArray(st.items)) items.push(...st.items.filter(looksProduct)); });
+            }
+            walk(o[k], d + 1);
+          }
+        }
+      };
+      blobs.forEach(b => walk(b, 0));
+      return items;
+    }
+
     function scrapeList(doc, url) {
       doc = doc || document;
       const blobs = jsonBlobs(doc);
-      const arrays = [];
-      blobs.forEach(b => collectProductArrays(b, 0, arrays));
-      let items = uniqBy([].concat.apply([], arrays),
+      // Prefer the main results grid; only fall back to the broad merge-all sweep
+      // (which can over-collect carousels) if the grid can't be located.
+      let raw = resultsFromStacks(blobs);
+      if (!raw.length) {
+        const arrays = [];
+        blobs.forEach(b => collectProductArrays(b, 0, arrays));
+        raw = [].concat.apply([], arrays);
+      }
+      let items = uniqBy(raw,
         it => String(it.usItemId || it.productId || it.id || it.canonicalUrl || it.name));
       const category = categoryOf(doc);
       let out = items.map(it => ({
@@ -290,7 +317,7 @@
       context, scrapeList, totalPages, nextPageUrl, fetchComposition, buildWorkbook,
       templateUrl: "template.xlsx",
       // internal, exposed for tests
-      _priceOf: priceOf, _imageOf: imageOf,
+      _priceOf: priceOf, _imageOf: imageOf, _resultsFromStacks: resultsFromStacks,
     };
   })();
 
