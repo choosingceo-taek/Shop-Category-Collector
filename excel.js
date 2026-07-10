@@ -94,16 +94,15 @@
     return kind === "reverify" ? FONT_REVERIFY : kind === "check" ? FONT_CHECK : FONT_REAL;
   }
 
-  function filterKept(items, WPB) {
+  // Keep every product on the page; only drop exact duplicates. Related/
+  // recommended/sponsored carousels are already excluded upstream (the collector
+  // reads the main results grid only), so nothing else needs filtering here.
+  function filterKept(items) {
     const kept = [], dropped = [], seen = new Set();
     for (const rec of items) {
-      const [sheet, why] = WPB.route(rec);
-      if (!sheet) { dropped.push([rec.name, why]); continue; }
-      if (WPB.knitScope(rec.name, rec.category, rec.fabric_composition) === "EXCLUDE") {
-        dropped.push([rec.name, "non-knit"]); continue;
-      }
       const k = (rec.id || rec.product_url || rec.name || "").toLowerCase();
-      if (k && seen.has(k)) continue; if (k) seen.add(k);
+      if (k && seen.has(k)) { dropped.push([rec.name, "duplicate"]); continue; }
+      if (k) seen.add(k);
       kept.push(rec);
     }
     return { kept, dropped };
@@ -113,13 +112,10 @@
   async function buildKnitWorkbook(items, ctx) {
     ctx = ctx || {};
     const ExcelJS = ctx.ExcelJS || root.ExcelJS || (typeof require !== "undefined" && require("exceljs"));
-    const WPB = ctx.WPB || root.WPB || (typeof require !== "undefined" && require("./pipeline.js"));
     const fetchImage = typeof ctx.fetchImage === "function" ? ctx.fetchImage : null;
     const onProgress = typeof ctx.onProgress === "function" ? ctx.onProgress : null;
 
-    const { kept, dropped } = ctx.scope === false
-      ? { kept: items.slice(), dropped: [] }
-      : filterKept(items, WPB);
+    const { kept, dropped } = filterKept(items);
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Fabric-Scanner";

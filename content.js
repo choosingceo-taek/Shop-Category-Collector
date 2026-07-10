@@ -190,7 +190,7 @@ async function runStep(j) {
       el.download = `${a.id}_${brandTag}${catTag ? "_" + catTag : ""}_${total}items_${stamp}.xlsx`;
       document.body.appendChild(el); el.click(); el.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      await report(`완료: ${total}개 기입, ${(dropped || []).length}개 제외(스코프 밖) · 총 수집 ${j.items.length}개`);
+      await report(`완료: ${total}개 기입${(dropped || []).length ? ", 중복 " + dropped.length + "개 제외" : ""} · 총 수집 ${j.items.length}개`);
     } catch (e) {
       await report("엑셀 생성 실패: " + (e && e.message || e));
     }

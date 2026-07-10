@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Walmart PB Knit Collector",
-  "version": "0.2.0",
-  "description": "Collect a Walmart private-brand category (all pages) into a clean Excel with embedded thumbnails, one click.",
+  "name": "Walmart Category Collector",
+  "version": "0.3.0",
+  "description": "Collect all products in a Walmart search/category (every page) into a clean Excel with embedded thumbnails, one click. Excludes recommended/related carousels.",
   "permissions": ["storage", "downloads", "activeTab", "scripting"],
   "host_permissions": [
     "https://www.walmart.com/*",
     "https://*.walmartimages.com/*"
   ],
   "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "Walmart PB Collector" },
+  "action": { "default_popup": "popup.html", "default_title": "Walmart Category Collector" },
   "content_scripts": [
     {
       "matches": [

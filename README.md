@@ -58,9 +58,20 @@ The engine is site-agnostic; per-store knowledge is isolated in **adapters**.
   SheetJS (still used by the generic fallback path).
 - `template.xlsx` — legacy knit-DB template (no longer used for output).
 
+## What it collects
+**Every product in the current search/category**, across all pages. It reads the
+main results grid only, so the site's recommended / related / sponsored carousels
+are excluded. Only exact duplicates are dropped — there is no category/brand
+filtering. Pagination continues until the site's reported result count is reached.
+
 ## Output columns
 Thumbnail (embedded image) · Product URL (hyperlink) · Brand · Category ·
 Product Name · Retail Price · Colorways · Fabric Composition · Key Design Details.
+
+Provenance: only words literally on the page are written as values. Inferred
+fields (e.g. Key Design Details with no descriptor in the name) show **재확인 필요**;
+not-found fields show **정보 확인** — both in **red** so unconfirmed cells stand out.
+When a problem caused a miss, the cause is appended, e.g. "정보 확인 (상세 페이지 차단됨)".
 Thumbnails embed the real image; if the bytes can't be fetched (or are webp,
 which xlsx can't embed) the cell falls back to an `=IMAGE("url")` formula
 (renders in Excel 365 / Google Sheets) and keeps the URL as a note.
