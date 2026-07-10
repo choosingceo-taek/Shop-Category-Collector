@@ -132,29 +132,33 @@ async function runStep(j) {
       j.specIdx = 0;
       await s(j);
       // announce the phase change immediately so the UI doesn't look frozen at "N/Np"
-      await report(j.withSpec ? `목록 ${j.items.length}개 완료 — 원단 조성 수집 시작…` : "목록 완료 — 엑셀 생성 준비…");
+      await report(j.withSpec ? `목록 ${j.items.length}개 완료 — 상품 상세 수집 시작…` : "목록 완료 — 엑셀 생성 준비…");
       step();
     }
     return;
   }
 
-  // -------- phase: spec (optional per-product detail) --------
+  // -------- phase: detail (optional per-product page: composition/colors/design) --------
   if (j.phase === "spec") {
-    if (typeof a.fetchComposition !== "function") { j.phase = "build"; await s(j); step(); return; }
+    if (typeof a.fetchDetail !== "function") { j.phase = "build"; await s(j); step(); return; }
     const total = j.items.length;
     for (let i = j.specIdx || 0; i < total; i++) {
       if (!alive()) return;   // extension reloaded mid-run -> stop quietly
       j.specIdx = i;
       const it = j.items[i];
-      if (!it._specDone && !(it.fabric_composition)) {
+      if (!it._specDone) {
         try {
-          const d = await a.fetchComposition(it.product_url);
-          if (d && typeof d === "object") { it.fabric_composition = d.value || ""; it._compReason = d.reason || ""; }
-          else { it.fabric_composition = d || ""; }   // string-returning adapters
+          const d = await a.fetchDetail(it.product_url);
+          if (d && typeof d === "object") {
+            it.fabric_composition = d.composition || "";
+            if (d.colorways) it.colorways = d.colorways;   // fuller than the list swatches
+            if (d.design) it.design = d.design;            // real "Key item features"
+            it._compReason = d.reason || "";
+          } else { it.fabric_composition = d || ""; }
         } catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run
       }
       it._specDone = true;
-      await report(`원단 조성 수집… ${i + 1}/${total}`);   // update every item so progress is visible
+      await report(`상품 상세 수집… ${i + 1}/${total}`);   // update every item so progress is visible
       if (i % 5 === 0) await s(j);                          // persist periodically for resume
       await sleep(400 + Math.random() * 400);
     }

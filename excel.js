@@ -87,8 +87,13 @@
     return check(reasonKo(rec._compReason));
   }
   function fieldDesign(rec) {
+    // 1) real design features pulled from the product page ("Fit: Relaxed; ...")
+    if (rec.design && String(rec.design).trim()) return real(String(rec.design).trim());
+    // 2) descriptors literally present in the product name
     const lit = literalDesign(rec.name);
-    return lit ? real(lit) : reverify();   // no literal descriptor -> don't guess
+    if (lit) return real(lit);
+    // 3) nothing literal -> don't guess
+    return reverify();
   }
   function fontFor(kind) {
     return kind === "reverify" ? FONT_REVERIFY : kind === "check" ? FONT_CHECK : FONT_REAL;

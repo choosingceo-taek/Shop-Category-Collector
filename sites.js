@@ -343,9 +343,73 @@
       return "";
     }
 
-    // Returns { value, reason }. value is the literal on-page composition (or "").
-    // reason explains an empty value: "blocked" | "timeout" | "not_found" | "error".
-    async function fetchComposition(url) {
+    // Design feature labels to pull from the product page "Key item features".
+    // These are literal on-page values, so they satisfy the provenance rule.
+    const DESIGN_LABELS = ["Silhouette", "Fit", "Neckline", "Collar", "Sleeve Type",
+      "Sleeve Length", "Sleeve Style", "Sleeves", "Sleeve", "Closure", "Length",
+      "Hem", "Waist", "Rise", "Pockets", "Features", "Feature", "Style", "Design Details"];
+    const SPEC_SKIP = /^(material|fabric|care|country|size|brand|gender|age|model|price|color|assembled|manufacturer|warranty|count|weight)/i;
+
+    // Gather a label -> value map from a product page, from both shapes:
+    //   { name:"Fit", value:"Relaxed" }   and   "Fit: Relaxed"  (highlight bullet)
+    function collectSpecs(obj, out, depth) {
+      depth = depth || 0;
+      if (obj == null || depth > 16) return out;
+      if (typeof obj === "string") {
+        const m = obj.match(/^\s*([A-Za-z][A-Za-z /&-]{1,26}):\s*(.+\S)\s*$/);
+        if (m) { const k = m[1].trim(), v = m[2].trim(); if (v.length <= 240 && !out[k]) out[k] = v; }
+        return out;
+      }
+      if (Array.isArray(obj)) { for (const v of obj) collectSpecs(v, out, depth + 1); return out; }
+      if (typeof obj === "object") {
+        const nm = obj.name || obj.displayName || obj.key;
+        const val = obj.value != null ? obj.value : obj.values;
+        if (typeof nm === "string" && nm.length <= 28 && val != null) {
+          const sval = Array.isArray(val) ? val.join(", ") : String(val);
+          if (sval && sval.length <= 240 && !out[nm.trim()]) out[nm.trim()] = sval.trim();
+        }
+        for (const k in obj) collectSpecs(obj[k], out, depth + 1);
+      }
+      return out;
+    }
+
+    // All colour options from a product page's variant swatches.
+    function extractColorways(blobs) {
+      const colors = [];
+      const seen = new Set();
+      const add = c => { const s = String(c || "").trim(); if (s && !seen.has(s.toLowerCase())) { seen.add(s.toLowerCase()); colors.push(s); } };
+      const walk = (o, d) => {
+        if (!o || d > 16 || typeof o !== "object") return;
+        if (Array.isArray(o)) { o.forEach(v => walk(v, d + 1)); return; }
+        const nm = (o.name || o.type || o.id || o.variantType || "") + "";
+        if (/colou?r/i.test(nm) && Array.isArray(o.variantList)) {
+          o.variantList.forEach(v => add(v && (v.name || v.value || v.swatchName)));
+        }
+        for (const k in o) walk(o[k], d + 1);
+      };
+      blobs.forEach(b => walk(b, 0));
+      return colors;
+    }
+
+    function pickDesign(specs) {
+      const parts = [];
+      for (const label of DESIGN_LABELS) {
+        if (specs[label] && !SPEC_SKIP.test(label)) parts.push(`${label}: ${specs[label]}`);
+      }
+      return parts.join("; ").slice(0, 300);
+    }
+    function pickComposition(specs, blobs) {
+      for (const key of ["Fabric Material", "Material", "Fabric Content", "Fabric Composition", "Composition", "Shell", "Fabric"]) {
+        if (specs[key] && FIBER.test(specs[key])) return cleanComp(specs[key]);
+      }
+      for (const b of blobs) { const v = findComposition(b); if (v) return v; }
+      return "";
+    }
+
+    // Fetch a product page and extract everything we can that's literally on it.
+    // Returns { composition, colorways, design, reason }.
+    async function fetchDetail(url) {
+      const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
       let html;
       try {
         const ctrl = new AbortController();
@@ -355,25 +419,19 @@
           html = await res.text();
         } finally { clearTimeout(timer); }
       } catch (e) {
-        return { value: "", reason: (e && e.name === "AbortError") ? "timeout" : "error" };
+        return empty((e && e.name === "AbortError") ? "timeout" : "error");
       }
-      // bot-wall guard: Walmart returns a captcha/blocked shell with no product JSON
-      if (/Robot or human|px-captcha|blocked/i.test(html) && !/__NEXT_DATA__/.test(html)) {
-        return { value: "", reason: "blocked" };
-      }
+      if (/Robot or human|px-captcha|blocked/i.test(html) && !/__NEXT_DATA__/.test(html)) return empty("blocked");
       try {
         const doc = new DOMParser().parseFromString(html, "text/html");
         const blobs = jsonBlobs(doc);
-        for (const b of blobs) { const v = findComposition(b); if (v) return { value: v, reason: "" }; }
-        // DOM fallback: rendered "Key item features" text (e.g. "Material: 55% Cotton/45% Polyester")
-        const body = (doc.body && doc.body.textContent) || "";
-        const dm = body.match(new RegExp(COMP_LABEL.source + "\\s*[:\\-]\\s*([0-9][^\\n]{2,140})", "i"));
-        if (dm && FIBER.test(dm[1])) return { value: cleanComp(dm[1]), reason: "" };
-        // last resort: raw-html spec pair
-        const m = html.match(/"(?:Fabric Material|Material|Fabric Content|Composition)"\s*,\s*"value"\s*:\s*"([^"]+)"/i);
-        if (m && FIBER.test(m[1])) return { value: cleanComp(m[1]), reason: "" };
-        return { value: "", reason: "not_found" };
-      } catch (e) { return { value: "", reason: "error" }; }
+        const specs = {};
+        blobs.forEach(b => collectSpecs(b, specs));
+        const composition = pickComposition(specs, blobs);
+        const design = pickDesign(specs);
+        const colorways = extractColorways(blobs).join("; ");
+        return { composition, colorways, design, reason: composition ? "" : "not_found" };
+      } catch (e) { return empty("error"); }
     }
 
     function context(doc) {
@@ -399,11 +457,12 @@
       id: "walmart",
       label: "Walmart",
       match: url => /^https?:\/\/(www\.)?walmart\.com\/(browse|search|shop|cp|c\/)/i.test(url || ""),
-      context, scrapeList, totalPages, resultCount, nextPageUrl, fetchComposition, buildWorkbook,
+      context, scrapeList, totalPages, resultCount, nextPageUrl, fetchDetail, buildWorkbook,
       templateUrl: null,   // ExcelJS builds a fresh styled workbook; no template needed
       // internal, exposed for tests
       _priceOf: priceOf, _imageOf: imageOf, _resultsFromStacks: resultsFromStacks,
-      _findComposition: findComposition,
+      _findComposition: findComposition, _collectSpecs: collectSpecs,
+      _extractColorways: extractColorways, _pickDesign: pickDesign,
     };
   })();
 
