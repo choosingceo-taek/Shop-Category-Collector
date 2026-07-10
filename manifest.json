@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Walmart PB Knit Collector",
+  "version": "0.1.0",
+  "description": "Collect a Walmart private-brand category (all pages) into the knit-DB Excel template with one click.",
+  "permissions": ["storage", "downloads", "activeTab", "scripting"],
+  "host_permissions": ["https://www.walmart.com/*"],
+  "action": { "default_popup": "popup.html", "default_title": "Walmart PB Collector" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.walmart.com/browse/*", "https://www.walmart.com/search*"],
+      "js": ["xlsx.full.min.js", "pipeline.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["template.xlsx"], "matches": ["https://www.walmart.com/*"] }
+  ]
+}
