@@ -20,25 +20,56 @@ const MAX_PAGES = 200;              // hard safety cap
 const EMPTY_PAGE_LIMIT = 2;         // stop after this many consecutive no-new-item pages
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const g = () => new Promise(r => chrome.storage.local.get(JOB, o => r(o[JOB] || null)));
-const s = j => new Promise(r => chrome.storage.local.set({ [JOB]: j }, r));
-const clear = () => new Promise(r => chrome.storage.local.remove(JOB, r));
+
+// True only while THIS content script's extension context is still valid.
+// After the extension is reloaded/updated, an old content script left running
+// on the page has an invalidated context; chrome.* calls then throw
+// "Extension context invalidated". We detect that and stop quietly instead of
+// spamming uncaught errors — the user just needs to reload the page.
+function alive() { try { return !!(chrome.runtime && chrome.runtime.id); } catch (e) { return false; } }
+
+const g = () => new Promise(r => {
+  if (!alive()) return r(null);
+  try { chrome.storage.local.get(JOB, o => r(chrome.runtime.lastError ? null : (o[JOB] || null))); }
+  catch (e) { r(null); }
+});
+const s = j => new Promise(r => {
+  if (!alive()) return r();
+  try { chrome.storage.local.set({ [JOB]: j }, () => r()); } catch (e) { r(); }
+});
+const clear = () => new Promise(r => {
+  if (!alive()) return r();
+  try { chrome.storage.local.remove(JOB, () => r()); } catch (e) { r(); }
+});
 
 function adapter() { return (self.SITES && SITES.active(location.href)) || null; }
 function itemKey(r) { return (r.id || r.product_url || r.name || "").toLowerCase(); }
 
 async function report(msg) { const j = await g(); if (j) { j.status = msg; await s(j); } }
 
+// Top-level wrapper: no matter what throws, the job never silently freezes —
+// the error is written to the status box and the tab can be re-run.
 async function step() {
   const j = await g();
   if (!j || !j.active) return;
+  try {
+    await runStep(j);
+  } catch (e) {
+    const cur = await g();
+    if (cur) { cur.status = "오류: " + (e && e.message || e) + " (다시 실행하면 재시도)"; await s(cur); }
+  }
+}
+
+async function runStep(j) {
   const a = adapter();
   if (!a) { await report("이 페이지를 지원하는 어댑터가 없습니다."); j.active = false; await s(j); return; }
 
   // -------- phase: list (scrape + auto-paginate) --------
   if (j.phase === "list") {
     const page = j.pagesDone + 1;
-    const scraped = a.scrapeList(document, location.href) || [];
+    let scraped = [];
+    try { scraped = a.scrapeList(document, location.href) || []; }
+    catch (e) { scraped = []; await report(`페이지 ${page} 파싱 오류(건너뜀): ${e && e.message || e}`); }
     j.seen = j.seen || {};
     let added = 0;
     for (const r of scraped) {
@@ -63,7 +94,11 @@ async function step() {
     } else {
       if (capped) await report(`안전 상한(${MAX_PAGES}p) 도달 — 수집 중단하고 엑셀 생성.`);
       j.phase = j.withSpec ? "spec" : "build";
-      await s(j); step();
+      j.specIdx = 0;
+      await s(j);
+      // announce the phase change immediately so the UI doesn't look frozen at "N/Np"
+      await report(j.withSpec ? `목록 ${j.items.length}개 완료 — 원단 조성 수집 시작…` : "목록 완료 — 엑셀 생성 준비…");
+      step();
     }
     return;
   }
@@ -71,15 +106,21 @@ async function step() {
   // -------- phase: spec (optional per-product detail) --------
   if (j.phase === "spec") {
     if (typeof a.fetchComposition !== "function") { j.phase = "build"; await s(j); step(); return; }
-    for (let i = 0; i < j.items.length; i++) {
-      if (j.items[i].fabric_composition != null && j.items[i].fabric_composition !== "") continue;
-      if (j.items[i]._specDone) continue;
-      j.items[i].fabric_composition = await a.fetchComposition(j.items[i].product_url);
-      j.items[i]._specDone = true;
-      if (i % 3 === 0) { await report(`원단 조성 수집… ${i + 1}/${j.items.length}`); await s(j); }
-      await sleep(500 + Math.random() * 600);
+    const total = j.items.length;
+    for (let i = j.specIdx || 0; i < total; i++) {
+      if (!alive()) return;   // extension reloaded mid-run -> stop quietly
+      j.specIdx = i;
+      const it = j.items[i];
+      if (!it._specDone && !(it.fabric_composition)) {
+        try { it.fabric_composition = await a.fetchComposition(it.product_url); }
+        catch (e) { it.fabric_composition = ""; }   // never let one product stall the run
+      }
+      it._specDone = true;
+      await report(`원단 조성 수집… ${i + 1}/${total}`);   // update every item so progress is visible
+      if (i % 5 === 0) await s(j);                          // persist periodically for resume
+      await sleep(400 + Math.random() * 400);
     }
-    j.phase = "build"; await s(j); step(); return;
+    j.specIdx = total; j.phase = "build"; await s(j); step(); return;
   }
 
   // -------- phase: build (export) --------

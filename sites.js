@@ -278,8 +278,14 @@
 
     async function fetchComposition(url) {
       try {
-        const res = await fetch(url, { credentials: "include" });
-        const html = await res.text();
+        // hard timeout so one stalled product page can't freeze the whole run
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        let html;
+        try {
+          const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
+          html = await res.text();
+        } finally { clearTimeout(timer); }
         // bot-wall guard: Walmart returns a captcha/blocked shell with no product JSON
         if (/Robot or human|px-captcha|blocked/i.test(html) && !/__NEXT_DATA__/.test(html)) return "";
         const doc = new DOMParser().parseFromString(html, "text/html");
