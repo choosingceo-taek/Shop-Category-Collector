@@ -45,6 +45,21 @@ const clear = () => new Promise(r => {
 function adapter() { return (self.SITES && SITES.active(location.href)) || null; }
 function itemKey(r) { return (r.id || r.product_url || r.name || "").toLowerCase(); }
 
+// Identity of a collection = its search context, ignoring the page number and
+// noisy tracking params. A job only auto-resumes on pages with the SAME
+// signature, so an abandoned job from a different category can never resurface
+// its old items on a new page.
+function collectionSig(url) {
+  try {
+    const u = new URL(url);
+    const p = u.searchParams;
+    const q = (p.get("q") || "").trim().toLowerCase();
+    const facet = (p.get("facet") || "").trim().toLowerCase();
+    const cat = (p.get("cat_id") || p.get("catId") || p.get("cat_ids") || "").trim();
+    return u.pathname + "|" + q + "|" + facet + "|" + cat;
+  } catch (e) { return url; }
+}
+
 // Ask the service worker to fetch image bytes (it has cross-origin host access;
 // a content-script fetch would be blocked by CORS). Resolves null on any failure
 // so a missing image never breaks the export.
@@ -171,8 +186,9 @@ async function runStep(j) {
 
 chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.type === "start") {
+    // always a FRESH job tagged with this page's collection signature
     s({ active: true, phase: "list", items: [], seen: {}, pagesDone: 0, totalPages: 0,
-        emptyStreak: 0, withSpec: m.withSpec, status: "시작…" })
+        emptyStreak: 0, withSpec: m.withSpec, sig: collectionSig(location.href), status: "시작…" })
       .then(() => { step(); send({ ok: true }); });
     return true;
   }
@@ -186,5 +202,11 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   return true;
 });
 
-// resume across the page navigations that pagination triggers
-g().then(j => { if (j && j.active) step(); });
+// resume across the page navigations that pagination triggers — but ONLY for the
+// same collection. A leftover active job from a different search (or a legacy job
+// with no signature) is abandoned and cleared, so it can't output stale items.
+g().then(j => {
+  if (!j || !j.active) return;
+  if (!j.sig || collectionSig(location.href) !== j.sig) { clear(); return; }
+  step();
+});
