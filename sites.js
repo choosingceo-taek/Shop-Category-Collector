@@ -292,6 +292,40 @@
       return u.toString();
     }
 
+    // A real composition contains a percentage or a known fiber word — this lets
+    // us ignore "Material: Imported" / "Care: Machine washable" style noise.
+    const FIBER = /\d\s*%|\b(cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide|jersey|fleece)\b/i;
+    const COMP_LABEL = /(?:fabric material|material|fabric content|fabric composition|composition|shell|body|fabric)/i;
+    const NEXT_LABEL = /\s*(?:care|country of origin|country|size|fit|neckline|closure|features?|style|pattern|occasion)\b.*$/i;
+
+    function cleanComp(s) { return String(s).replace(/\s+/g, " ").replace(NEXT_LABEL, "").trim(); }
+
+    // Deep scan any JSON for a composition, in either shape:
+    //   { name:"Material", value:"55% Cotton/45% Polyester" }   (spec pair)
+    //   "Material: 55% Cotton/45% Polyester"                     (highlight bullet)
+    function findComposition(obj, depth) {
+      depth = depth || 0;
+      if (obj == null || depth > 14) return "";
+      if (typeof obj === "string") {
+        const m = obj.match(new RegExp("^\\s*" + COMP_LABEL.source + "\\s*[:\\-]\\s*(.+)$", "i"));
+        return (m && FIBER.test(m[1])) ? cleanComp(m[1]) : "";
+      }
+      if (Array.isArray(obj)) {
+        for (const v of obj) { const r = findComposition(v, depth + 1); if (r) return r; }
+        return "";
+      }
+      if (typeof obj === "object") {
+        const nm = obj.name || obj.displayName || obj.key;
+        const val = obj.value != null ? obj.value : obj.values;
+        if (nm && val != null && new RegExp("^\\s*" + COMP_LABEL.source + "\\s*$", "i").test(String(nm))) {
+          const sval = Array.isArray(val) ? val.join(", ") : String(val);
+          if (FIBER.test(sval)) return cleanComp(sval);
+        }
+        for (const k in obj) { const r = findComposition(obj[k], depth + 1); if (r) return r; }
+      }
+      return "";
+    }
+
     // Returns { value, reason }. value is the literal on-page composition (or "").
     // reason explains an empty value: "blocked" | "timeout" | "not_found" | "error".
     async function fetchComposition(url) {
@@ -313,11 +347,15 @@
       try {
         const doc = new DOMParser().parseFromString(html, "text/html");
         const blobs = jsonBlobs(doc);
-        const keys = ["Fabric Material", "Material", "Fabric Content", "Composition",
-          "Fabric", "Shell", "Body", "Fabric Composition"];
-        for (const b of blobs) { const v = findKeyedValue(b, keys); if (v) return { value: v, reason: "" }; }
-        const m = html.match(/"(?:Fabric Material|Material|Fabric Content|Composition)"\s*,\s*"value"\s*:\s*"([^"]+)"/);
-        return m ? { value: m[1], reason: "" } : { value: "", reason: "not_found" };
+        for (const b of blobs) { const v = findComposition(b); if (v) return { value: v, reason: "" }; }
+        // DOM fallback: rendered "Key item features" text (e.g. "Material: 55% Cotton/45% Polyester")
+        const body = (doc.body && doc.body.textContent) || "";
+        const dm = body.match(new RegExp(COMP_LABEL.source + "\\s*[:\\-]\\s*([0-9][^\\n]{2,140})", "i"));
+        if (dm && FIBER.test(dm[1])) return { value: cleanComp(dm[1]), reason: "" };
+        // last resort: raw-html spec pair
+        const m = html.match(/"(?:Fabric Material|Material|Fabric Content|Composition)"\s*,\s*"value"\s*:\s*"([^"]+)"/i);
+        if (m && FIBER.test(m[1])) return { value: cleanComp(m[1]), reason: "" };
+        return { value: "", reason: "not_found" };
       } catch (e) { return { value: "", reason: "error" }; }
     }
 
@@ -348,6 +386,7 @@
       templateUrl: null,   // ExcelJS builds a fresh styled workbook; no template needed
       // internal, exposed for tests
       _priceOf: priceOf, _imageOf: imageOf, _resultsFromStacks: resultsFromStacks,
+      _findComposition: findComposition,
     };
   })();
 

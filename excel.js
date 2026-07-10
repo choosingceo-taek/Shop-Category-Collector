@@ -26,8 +26,8 @@
   const CHECK = "정보 확인";         // not found (grey)
 
   const FONT_REAL = { color: { argb: "FF1A1A1A" } };
-  const FONT_REVERIFY = { color: { argb: "FFCC0000" }, bold: true };
-  const FONT_CHECK = { color: { argb: "FF8A8A8A" }, italic: true };
+  const FONT_REVERIFY = { color: { argb: "FFCC0000" }, bold: true };  // inferred -> red bold
+  const FONT_CHECK = { color: { argb: "FFCC0000" }, italic: true };   // unconfirmed/not found -> red italic
 
   // Only design descriptors that literally appear in the product name are "real".
   const DESIGN_TOKENS = [
