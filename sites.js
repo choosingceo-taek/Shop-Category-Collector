@@ -181,6 +181,21 @@
       const h1 = (doc.querySelector && doc.querySelector("h1")) || {};
       return (h1.textContent || "").replace(/\(\d[\d,]*\).*/, "").trim();
     }
+    // Best-effort colorways from the list JSON (variant swatches). Full color
+    // lists usually live on the product page; this catches what the shelf ships.
+    function colorwaysOf(it) {
+      const names = [];
+      const pull = arr => { if (Array.isArray(arr)) arr.forEach(v => {
+        const n = v && (v.name || v.value || v.swatchName || v.variantName || v.colorName);
+        if (n) names.push(String(n));
+      }); };
+      pull(it.variantList); pull(it.variants); pull(it.colorVariants);
+      if (Array.isArray(it.variantCriteria)) it.variantCriteria.forEach(c => {
+        if (/colou?r/i.test((c && c.name) || "")) pull(c.variantList || c.values);
+      });
+      const uniq = [...new Set(names.map(s => s.trim()).filter(Boolean))];
+      return uniq.length ? uniq.join("; ") : "";
+    }
 
     // Walmart's MAIN search/browse results live in `itemStacks[].items`. Pulling
     // those only keeps us off the "recommended / sponsored / you-might-also-like"
@@ -226,6 +241,7 @@
         category,
         department: it.department || "",
         id: String(it.usItemId || it.productId || it.id || it.itemId || ""),
+        colorways: colorwaysOf(it),
       })).filter(r => r.name && r.product_url);
 
       // DOM fallback if embedded JSON yielded nothing (structure changed / SSR off)
@@ -309,11 +325,13 @@
       };
     }
 
-    function buildWorkbook(XLSX, templateArrayBuffer, items, opts) {
-      // Walmart uses the knit-DB template + brand/scope routing in pipeline.js.
-      const WPB = (typeof self !== "undefined" && self.WPB) ||
-        (typeof global !== "undefined" && global.WPB) || root.WPB;
-      return WPB.fillWorkbook(XLSX, templateArrayBuffer, items, opts);
+    // Clean 9-column workbook with embedded thumbnails (ExcelJS). Async because
+    // it fetches image bytes. ctx carries { ExcelJS, WPB, fetchImage, onProgress }.
+    async function buildWorkbook(items, ctx) {
+      const WPBExcel = (typeof self !== "undefined" && self.WPBExcel) ||
+        (typeof global !== "undefined" && global.WPBExcel) ||
+        (typeof require !== "undefined" && require("./excel.js"));
+      return WPBExcel.buildKnitWorkbook(items, ctx);
     }
 
     return {
@@ -321,7 +339,7 @@
       label: "Walmart",
       match: url => /^https?:\/\/(www\.)?walmart\.com\/(browse|search|shop|cp|c\/)/i.test(url || ""),
       context, scrapeList, totalPages, nextPageUrl, fetchComposition, buildWorkbook,
-      templateUrl: "template.xlsx",
+      templateUrl: null,   // ExcelJS builds a fresh styled workbook; no template needed
       // internal, exposed for tests
       _priceOf: priceOf, _imageOf: imageOf, _resultsFromStacks: resultsFromStacks,
     };

@@ -42,15 +42,28 @@ The engine is site-agnostic; per-store knowledge is isolated in **adapters**.
   scrape each page → auto-paginate → (optional) fetch detail → build → download.
   Robust pagination: stops when there's no next page, when a page adds **0 new
   items** (global dedupe by id/url), or at a safety cap (200p) — a changed layout
-  can never loop forever.
+  can never loop forever. Crash-safe: any error surfaces to the status box.
 - `sites.js` — **adapter registry**. The Walmart adapter lives here plus shared,
   hardened extraction helpers (see below). **To add another store, add one adapter
   object** — the engine doesn't change.
-- `pipeline.js` — Walmart classification / routing / provenance / Excel fill, plus
-  a generic flat-sheet exporter (`fillGeneric`) for future non-Walmart adapters.
+- `excel.js` — **styled workbook builder (ExcelJS)**. Produces the clean
+  9-column output with **embedded thumbnail images** and readable formatting
+  (frozen header, column widths, wrap, row heights, hyperlinked URLs).
+- `background.js` — MV3 service worker that fetches thumbnail image bytes with
+  the extension's host permissions (a content-script fetch would hit CORS).
+- `pipeline.js` — Walmart classification / scope filtering / design-detail
+  derivation, plus a generic flat exporter (`fillGeneric`) for future adapters.
 - `popup.html` / `popup.js` — the button UI (shows the detected site + page count).
-- `xlsx.full.min.js` — SheetJS (Excel writer).
-- `template.xlsx` — the knit-DB workbook template (Walmart adapter only).
+- `exceljs.min.js` — ExcelJS (writes images + styles). `xlsx.full.min.js` —
+  SheetJS (still used by the generic fallback path).
+- `template.xlsx` — legacy knit-DB template (no longer used for output).
+
+## Output columns
+Thumbnail (embedded image) · Product URL (hyperlink) · Brand · Category ·
+Product Name · Retail Price · Colorways · Fabric Composition · Key Design Details.
+Thumbnails embed the real image; if the bytes can't be fetched (or are webp,
+which xlsx can't embed) the cell falls back to an `=IMAGE("url")` formula
+(renders in Excel 365 / Google Sheets) and keeps the URL as a note.
 
 ### Why the scrape is hard to break
 `sites.js` extraction tries, in order of reliability:

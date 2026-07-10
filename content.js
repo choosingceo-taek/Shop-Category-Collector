@@ -45,6 +45,21 @@ const clear = () => new Promise(r => {
 function adapter() { return (self.SITES && SITES.active(location.href)) || null; }
 function itemKey(r) { return (r.id || r.product_url || r.name || "").toLowerCase(); }
 
+// Ask the service worker to fetch image bytes (it has cross-origin host access;
+// a content-script fetch would be blocked by CORS). Resolves null on any failure
+// so a missing image never breaks the export.
+function fetchImageViaBg(url) {
+  return new Promise(res => {
+    if (!url || !alive()) return res(null);
+    try {
+      chrome.runtime.sendMessage({ type: "fetchImage", url }, resp => {
+        if (chrome.runtime.lastError) return res(null);
+        res(resp && resp.ok ? resp : null);
+      });
+    } catch (e) { res(null); }
+  });
+}
+
 async function report(msg) { const j = await g(); if (j) { j.status = msg; await s(j); } }
 
 // Top-level wrapper: no matter what throws, the job never silently freezes —
@@ -125,11 +140,14 @@ async function runStep(j) {
 
   // -------- phase: build (export) --------
   if (j.phase === "build") {
-    await report("엑셀 생성 중…");
+    await report("엑셀 생성 중… (썸네일 이미지 포함, 잠시 걸립니다)");
     try {
-      let templateAB = null;
-      if (a.templateUrl) templateAB = await (await fetch(chrome.runtime.getURL(a.templateUrl))).arrayBuffer();
-      const { bytes, kept, dropped } = a.buildWorkbook(XLSX, templateAB, j.items, { dedupe: true });
+      const ctx = {
+        ExcelJS: self.ExcelJS, WPB: self.WPB, XLSX: self.XLSX,
+        fetchImage: fetchImageViaBg,
+        onProgress: (i, total) => report(`엑셀 생성 중… 썸네일 ${i}/${total}`),
+      };
+      const { bytes, kept, dropped } = await a.buildWorkbook(j.items, ctx);
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
