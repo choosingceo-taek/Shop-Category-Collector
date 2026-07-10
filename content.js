@@ -109,12 +109,17 @@ async function runStep(j) {
     }
     j.pagesDone = page;
     j.totalPages = j.totalPages || a.totalPages(document) || 0;
+    j.resultCount = j.resultCount || (a.resultCount ? a.resultCount(document) : 0) || 0;
     j.emptyStreak = added === 0 ? (j.emptyStreak || 0) + 1 : 0;
     await s(j);
-    await report(`수집 중… ${page}${j.totalPages ? "/" + j.totalPages : ""}p · ${j.items.length}개 (이번 페이지 +${added})`);
+    const target = j.resultCount ? "/" + j.resultCount : "";
+    await report(`수집 중… ${page}${j.totalPages ? "/" + j.totalPages + "p" : "p"} · ${j.items.length}${target}개 (이번 페이지 +${added})`);
 
     const next = a.nextPageUrl(location.href, page);
-    const knownDone = j.totalPages && page >= j.totalPages;
+    // keep paginating until we've collected the site's reported total, even if the
+    // page-count hint says we're "done" — the count target is more reliable.
+    const haveMore = j.resultCount && j.items.length < j.resultCount;
+    const knownDone = j.totalPages && page >= j.totalPages && !haveMore;
     const stalled = j.emptyStreak >= EMPTY_PAGE_LIMIT;
     const capped = page >= MAX_PAGES;
 
@@ -168,14 +173,23 @@ async function runStep(j) {
         onProgress: (i, total) => report(`엑셀 생성 중… 썸네일 ${i}/${total}`),
       };
       const { bytes, kept, dropped } = await a.buildWorkbook(j.items, ctx);
+      const total = Object.values(kept).reduce((n, v) => n + (v.length || 0), 0);
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
-      const tag = (j.items[0] && j.items[0].brand || a.label || "collect").replace(/\W+/g, "");
-      el.href = url; el.download = `${a.id}_${tag}_filled.xlsx`;
+      // unique, descriptive filename so a new run never collides with an old file
+      // (which made it look like "the previous result" when the old file was opened)
+      const brandTag = (j.items[0] && j.items[0].brand || a.label || "collect").replace(/\W+/g, "");
+      let catTag = "";
+      try {
+        const q = new URL(location.href).searchParams.get("q") || "";
+        catTag = (j.items[0] && j.items[0].category || q).replace(/[^A-Za-z0-9]+/g, "").slice(0, 24);
+      } catch (e) {}
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T-]/g, "").slice(8); // HHMMSS
+      el.href = url;
+      el.download = `${a.id}_${brandTag}${catTag ? "_" + catTag : ""}_${total}items_${stamp}.xlsx`;
       document.body.appendChild(el); el.click(); el.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      const total = Object.values(kept).reduce((n, v) => n + (v.length || 0), 0);
       await report(`완료: ${total}개 기입, ${(dropped || []).length}개 제외(스코프 밖) · 총 수집 ${j.items.length}개`);
     } catch (e) {
       await report("엑셀 생성 실패: " + (e && e.message || e));

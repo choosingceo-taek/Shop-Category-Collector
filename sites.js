@@ -292,6 +292,23 @@
       return u.toString();
     }
 
+    // Total number of results the site reports (e.g. "Results ... (43)"). Used as
+    // a completeness target so we keep paginating until we've collected them all,
+    // even when the page-count hint is wrong.
+    function resultCount(doc) {
+      doc = doc || document;
+      const blobs = jsonBlobs(doc);
+      for (const b of blobs) {
+        const n = findNumber(b, ["totalResultCount", "recordCount", "totalCount", "count"]);
+        if (n) return n;
+      }
+      // DOM fallback: the "(43)" next to the results heading
+      const h = [...(doc.querySelectorAll ? doc.querySelectorAll("h1, h2, [data-testid='results-heading']") : [])]
+        .map(e => e.textContent || "").find(t => /result/i.test(t) && /\(\d[\d,]*\)/.test(t));
+      const m = h && h.match(/\((\d[\d,]*)\)/);
+      return m ? parseInt(m[1].replace(/,/g, "")) : 0;
+    }
+
     // A real composition contains a percentage or a known fiber word — this lets
     // us ignore "Material: Imported" / "Care: Machine washable" style noise.
     const FIBER = /\d\s*%|\b(cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide|jersey|fleece)\b/i;
@@ -382,7 +399,7 @@
       id: "walmart",
       label: "Walmart",
       match: url => /^https?:\/\/(www\.)?walmart\.com\/(browse|search|shop|cp|c\/)/i.test(url || ""),
-      context, scrapeList, totalPages, nextPageUrl, fetchComposition, buildWorkbook,
+      context, scrapeList, totalPages, resultCount, nextPageUrl, fetchComposition, buildWorkbook,
       templateUrl: null,   // ExcelJS builds a fresh styled workbook; no template needed
       // internal, exposed for tests
       _priceOf: priceOf, _imageOf: imageOf, _resultsFromStacks: resultsFromStacks,
