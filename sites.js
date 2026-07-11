@@ -154,13 +154,22 @@
     const ORIGIN = "https://www.walmart.com";
     const abs = u => !u ? "" : /^https?:/.test(u) ? u : ORIGIN + (u[0] === "/" ? u : "/" + u);
 
-    function priceOf(it) {
-      const p = it.priceInfo || it.primaryOffer || {};
-      const cand = p.linePrice || p.currentPrice || p.offerPrice || p.linePriceDisplay ||
-        (p.currentPrice && p.currentPrice.price) || it.price;
+    const priceVal = cand => {
       if (cand == null) return "";
       if (typeof cand === "object") return cand.price || cand.priceString || "";
       return cand;
+    };
+    // current (sale) price shown on the shelf
+    function priceOf(it) {
+      const p = it.priceInfo || it.primaryOffer || {};
+      return priceVal(p.linePrice || p.currentPrice || p.offerPrice || p.linePriceDisplay ||
+        (p.currentPrice && p.currentPrice.price) || it.price);
+    }
+    // original / list price (the struck-through "was" price); "" when not on sale
+    function wasPriceOf(it) {
+      const p = it.priceInfo || it.primaryOffer || {};
+      return priceVal(p.wasPrice || p.listPrice || p.originalPrice || p.strikethroughPrice ||
+        p.comparisonPrice || (p.priceRange && p.priceRange.wasPrice));
     }
     function imageOf(it) {
       const im = it.imageInfo || {};
@@ -176,9 +185,17 @@
       const facet = (new URLSearchParams((doc.location || location).search).get("facet") || "");
       return facet.replace(/.*brand:/i, "").split("||")[0] || "";
     }
-    function categoryOf(doc) {
+    // Category from the page heading, with the brand stripped so the cell holds
+    // ONLY the category: "Time and Tru Leggings in Time and Tru" -> "Leggings".
+    function categoryOf(doc, brand) {
       const h1 = (doc.querySelector && doc.querySelector("h1")) || {};
-      return (h1.textContent || "").replace(/\(\d[\d,]*\).*/, "").trim();
+      let t = (h1.textContent || "").replace(/\(\d[\d,]*\).*/, "").trim();
+      t = t.replace(/\s+in\s+[A-Za-z][^,]*$/i, "").trim();          // drop "... in <brand/dept>"
+      const b = String(brand || "").trim();
+      if (b && t.toLowerCase().startsWith(b.toLowerCase() + " ")) { // drop leading brand
+        t = t.slice(b.length).trim();
+      }
+      return t;
     }
     // Best-effort colorways from the list JSON (variant swatches). Full color
     // lists usually live on the product page; this catches what the shelf ships.
@@ -271,11 +288,12 @@
       }
       let items = uniqBy(raw,
         it => String(it.usItemId || it.productId || it.id || it.canonicalUrl || it.name));
-      const category = categoryOf(doc);
+      const category = categoryOf(doc, brandOf(doc, null));
       let out = items.map(it => ({
         brand: brandOf(doc, it),
         name: it.name || it.title || it.productName || "",
         price: priceOf(it),
+        price_was: wasPriceOf(it),
         product_url: abs(it.canonicalUrl || it.productPageUrl || it.productUrl || it.url || it.seoUrl),
         image_url: imageOf(it),
         category,
@@ -479,7 +497,7 @@
       doc = doc || document;
       return {
         brand: brandOf(doc, null),
-        category: categoryOf(doc),
+        category: categoryOf(doc, brandOf(doc, null)),
         totalPages: totalPages(doc),
         page: parseInt(new URLSearchParams((doc.location || location).search).get("page") || "1"),
       };

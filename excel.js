@@ -16,8 +16,8 @@
   "use strict";
 
   const HEADERS = ["Thumbnail", "Product URL", "Brand", "Category", "Product Name",
-    "Retail Price", "Colorways", "Fabric Composition", "Key Design Details"];
-  const WIDTHS = [16, 46, 16, 22, 40, 12, 22, 30, 34];
+    "Retail Price", "Current Price", "Size", "Colorways", "Fabric Composition", "Key Design Details"];
+  const WIDTHS = [16, 44, 15, 18, 36, 12, 12, 13, 22, 28, 32];
   const IMG_PX = 96;
   const ROW_H = 78;
 
@@ -28,6 +28,7 @@
   const FONT_REAL = { color: { argb: "FF1A1A1A" } };
   const FONT_REVERIFY = { color: { argb: "FFCC0000" }, bold: true };  // inferred -> red bold
   const FONT_CHECK = { color: { argb: "FFCC0000" }, italic: true };   // unconfirmed/not found -> red italic
+  const FONT_SALE = { color: { argb: "FFCC0000" } };                  // discounted price pair -> plain red
 
   // Only design descriptors that literally appear in the product name are "real".
   const DESIGN_TOKENS = [
@@ -72,11 +73,43 @@
 
   function fieldBrand(rec)    { return rec.brand ? real(String(rec.brand)) : check(); }
   function fieldCategory(rec) { return rec.category ? real(String(rec.category)) : check(); }
-  function fieldName(rec)     { return rec.name ? real(String(rec.name)) : check(); }
-  function fieldPrice(rec) {
-    if (rec.price == null || rec.price === "") return check();
-    const s = String(rec.price).trim();
-    return real(/^\d/.test(s) ? "$" + s : s);
+
+  // Split the size range out of a product name:
+  //   "Capri Leggings, XS-XXXL"           -> name "Capri Leggings",     size "XS-XXXL"
+  //   "Denim Jegging, Sizes XS-XXXL"      -> name "Denim Jegging",      size "XS-XXXL"
+  //   "Knit Leggings, 27\" Inseam, S-XXL" -> inseam stays in the name,  size "S-XXL"
+  function splitSize(name) {
+    const n = String(name || "").trim();
+    if (!n) return { name: n, size: "" };
+    let m = n.match(/,?\s*\bSizes?\s+([^,]+?)\s*$/i);
+    if (m) return { name: n.slice(0, m.index).replace(/,\s*$/, "").trim(), size: m[1].trim() };
+    m = n.match(/,\s*((?:\d{1,2}X|\d{1,2}|[XSML]{1,5})\s*[-–]\s*(?:\d{1,2}X|\d{1,2}|[XSML]{1,5}))\s*$/i);
+    if (m) return { name: n.slice(0, m.index).trim(), size: m[1].trim() };
+    return { name: n, size: "" };
+  }
+  function fieldName(rec) {
+    const { name } = splitSize(rec.name);
+    return name ? real(name) : check();
+  }
+  function fieldSize(rec) {
+    const { size } = splitSize(rec.name);
+    return size ? real(size) : check();
+  }
+
+  // Retail (original) + Current price pair. When they differ (markdown/sale),
+  // BOTH cells go red so discounted items stand out.
+  const priceNum = s => parseFloat(String(s).replace(/[^0-9.]/g, ""));
+  const priceStr = p => { const s = String(p).trim(); return /^\d/.test(s) ? "$" + s : s; };
+  function fieldPrices(rec) {
+    const cur = (rec.price != null && rec.price !== "") ? priceStr(rec.price) : null;
+    const was = (rec.price_was != null && rec.price_was !== "") ? priceStr(rec.price_was) : null;
+    const orig = was || cur;                       // no was-price -> not discounted
+    const differ = !!(was && cur && priceNum(was) !== priceNum(cur));
+    const kind = differ ? "sale" : "real";
+    return {
+      orig: orig ? { text: orig, kind } : check(),
+      cur: cur ? { text: cur, kind } : check(),
+    };
   }
   function fieldColorways(rec) {
     return (rec.colorways && String(rec.colorways).trim()) ? real(String(rec.colorways).trim()) : check();
@@ -96,7 +129,10 @@
     return reverify();
   }
   function fontFor(kind) {
-    return kind === "reverify" ? FONT_REVERIFY : kind === "check" ? FONT_CHECK : FONT_REAL;
+    return kind === "reverify" ? FONT_REVERIFY
+      : kind === "check" ? FONT_CHECK
+      : kind === "sale" ? FONT_SALE
+      : FONT_REAL;
   }
 
   // Keep every product on the page; only drop exact duplicates. Related/
@@ -143,29 +179,34 @@
       const rowNo = i + 2;
       const row = ws.getRow(rowNo);
 
-      // columns 2..9 (thumbnail handled after)
+      // columns 3..11 (thumbnail + URL handled separately)
+      const prices = fieldPrices(rec);
       const fields = [
         null,                    // 1 Thumbnail
         null,                    // 2 Product URL (hyperlink, handled below)
         fieldBrand(rec),         // 3
         fieldCategory(rec),      // 4
-        fieldName(rec),          // 5
-        fieldPrice(rec),         // 6
-        fieldColorways(rec),     // 7
-        fieldComposition(rec),   // 8
-        fieldDesign(rec),        // 9
+        fieldName(rec),          // 5 (size stripped)
+        prices.orig,             // 6 Retail Price (original)
+        prices.cur,              // 7 Current Price (red pair when discounted)
+        fieldSize(rec),          // 8
+        fieldColorways(rec),     // 9
+        fieldComposition(rec),   // 10
+        fieldDesign(rec),        // 11
       ];
       row.height = ROW_H;
       row.alignment = { vertical: "middle", wrapText: true };
 
-      for (let c = 3; c <= 9; c++) {
+      for (let c = 3; c <= HEADERS.length; c++) {
         const f = fields[c - 1];
         const cell = row.getCell(c);
         cell.value = f.text;
         cell.font = fontFor(f.kind);
         cell.border = { bottom: { style: "hair", color: { argb: "FFDDDDDD" } } };
       }
-      row.getCell(6).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      for (const c of [6, 7, 8]) {
+        row.getCell(c).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      }
 
       // Product URL (col 2)
       const uc = row.getCell(2);
