@@ -113,7 +113,8 @@ async function runStep(j) {
     // still ships ~100 recommendation products in its JSON) means we've walked
     // past the last real page — finish with what we have instead of scraping it.
     if (page > 1 && typeof a.isResultsPage === "function" && !a.isResultsPage(document)) {
-      await report(`페이지 ${page}는 결과 페이지가 아님 — ${j.items.length}개로 수집 종료`);
+      // Normal end-of-category probe: we walked one page past the last real one.
+      await report(`마지막 페이지 확인 완료 — 총 ${j.items.length}개 수집, 다음 단계로 진행`);
       j.phase = j.withSpec ? "spec" : "build";
       j.specIdx = 0;
       await s(j); step();

@@ -190,6 +190,7 @@
     function categoryOf(doc, brand) {
       const h1 = (doc.querySelector && doc.querySelector("h1")) || {};
       let t = (h1.textContent || "").replace(/\(\d[\d,]*\).*/, "").trim();
+      t = t.split("|")[0].trim();                                    // drop "... | Walmart" title tail
       t = t.replace(/\s+in\s+[A-Za-z][^,]*$/i, "").trim();          // drop "... in <brand/dept>"
       const b = String(brand || "").trim();
       if (b && t.toLowerCase().startsWith(b.toLowerCase() + " ")) { // drop leading brand
@@ -344,13 +345,14 @@
         const size = findNumber(c, ["pageSize", "resultsPerPage", "perPage"]);
         if (total && size) return Math.ceil(total / size);
       }
-      // JSON gave no page info — the rendered pagination links (1 2 3 … at the
-      // bottom) are authoritative. Browse categories often omit maxPage from
-      // their JSON, and assuming "1 page" here silently dropped pages 2+.
+      // JSON gave no page info — try the rendered pagination links (1 2 3 …).
       const dom = domPageLinks(doc);
       if (dom) return dom;
-      // container present, no pagination anywhere -> genuinely a single page
-      return (c && Array.isArray(c.itemStacks)) ? 1 : null;
+      // Unknown. Do NOT guess "1": three different Walmart layouts have shipped
+      // no detectable page info while having more pages, which silently dropped
+      // everything past page 1. Returning null makes the engine keep walking
+      // pages until a non-results page (404) ends the run cleanly.
+      return null;
     }
 
     function nextPageUrl(url, page) {
