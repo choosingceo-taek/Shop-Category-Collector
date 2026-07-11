@@ -109,6 +109,16 @@ async function runStep(j) {
       else { j.phase = j.withSpec ? "spec" : "build"; await s(j); step(); }
       return;
     }
+    // Past page 1, a page without the results grid (e.g. Walmart's 404, which
+    // still ships ~100 recommendation products in its JSON) means we've walked
+    // past the last real page — finish with what we have instead of scraping it.
+    if (page > 1 && typeof a.isResultsPage === "function" && !a.isResultsPage(document)) {
+      await report(`페이지 ${page}는 결과 페이지가 아님 — ${j.items.length}개로 수집 종료`);
+      j.phase = j.withSpec ? "spec" : "build";
+      j.specIdx = 0;
+      await s(j); step();
+      return;
+    }
     let scraped = [];
     try { scraped = a.scrapeList(document, location.href) || []; }
     catch (e) { scraped = []; await report(`페이지 ${page} 파싱 오류(건너뜀): ${e && e.message || e}`); }
@@ -128,9 +138,12 @@ async function runStep(j) {
     await report(`수집 중… ${page}${j.totalPages ? "/" + j.totalPages + "p" : "p"} · ${j.items.length}${target}개 (이번 페이지 +${added})`);
 
     const next = a.nextPageUrl(location.href, page);
-    // keep paginating until we've collected the site's reported total, even if the
-    // page-count hint says we're "done" — the count target is more reliable.
-    const haveMore = j.resultCount && j.items.length < j.resultCount;
+    // Keep paginating while the site's reported total says items are missing —
+    // but with a small tolerance: the reported count often includes 1-2
+    // sponsored/unavailable items that never render (e.g. "12" for an 11-item
+    // shelf), and chasing those would walk us onto a non-existent page.
+    const COUNT_TOLERANCE = 2;
+    const haveMore = j.resultCount && (j.resultCount - j.items.length) > COUNT_TOLERANCE;
     const knownDone = j.totalPages && page >= j.totalPages && !haveMore;
     const stalled = j.emptyStreak >= EMPTY_PAGE_LIMIT;
     const capped = page >= MAX_PAGES;

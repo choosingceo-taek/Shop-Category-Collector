@@ -238,6 +238,14 @@
       return any;
     }
 
+    // Is this an actual results page (search/browse grid present)? A 404 or any
+    // non-results page has no main container — the engine uses this to detect
+    // "walked past the last page" and end collection cleanly.
+    function isResultsPage(doc) {
+      doc = doc || document;
+      return !!mainContainer(jsonBlobs(doc));
+    }
+
     function scrapeList(doc, url) {
       doc = doc || document;
       const blobs = jsonBlobs(doc);
@@ -246,12 +254,17 @@
       // don't scrape it (its recommendation carousels would be mistaken for results).
       if (!container) {
         const body = (doc.body && doc.body.textContent) || "";
-        if (/couldn't be found|page not found|sorry about that/i.test(body)) return [];
+        if (/couldn.t be found|page not found|sorry about that/i.test(body)) return [];
       }
-      // Prefer the main results grid; only fall back to the broad merge-all sweep
-      // (which can over-collect carousels) if the grid can't be located.
       let raw = container ? stacksItems(container) : [];
-      if (!raw.length) {
+      // Broad merge-all sweep is a FIRST-PAGE-ONLY last resort: on page 1 the user
+      // is looking at real results, so if the container moved we still collect.
+      // During pagination (page 2+) a missing container means a non-results page
+      // (e.g. Walmart's 404, which ships ~100 recommendation products in its JSON)
+      // — sweeping there would pollute the job with carousel items.
+      let urlPage = 1;
+      try { urlPage = parseInt(new URL(url || "").searchParams.get("page") || "1"); } catch (e) {}
+      if (!raw.length && urlPage <= 1) {
         const arrays = [];
         blobs.forEach(b => collectProductArrays(b, 0, arrays));
         raw = [].concat.apply([], arrays);
@@ -485,7 +498,7 @@
       id: "walmart",
       label: "Walmart",
       match: url => /^https?:\/\/(www\.)?walmart\.com\/(browse|search|shop|cp|c\/)/i.test(url || ""),
-      context, scrapeList, totalPages, resultCount, nextPageUrl, fetchDetail, buildWorkbook,
+      context, scrapeList, totalPages, resultCount, nextPageUrl, fetchDetail, buildWorkbook, isResultsPage,
       templateUrl: null,   // ExcelJS builds a fresh styled workbook; no template needed
       // internal, exposed for tests
       _priceOf: priceOf, _imageOf: imageOf, _resultsFromStacks: resultsFromStacks,
