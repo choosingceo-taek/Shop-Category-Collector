@@ -16,13 +16,25 @@ One click on a Walmart brand-category page → auto-collect **all pages** →
 > allowlist this extension, or use an unmanaged Chrome profile. (See VERIFY.md.)
 
 ## Use (daily)
-1. In Chrome, open the Walmart category page you want
-   (e.g. Time and Tru → Tops & Tees).
+1. In Chrome, open the Walmart search/category page you want
+   (e.g. Time and Tru → Leggings), with any filters applied.
 2. Click the extension icon → confirm brand / page count.
-3. (Optional) keep **"원단 조성까지 수집"** checked for Verified composition (slower).
-4. Click **"이 카테고리 전 페이지 수집 → 엑셀"**.
-5. The tab flips through pages automatically; when done, a filled `.xlsx`
-   downloads. Open it once in Excel to recalc the Audit Summary.
+3. (Optional) keep **"상품 상세까지 수집 — 원단·색상·디자인"** checked to fill
+   Fabric Composition / Colorways / Key Design Details from each product page
+   (slower).
+4. Click **"이 카테고리 전 페이지 수집 → 엑셀"**. Collection always starts from
+   page 1 and walks every page to the end (per-search page counts differ; the
+   engine stops when the site's reported total is collected).
+5. When done, a styled `.xlsx` downloads with a unique name
+   (`walmart_<brand>_<category>_<N>items_<time>.xlsx`).
+
+Buttons:
+- **⏸ 일시정지 / ▶ 재개** — pause the current run without losing progress, then
+  continue where it left off (page-accurate; no skipped or duplicated pages).
+- **🗑 새 작업 (현재 작업 삭제)** — discard the current/stale job entirely, e.g.
+  when a run went wrong or you switch category. A job is also auto-discarded if
+  you open a different search (collection-signature check), so a previous run
+  can never leak into a new category's output.
 
 ## What it fills
 The bundled `template.xlsx` (your 20-column schema, all sheets preserved). Each

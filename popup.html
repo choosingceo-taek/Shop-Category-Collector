@@ -3,7 +3,9 @@ body{font:13px system-ui;width:300px;padding:14px;margin:0}
 h3{margin:0 0 8px;font-size:14px}
 .row{margin:8px 0}.muted{color:#666;font-size:12px}
 button{width:100%;padding:9px;border:0;border-radius:8px;background:#0071dc;color:#fff;font-weight:600;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
 button.sec{background:#eee;color:#333}
+button.warn{background:#fbe9e9;color:#b00000}
 #status{margin-top:10px;padding:8px;background:#f4f6f8;border-radius:8px;min-height:18px;font-size:12px}
 label{display:flex;gap:6px;align-items:center;font-size:12px}
 </style></head><body>
@@ -11,7 +13,8 @@ label{display:flex;gap:6px;align-items:center;font-size:12px}
 <div class="row muted" id="ctx">페이지 감지 중…</div>
 <div class="row"><label><input type="checkbox" id="spec" checked> 상품 상세까지 수집 — 원단·색상·디자인 (느림)</label></div>
 <div class="row"><button id="go">이 카테고리 전 페이지 수집 → 엑셀</button></div>
-<div class="row"><button class="sec" id="cancel">중지</button></div>
+<div class="row"><button class="sec" id="pauseresume" disabled>⏸ 일시정지</button></div>
+<div class="row"><button class="warn" id="reset">🗑 새 작업 (현재 작업 삭제)</button></div>
 <div id="status"></div>
 <script src="popup.js"></script>
 </body></html>

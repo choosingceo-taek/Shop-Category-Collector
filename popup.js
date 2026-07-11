@@ -1,28 +1,55 @@
 const tabQ = () => new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, t => r(t[0])));
-const send = (id, msg) => new Promise(r => chrome.tabs.sendMessage(id, msg, res => r(res)));
+const send = (id, msg) => new Promise(r => chrome.tabs.sendMessage(id, msg, res => {
+  if (chrome.runtime.lastError) return r(null);
+  r(res);
+}));
+
+const el = id => document.getElementById(id);
 
 async function refresh() {
   const tab = await tabQ();
-  const ctxEl = document.getElementById("ctx");
-  const goEl = document.getElementById("go");
-  // content script only loads on supported sites; if messaging fails, it's unsupported
-  const ctx = tab ? await send(tab.id, { type: "context" }).catch(() => null) : null;
+  const ctx = tab ? await send(tab.id, { type: "context" }) : null;
   if (!ctx || !ctx.site) {
-    ctxEl.textContent = "지원 사이트의 카테고리 페이지에서 열어주세요.";
-    goEl.disabled = true; return;
+    el("ctx").textContent = "지원 사이트의 카테고리 페이지에서 열어주세요.";
+    el("go").disabled = true;
+    el("pauseresume").disabled = true;
+    return;
   }
-  goEl.disabled = false;
-  ctxEl.textContent = `${ctx.site} · ${ctx.brand || "브랜드?"} · ${ctx.totalPages ? "총 " + ctx.totalPages + "p" : "페이지 자동 감지"} (현재 ${ctx.page || 1})`;
-  const st = await send(tab.id, { type: "status" }).catch(() => null);
-  if (st && st.status) document.getElementById("status").textContent = st.status;
+  el("ctx").textContent = `${ctx.site} · ${ctx.brand || "브랜드?"} · ${ctx.totalPages ? "총 " + ctx.totalPages + "p" : "페이지 자동 감지"} (현재 ${ctx.page || 1})`;
+
+  const st = await send(tab.id, { type: "status" });
+  const running = !!(st && st.active);
+  el("go").disabled = running;                       // finish or reset before a new run
+  el("pauseresume").disabled = !running;
+  el("pauseresume").textContent = (st && st.paused) ? "▶ 재개" : "⏸ 일시정지";
+  if (st && st.status) el("status").textContent = st.status;
 }
-document.getElementById("go").onclick = async () => {
+
+el("go").onclick = async () => {
   const tab = await tabQ();
-  await send(tab.id, { type: "start", withSpec: document.getElementById("spec").checked });
-  document.getElementById("status").textContent = "시작했습니다. 창을 닫아도 진행됩니다.";
+  await send(tab.id, { type: "start", withSpec: el("spec").checked });
+  el("status").textContent = "시작했습니다. 팝업을 닫아도 진행됩니다.";
+  refresh();
 };
-document.getElementById("cancel").onclick = async () => {
-  const tab = await tabQ(); await send(tab.id, { type: "cancel" });
-  document.getElementById("status").textContent = "중지됨.";
+
+el("pauseresume").onclick = async () => {
+  const tab = await tabQ();
+  const st = await send(tab.id, { type: "status" });
+  if (st && st.active && st.paused) {
+    await send(tab.id, { type: "resume" });
+    el("status").textContent = "재개했습니다.";
+  } else if (st && st.active) {
+    await send(tab.id, { type: "pause" });
+    el("status").textContent = "일시정지됨. ▶ 재개를 누르면 이어서 진행합니다.";
+  }
+  refresh();
 };
-setInterval(refresh, 1500); refresh();
+
+el("reset").onclick = async () => {
+  const tab = await tabQ();
+  await send(tab.id, { type: "reset" });
+  el("status").textContent = "작업이 삭제되었습니다. 새로 시작할 수 있습니다.";
+  refresh();
+};
+
+setInterval(refresh, 1200); refresh();

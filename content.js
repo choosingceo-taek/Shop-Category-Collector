@@ -81,7 +81,7 @@ async function report(msg) { const j = await g(); if (j) { j.status = msg; await
 // the error is written to the status box and the tab can be re-run.
 async function step() {
   const j = await g();
-  if (!j || !j.active) return;
+  if (!j || !j.active || j.paused) return;
   try {
     await runStep(j);
   } catch (e) {
@@ -96,7 +96,19 @@ async function runStep(j) {
 
   // -------- phase: list (scrape + auto-paginate) --------
   if (j.phase === "list") {
-    const page = j.pagesDone + 1;
+    // The page number comes from the URL, not a counter, so pausing/resuming or
+    // reloading can never skip a page or scrape one twice.
+    const page = (a.context && (a.context(document).page || 1)) || 1;
+    if (page <= j.pagesDone) {
+      // this page is already collected (resume/reload) -> jump to the next one
+      const more = (j.totalPages && j.pagesDone < j.totalPages) ||
+                   (j.resultCount && j.items.length < j.resultCount) ||
+                   (!j.totalPages && !j.resultCount);
+      const next = more ? a.nextPageUrl(location.href, j.pagesDone) : null;
+      if (next && j.pagesDone < MAX_PAGES) { await sleep(600); location.href = next; }
+      else { j.phase = j.withSpec ? "spec" : "build"; await s(j); step(); }
+      return;
+    }
     let scraped = [];
     try { scraped = a.scrapeList(document, location.href) || []; }
     catch (e) { scraped = []; await report(`페이지 ${page} 파싱 오류(건너뜀): ${e && e.message || e}`); }
@@ -125,6 +137,8 @@ async function runStep(j) {
 
     if (next && !knownDone && !stalled && !capped) {
       await sleep(1200 + Math.random() * 900);   // human pace / anti-bot friendly
+      const cur = await g();                       // honor a pause clicked during the delay
+      if (!cur || !cur.active || cur.paused) return;
       location.href = next;                        // navigation -> resume() re-enters step()
     } else {
       if (capped) await report(`안전 상한(${MAX_PAGES}p) 도달 — 수집 중단하고 엑셀 생성.`);
@@ -144,6 +158,8 @@ async function runStep(j) {
     const total = j.items.length;
     for (let i = j.specIdx || 0; i < total; i++) {
       if (!alive()) return;   // extension reloaded mid-run -> stop quietly
+      const live = await g();
+      if (!live || !live.active || live.paused) { await s(j); return; }   // pause -> keep progress
       j.specIdx = i;
       const it = j.items[i];
       if (!it._specDone) {
@@ -205,12 +221,33 @@ async function runStep(j) {
 chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.type === "start") {
     // always a FRESH job tagged with this page's collection signature
-    s({ active: true, phase: "list", items: [], seen: {}, pagesDone: 0, totalPages: 0,
-        emptyStreak: 0, withSpec: m.withSpec, sig: collectionSig(location.href), status: "시작…" })
-      .then(() => { step(); send({ ok: true }); });
+    s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
+        totalPages: 0, emptyStreak: 0, withSpec: m.withSpec,
+        sig: collectionSig(location.href), status: "시작…" })
+      .then(() => {
+        // collection always begins at page 1, wherever the user started from
+        const u = new URL(location.href);
+        if ((parseInt(u.searchParams.get("page")) || 1) > 1) {
+          u.searchParams.delete("page");
+          send({ ok: true });
+          location.href = u.toString();   // auto-resumes there (same signature)
+        } else { step(); send({ ok: true }); }
+      });
     return true;
   }
-  if (m.type === "cancel") { clear().then(() => send({ ok: true })); return true; }
+  if (m.type === "pause") {
+    g().then(j => { if (j && j.active) { j.paused = true; j.status = "일시정지됨 (재개 가능)"; return s(j); } })
+      .then(() => send({ ok: true }));
+    return true;
+  }
+  if (m.type === "resume") {
+    g().then(j => {
+      if (j && j.active && j.paused) { j.paused = false; j.status = "재개…"; return s(j).then(() => step()); }
+    }).then(() => send({ ok: true }));
+    return true;
+  }
+  // reset = discard the job entirely so a wrong run can never resurface
+  if (m.type === "reset" || m.type === "cancel") { clear().then(() => send({ ok: true })); return true; }
   if (m.type === "context") {
     const a = adapter();
     send(a ? Object.assign({ site: a.label }, a.context(document)) : { site: null });
@@ -221,10 +258,12 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
 });
 
 // resume across the page navigations that pagination triggers — but ONLY for the
-// same collection. A leftover active job from a different search (or a legacy job
-// with no signature) is abandoned and cleared, so it can't output stale items.
+// same collection, and never while paused. A leftover active job from a different
+// search (or a legacy job with no signature) is abandoned and cleared, so it can
+// never emit stale items into a new category's output.
 g().then(j => {
   if (!j || !j.active) return;
   if (!j.sig || collectionSig(location.href) !== j.sig) { clear(); return; }
+  if (j.paused) return;   // user paused — wait for the resume button
   step();
 });
