@@ -1,119 +1,86 @@
-# Walmart PB Knit Collector — Chrome Extension
+# Walmart Category Collector (v1.0)
 
-One click on a Walmart brand-category page → auto-collect **all pages** →
-(optional) fetch each product's fabric composition → download the knit-DB Excel
-**template already filled**. No paid services, runs in your own logged-in Chrome
-(so Walmart's anti-bot sees a normal human session).
+월마트에서 **검색·필터링한 카테고리의 전체 상품**(모든 페이지)을 클릭 한 번으로
+**썸네일 이미지가 삽입된 엑셀**로 추출하는 크롬 확장 프로그램.
+추천 상품·연관 상품·스폰서 캐러셀은 제외하고, **실제 검색 결과만** 담습니다.
+전부 브라우저 안에서 동작 — 서버·유료 서비스 없음.
 
-## Install (담당자, 1회 · 약 5분)
-1. Unzip this folder.
-2. Open `chrome://extensions`
-3. Turn on **개발자 모드 / Developer mode** (top-right).
-4. Click **압축해제된 확장 프로그램 로드 / Load unpacked** → select this folder.
-5. The toolbar shows the extension icon. Done.
+---
 
-> If Developer mode is greyed out, your company Chrome is managed — ask IT to
-> allowlist this extension, or use an unmanaged Chrome profile. (See VERIFY.md.)
+## 설치 (1회, 약 2분)
 
-## Use (daily)
-1. In Chrome, open the Walmart search/category page you want
-   (e.g. Time and Tru → Leggings), with any filters applied.
-2. Click the extension icon → confirm brand / page count.
-3. (Optional) keep **"상품 상세까지 수집 — 원단·색상·디자인"** checked to fill
-   Fabric Composition / Colorways / Key Design Details from each product page
-   (slower).
-4. Click **"이 카테고리 전 페이지 수집 → 엑셀"**. Collection always starts from
-   page 1 and walks every page to the end (per-search page counts differ; the
-   engine stops when the site's reported total is collected).
-5. When done, a styled `.xlsx` downloads with a unique name
-   (`walmart_<brand>_<category>_<N>items_<time>.xlsx`).
+1. 이 저장소를 ZIP으로 받아 압축 해제 (또는 클론)
+2. 크롬 주소창에 `chrome://extensions` 입력
+3. 오른쪽 위 **개발자 모드** 켜기
+4. **압축해제된 확장 프로그램 로드** → 이 폴더 선택
+5. 툴바에 남색 아이콘이 생기면 완료 (안 보이면 🧩 → 핀 고정)
 
-Buttons:
-- **⏸ 일시정지 / ▶ 재개** — pause the current run without losing progress, then
-  continue where it left off (page-accurate; no skipped or duplicated pages).
-- **🗑 새 작업 (현재 작업 삭제)** — discard the current/stale job entirely, e.g.
-  when a run went wrong or you switch category. A job is also auto-discarded if
-  you open a different search (collection-signature check), so a previous run
-  can never leak into a new category's output.
+> 코드를 업데이트했을 때: 폴더 덮어쓰기 → `chrome://extensions`에서 ↻ 리로드 →
+> **월마트 탭 F5 새로고침** (이 순서가 중요합니다)
 
-## What it fills
-The bundled `template.xlsx` (your 20-column schema, all sheets preserved). Each
-value is tagged `Verified` (published), `Visual Observation` (name/image-derived)
-or `Needs Review` — the zero-hallucination rule. Out-of-scope items (sweaters,
-woven, denim, non-target categories) are auto-dropped.
+## 사용법 (매일)
 
-## Scope (edit in pipeline.js)
-Categories: T-shirts · Sweatshirts & Hoodies · Tank Tops · Leggings · Sweatpants.
-Cut & Sew knit only. Brands route to their sheet; Wonder Nation / Weekend Academy
-split Girls/Boys by department.
+1. 월마트에서 원하는 **검색/카테고리 페이지**를 연다 (필터 적용된 상태 그대로)
+2. 확장 아이콘 클릭 → 팝업에 `Walmart · 브랜드 · 총 Np` 확인
+3. 옵션 **"상품 상세까지 수집 — 원단·색상·디자인"**
+   - 체크 ✅ : 상품마다 상세 페이지를 방문해 원단 조성·전체 색상·디자인 특징을 채움 (상품당 ~1초)
+   - 해제 : 목록 정보만 빠르게 (원단/색상/디자인은 빨간 "정보 확인")
+4. **"이 카테고리 전 페이지 수집 → 엑셀"** 클릭
+   - 어느 페이지에서 시작해도 **1페이지부터 끝 페이지까지** 자동 진행
+   - 사이트가 표시하는 총 상품 수를 채울 때까지 수집
+5. 완료되면 엑셀 자동 다운로드: `walmart_브랜드_카테고리_N items_시각.xlsx`
+   (실행마다 파일명이 달라 이전 파일과 절대 안 섞임)
 
-## Architecture (site-adapter)
-The engine is site-agnostic; per-store knowledge is isolated in **adapters**.
+### 팝업 버튼
+| 버튼 | 역할 |
+|---|---|
+| 수집 시작 | 새 수집 시작 (작업 중엔 비활성) |
+| ⏸ 일시정지 / ▶ 재개 | 진행 상황 보존한 채 멈춤/이어서 진행. 페이지 누락·중복 없음 |
+| 🗑 새 작업 | 현재/잘못된 작업을 완전히 삭제하고 처음부터 |
 
-- `content.js` — **generic engine**. Picks `SITES.active(url)` and drives it:
-  scrape each page → auto-paginate → (optional) fetch detail → build → download.
-  Robust pagination: stops when there's no next page, when a page adds **0 new
-  items** (global dedupe by id/url), or at a safety cap (200p) — a changed layout
-  can never loop forever. Crash-safe: any error surfaces to the status box.
-- `sites.js` — **adapter registry**. The Walmart adapter lives here plus shared,
-  hardened extraction helpers (see below). **To add another store, add one adapter
-  object** — the engine doesn't change.
-- `excel.js` — **styled workbook builder (ExcelJS)**. Produces the clean
-  9-column output with **embedded thumbnail images** and readable formatting
-  (frozen header, column widths, wrap, row heights, hyperlinked URLs).
-- `background.js` — MV3 service worker that fetches thumbnail image bytes with
-  the extension's host permissions (a content-script fetch would hit CORS).
-- `pipeline.js` — Walmart classification / scope filtering / design-detail
-  derivation, plus a generic flat exporter (`fillGeneric`) for future adapters.
-- `popup.html` / `popup.js` — the button UI (shows the detected site + page count).
-- `exceljs.min.js` — ExcelJS (writes images + styles). `xlsx.full.min.js` —
-  SheetJS (still used by the generic fallback path).
-- `template.xlsx` — legacy knit-DB template (no longer used for output).
+다른 카테고리로 옮겨가면 이전 작업은 **자동 폐기**됩니다(수집 서명 검사) —
+이전 카테고리 결과가 새 엑셀에 섞이는 일은 구조적으로 불가능합니다.
 
-## What it collects
-**Every product in the current search/category**, across all pages. It reads the
-main results grid only, so the site's recommended / related / sponsored carousels
-are excluded. Only exact duplicates are dropped — there is no category/brand
-filtering. Pagination continues until the site's reported result count is reached.
+## 엑셀 출력
 
-## Output columns
-Thumbnail (embedded image) · Product URL (hyperlink) · Brand · Category ·
-Product Name · Retail Price · Colorways · Fabric Composition · Key Design Details.
+| 컬럼 | 내용 |
+|---|---|
+| Thumbnail | **실제 상품 이미지 삽입** (불가 시 `=IMAGE()` 수식 + URL 메모) |
+| Product URL | 클릭 가능한 링크 |
+| Brand / Category / Product Name / Retail Price | 목록 페이지의 실제 값 |
+| Colorways | 상세 페이지 색상 스와치 전체 (상세 수집 시) |
+| Fabric Composition | 상세 페이지의 실제 원단 조성 (상세 수집 시) |
+| Key Design Details | 상세 "Key item features"의 Fit/Neckline/Sleeves/Features 등 |
 
-Provenance: only words literally on the page are written as values. Inferred
-fields (e.g. Key Design Details with no descriptor in the name) show **재확인 필요**;
-not-found fields show **정보 확인** — both in **red** so unconfirmed cells stand out.
-When a problem caused a miss, the cause is appended, e.g. "정보 확인 (상세 페이지 차단됨)".
-Thumbnails embed the real image; if the bytes can't be fetched (or are webp,
-which xlsx can't embed) the cell falls back to an `=IMAGE("url")` formula
-(renders in Excel 365 / Google Sheets) and keeps the URL as a note.
+**출처 규칙 (zero-hallucination)** — 헤더는 `#0F3B5F`:
+- 사이트에 실제로 있는 값만 검정 텍스트로 기입
+- 추론이 필요한 항목 → 값 대신 빨간 **"재확인 필요"**
+- 못 찾은 정보 → 빨간 **"정보 확인"**, 원인이 있으면 함께 표기
+  (예: `정보 확인 (상세 페이지 차단됨)` / `(시간 초과)` / `(원단 조성 미수집(옵션 꺼짐))`)
 
-### Why the scrape is hard to break
-`sites.js` extraction tries, in order of reliability:
-1. `__NEXT_DATA__` JSON, 2. every `application/json` / `ld+json` script,
-3. inline redux/preloaded state (`__WML_REDUX_INITIAL_STATE__`,
-`__PRELOADED_STATE__`, …) recovered by brace-balanced slicing,
-4. a DOM fallback over product tiles.
-It deep-searches **all** of that for product arrays and **merges + dedupes** them
-(Walmart splits results across several `itemStacks`), so it keeps working even
-when Walmart renames or moves its data blob.
+## 문제 해결
 
-## Adding a new site later
-In `sites.js`, add an adapter with `match / context / scrapeList / totalPages /
-nextPageUrl / fetchComposition / buildWorkbook`, register it in `ADAPTERS`, and add
-the site's URL patterns to `manifest.json` (`content_scripts.matches` +
-`host_permissions`). Reuse the shared helpers under `SITES.shared`. A non-Walmart
-adapter can set `templateUrl: null` and use `WPB.fillGeneric` for a plain export.
+| 증상 | 조치 |
+|---|---|
+| 팝업이 "지원 사이트 페이지에서 열어주세요" | 월마트 검색/카테고리 페이지인지 확인 후 F5 |
+| 개수가 사이트 표시와 다름 | 🗑 새 작업 → F5 → 재수집. 그래도 다르면 `diagnose-console.js` 실행 결과를 개발자에게 |
+| 진행이 멈춘 듯함 | 팝업 상태창 확인 — 상세 수집은 상품당 ~1초로 원래 느림. ⏸→▶로 재개 가능 |
+| "Extension context invalidated" 에러 | 수집 중 확장을 리로드해서 발생. F5 → 🗑 새 작업 → 재시작 |
+| 원단/색상이 "정보 확인" | "상품 상세까지 수집" 체크했는지 확인. 켰는데도 비면 셀의 원인 표기 참고 |
 
-## Limits (honest)
-- New rows are written as data; heavy cell styling from the template may not carry
-  to new rows (SheetJS community). Data + sheet structure are preserved.
-- The Excel "Thumbnail" column holds the image **URL/reference**, not an embedded
-  picture (embedding images into cells is a separate feature — say the word).
-- Walmart's page structure still needs a **one-time live check** (see VERIFY.md).
-  The layered fallbacks make breakage far less likely, but the sandbox that built
-  this has no Chrome, so the field names are confirmed against Walmart's known
-  JSON shape, not a live capture.
-- Keep collection at a human pace (built-in delays) to avoid anti-bot flags. The
-  optional detail-fetch step can be blocked by Walmart's bot wall; the code guards
-  for that and leaves the field blank rather than inventing a value.
+## 유지보수: 수집이 깨졌을 때
+월마트가 페이지 구조를 바꾸면 수집이 0개가 될 수 있습니다.
+그 페이지에서 F12 → Console에 `diagnose-console.js` 내용을 붙여넣고
+출력 전체를 개발자(또는 Claude)에게 전달하면 어댑터(`sites.js`)만 고쳐서 복구됩니다.
+4단계 폴백(JSON → 인라인 state → DOM) 덕분에 잔개편은 대부분 자동으로 버팁니다.
+
+## 구조 (다른 사이트 확장 대비)
+
+- `content.js` — 사이트 무관 수집 엔진 (페이지 넘김·일시정지/재개·중복 제거·작업 서명)
+- `sites.js` — 사이트 어댑터 등록소. **새 사이트 지원 = 어댑터 1개 추가**
+  (`match / context / scrapeList / totalPages / resultCount / nextPageUrl / fetchDetail / buildWorkbook`)
+  - 공용 추출 헬퍼(`SITES.shared`): JSON 전수 스캔, 인라인 state 복구, 상품 배열 탐색 등
+- `excel.js` — 9컬럼 스타일 엑셀 빌더 (ExcelJS: 이미지 삽입 + 서식 + 출처 규칙)
+- `background.js` — 썸네일 이미지 바이트 fetch (CORS 우회용 서비스워커)
+- `popup.html/js` — UI · `icons/` — 아이콘 · `exceljs.min.js` — ExcelJS (MIT)
+- `diagnose-console.js` — 유지보수용 진단 스니펫 (확장에 로드되지 않음)

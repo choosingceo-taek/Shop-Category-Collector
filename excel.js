@@ -10,7 +10,7 @@
      Thumbnail · Product URL · Brand · Category · Product Name ·
      Retail Price · Colorways · Fabric Composition · Key Design Details
 
-   Runs in the content script (global ExcelJS + WPB) and under Node (require).
+   Runs in the content script (global ExcelJS) and under Node (require).
 */
 (function (root) {
   "use strict";
@@ -113,7 +113,7 @@
     return { kept, dropped };
   }
 
-  // items: normalized records. ctx: { ExcelJS?, WPB?, fetchImage?(url)->{ok,base64,ext}|null, onProgress?, scope? }
+  // items: normalized records. ctx: { ExcelJS?, fetchImage?(url)->{ok,base64,ext}|null, onProgress? }
   async function buildKnitWorkbook(items, ctx) {
     ctx = ctx || {};
     const ExcelJS = ctx.ExcelJS || root.ExcelJS || (typeof require !== "undefined" && require("exceljs"));

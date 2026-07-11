@@ -11,9 +11,8 @@
      scrapeList(doc, url) : [normalized item, ...]  (one page)
      totalPages(doc)      : number | null            (display hint only)
      nextPageUrl(url, page): string | null           (null = no more pages)
-     fetchComposition(url) : Promise<string>          (optional deep detail)
-     buildWorkbook(XLSX, templateArrayBuffer, items, opts)
-                          : { bytes, kept, dropped }  (how to export)
+     fetchDetail(url)     : Promise<{composition, colorways, design, reason}>
+     buildWorkbook(items, ctx) : Promise<{ bytes, kept, dropped }>  (how to export)
      templateUrl          : string | null  (extension resource to fetch, or null)
 
    Normalized item shape produced by scrapeList / consumed by buildWorkbook:
@@ -474,7 +473,7 @@
     }
 
     // Clean 9-column workbook with embedded thumbnails (ExcelJS). Async because
-    // it fetches image bytes. ctx carries { ExcelJS, WPB, fetchImage, onProgress }.
+    // it fetches image bytes. ctx carries { ExcelJS, fetchImage, onProgress }.
     async function buildWorkbook(items, ctx) {
       const WPBExcel = (typeof self !== "undefined" && self.WPBExcel) ||
         (typeof global !== "undefined" && global.WPBExcel) ||

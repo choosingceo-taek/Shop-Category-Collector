@@ -188,7 +188,7 @@ async function runStep(j) {
     if (!j.withSpec) j.items.forEach(it => { if (!it.fabric_composition && !it._compReason) it._compReason = "not_collected"; });
     try {
       const ctx = {
-        ExcelJS: self.ExcelJS, WPB: self.WPB, XLSX: self.XLSX,
+        ExcelJS: self.ExcelJS,
         fetchImage: fetchImageViaBg,
         onProgress: (i, total) => report(`엑셀 생성 중… 썸네일 ${i}/${total}`),
       };

@@ -1,15 +1,30 @@
 {
   "manifest_version": 3,
   "name": "Walmart Category Collector",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "description": "Collect all products in a Walmart search/category (every page) into a clean Excel with embedded thumbnails, one click. Excludes recommended/related carousels.",
   "permissions": ["storage", "downloads", "activeTab", "scripting"],
   "host_permissions": [
     "https://www.walmart.com/*",
     "https://*.walmartimages.com/*"
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "Walmart Category Collector" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Walmart Category Collector",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
   "content_scripts": [
     {
       "matches": [
@@ -19,7 +34,7 @@
         "https://www.walmart.com/cp/*",
         "https://www.walmart.com/c/*"
       ],
-      "js": ["xlsx.full.min.js", "exceljs.min.js", "pipeline.js", "excel.js", "sites.js", "content.js"],
+      "js": ["exceljs.min.js", "excel.js", "sites.js", "content.js"],
       "run_at": "document_idle"
     }
   ]
