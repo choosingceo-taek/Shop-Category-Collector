@@ -326,22 +326,31 @@
       return out;
     }
 
+    function domPageLinks(doc) {
+      const nums = [...(doc.querySelectorAll
+        ? doc.querySelectorAll('nav[aria-label*="pagination" i] a, nav[aria-label*="pagination" i] button, ' +
+            '[data-testid*="pagination" i] a, [data-testid*="pagination" i] button, ul.paginator a')
+        : [])].map(a => parseInt((a.textContent || "").trim())).filter(n => !isNaN(n));
+      return nums.length ? Math.max(...nums) : 0;
+    }
+
     function totalPages(doc) {
       doc = doc || document;
       const c = mainContainer(jsonBlobs(doc));
       if (c) {
         const n = findNumber(c, ["maxPage", "numberOfPages", "totalPages", "pageCount"]);
         if (n) return n;
-        const total = findNumber(c, ["totalResultCount", "totalCount", "recordCount"]);
+        const total = findNumber(c, ["totalResultCount", "totalCount", "recordCount", "itemCount"]);
         const size = findNumber(c, ["pageSize", "resultsPerPage", "perPage"]);
         if (total && size) return Math.ceil(total / size);
-        // container present but no page info -> treat as a single page
-        if (Array.isArray(c.itemStacks)) return 1;
       }
-      const nums = [...(doc.querySelectorAll
-        ? doc.querySelectorAll('nav[aria-label*="pagination" i] a, [data-testid*="pagination" i] a, ul.paginator a')
-        : [])].map(a => parseInt(a.textContent)).filter(n => !isNaN(n));
-      return nums.length ? Math.max(...nums) : null;
+      // JSON gave no page info — the rendered pagination links (1 2 3 … at the
+      // bottom) are authoritative. Browse categories often omit maxPage from
+      // their JSON, and assuming "1 page" here silently dropped pages 2+.
+      const dom = domPageLinks(doc);
+      if (dom) return dom;
+      // container present, no pagination anywhere -> genuinely a single page
+      return (c && Array.isArray(c.itemStacks)) ? 1 : null;
     }
 
     function nextPageUrl(url, page) {
@@ -358,12 +367,14 @@
       doc = doc || document;
       const c = mainContainer(jsonBlobs(doc));
       if (c) {
-        const n = findNumber(c, ["totalResultCount", "recordCount", "totalCount", "count"]);
+        const n = findNumber(c, ["totalResultCount", "recordCount", "totalCount", "itemCount", "count"]);
         if (n) return n;
       }
-      // DOM fallback: the "(43)" next to the results heading
+      // DOM fallback: the "(87)" in the results heading. Search pages say
+      // "Results for ... (81)"; browse pages just say "<Category> in <Brand> (87)"
+      // — accept any heading with a trailing count.
       const h = [...(doc.querySelectorAll ? doc.querySelectorAll("h1, h2, [data-testid='results-heading']") : [])]
-        .map(e => e.textContent || "").find(t => /result/i.test(t) && /\(\d[\d,]*\)/.test(t));
+        .map(e => e.textContent || "").find(t => /\(\d[\d,]*\)/.test(t));
       const m = h && h.match(/\((\d[\d,]*)\)/);
       return m ? parseInt(m[1].replace(/,/g, "")) : 0;
     }
