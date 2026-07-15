@@ -42,7 +42,7 @@ const clear = () => new Promise(r => {
   try { chrome.storage.local.remove(JOB, () => r()); } catch (e) { r(); }
 });
 
-function adapter() { return (self.SITES && SITES.active(location.href)) || null; }
+function adapter() { return (self.SITES && SITES.active(location.href, document)) || null; }
 function itemKey(r) { return (r.id || r.product_url || r.name || "").toLowerCase(); }
 
 // Identity of a collection = its search context, ignoring the page number and
@@ -183,6 +183,10 @@ async function runStep(j) {
             it.fabric_composition = d.composition || "";
             if (d.colorways) it.colorways = d.colorways;   // fuller than the list swatches
             if (d.design) it.design = d.design;            // real "Key item features"
+            // optional enrichment some adapters provide (e.g. shopify vendor/type)
+            if (d.brand && !it.brand) it.brand = d.brand;
+            if (d.category && !it.category) it.category = d.category;
+            if (d.price_was && !it.price_was) it.price_was = d.price_was;
             it._compReason = d.reason || "";
           } else { it.fabric_composition = d || ""; }
         } catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run

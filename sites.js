@@ -143,9 +143,27 @@
     return out;
   };
 
+  // Fabric composition from free text (product descriptions etc). Accepts
+  // "Material: 95% Polyester, 5% Spandex" label style AND a bare percentage
+  // run "95% Polyester 5% Spandex"; validated by a fiber/percentage check so
+  // "Material: Imported" style noise never passes.
+  const FIBER_RE = /\d\s*%|\b(cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide|jersey|fleece)\b/i;
+  function compositionFromText(text) {
+    // closing tags become newlines so list-item boundaries survive stripping —
+    // otherwise "Material: 95% ...</li><li>Ruched sides" runs together.
+    const t = String(text || "")
+      .replace(/<\/(?:li|p|div|tr|h\d)>|<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[ \t]+/g, " ");
+    const lab = t.match(/(?:fabric material|material|fabric content|fabric composition|composition|fabric)\s*[:\-]\s*([^.;\n]{3,140})/i);
+    if (lab && FIBER_RE.test(lab[1])) return lab[1].trim();
+    const bare = t.match(/\d{1,3}\s?%\s?[A-Za-z]+(?:[ ,/&+]+\d{1,3}\s?%\s?[A-Za-z]+)*/);
+    return bare ? bare[0].trim() : "";
+  }
+
   // Expose shared helpers so adapters (and tests) can reuse them.
   const shared = { jsonBlobs, sliceBalanced, looksProduct, collectProductArrays,
-    findKeyedValue, findNumber, uniqBy };
+    findKeyedValue, findNumber, uniqBy, compositionFromText, FIBER_RE };
 
   // ---------------------------------------------------------------------------
   // Walmart adapter
@@ -742,14 +760,145 @@
   })();
 
   // ---------------------------------------------------------------------------
+  // Shopify adapter — covers every Shopify storefront (Edikted and thousands of
+  // other fashion shops) in one adapter. Detected by page content (Shopify CDN
+  // markers), not by domain, so any allow-listed Shopify site upgrades from
+  // generic to this automatically.
+  //
+  // List phase reads the RENDERED page (so storefront filters the user applied
+  // are respected), then detail phase uses Shopify's public per-product JSON
+  // endpoint ({product_url}.js) for colorways (Color option values), fabric
+  // composition (from the description, fiber-validated), brand (vendor) and
+  // the original price (compare_at_price).
+  // ---------------------------------------------------------------------------
+  const shopify = (function () {
+    const stripVariant = u => { try { const x = new URL(u); x.search = ""; x.hash = ""; return x.toString(); } catch (e) { return u; } };
+
+    function match(url, doc) {
+      if (!doc || !doc.querySelector) return false;
+      return !!doc.querySelector(
+        'link[href*="cdn.shopify.com"], script[src*="cdn.shopify.com"], ' +
+        'link[href*="/cdn/shop/"], script[src*="/cdn/shop/"], ' +
+        '#shopify-features, meta[name="shopify-checkout-api-token"]');
+    }
+
+    // Category from the collection handle in the URL: /collections/mini-dresses
+    // -> "Mini Dresses". This is literal site structure, not a guess.
+    function categoryFromUrl(url) {
+      const m = String(url || "").match(/\/collections\/([^/?#]+)/i);
+      if (!m) return "";
+      return decodeURIComponent(m[1]).replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function scrapeList(doc, url) {
+      doc = doc || document;
+      const category = categoryFromUrl(url);
+      // 1) generic tile detection, kept only for real product links
+      let items = generic.scrapeList(doc, url)
+        .filter(r => /\/products\//i.test(r.product_url))
+        .map(r => ({ ...r, category, product_url: stripVariant(r.product_url), id: stripVariant(r.product_url) }));
+      // 2) fallback: walk product-link anchors directly (themes whose price
+      //    element sits outside what the generic climb reaches)
+      if (!items.length && doc.querySelectorAll) {
+        const seen = new Set();
+        doc.querySelectorAll('a[href*="/products/"]').forEach(a => {
+          const href = stripVariant(new URL(a.getAttribute("href"), url || "https://x/").toString());
+          if (seen.has(href)) return;
+          // climb a little to find the card that holds image + price text
+          let node = a, img = null, price = "";
+          for (let d = 0; d < 4 && node; d++, node = node.parentElement) {
+            if (!img) img = node.querySelector && node.querySelector("img");
+            if (!price) { const m = ((node.textContent || "").match(/(?:[$₩€£¥]\s?\d[\d,]*(?:\.\d{1,2})?)/) || [])[0]; if (m) price = m; }
+            if (img && price) break;
+          }
+          const name = (a.getAttribute("title") || (img && img.getAttribute("alt")) || (a.textContent || "")).replace(/\s+/g, " ").trim();
+          if (!name || name.length < 3 || !price) return;
+          seen.add(href);
+          items.push({ brand: "", category, department: "", name: name.slice(0, 200), price,
+            product_url: href, image_url: img ? (img.getAttribute("src") || img.getAttribute("data-src") || "") : "", id: href });
+        });
+      }
+      return items;
+    }
+
+    // Shopify's public product JSON: {product_url}.js → title, vendor, options
+    // (Color values = full colorway list), price/compare_at_price (cents),
+    // description HTML (composition usually lives there as "Material: ...").
+    function parseProductJson(p, listPrice) {
+      const opt = (p.options || []).find(o => /colou?r/i.test((o && (o.name || o)) + ""));
+      const colorways = opt ? (opt.values || []).join("; ") : "";
+      const composition = compositionFromText(p.description || p.body_html || "");
+      let price_was = "";
+      if (p.compare_at_price && p.price && p.compare_at_price > p.price) {
+        const sym = (String(listPrice || "").match(/^[^\d\s.,]+/) || ["$"])[0];
+        price_was = sym + (p.compare_at_price / 100).toFixed(2);
+      }
+      return {
+        composition, colorways, design: "",
+        brand: p.vendor || "",
+        category: p.type || "",
+        price_was,
+        reason: composition ? "" : "not_found",
+      };
+    }
+
+    async function fetchDetail(url) {
+      const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
+      let jsUrl;
+      try {
+        const u = new URL(url); u.search = ""; u.hash = "";
+        if (!/\/products\//i.test(u.pathname)) return empty("not_found");
+        jsUrl = u.origin + u.pathname.replace(/\/$/, "") + ".js";
+      } catch (e) { return empty("error"); }
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        let res;
+        try { res = await fetch(jsUrl, { credentials: "include", signal: ctrl.signal }); }
+        finally { clearTimeout(timer); }
+        if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
+        return parseProductJson(await res.json(), "");
+      } catch (e) {
+        return empty((e && e.name === "AbortError") ? "timeout" : "error");
+      }
+    }
+
+    function context(doc) {
+      doc = doc || document;
+      const url = (doc.location && doc.location.href) || (typeof location !== "undefined" ? location.href : "");
+      return {
+        brand: "",
+        category: categoryFromUrl(url),
+        totalPages: generic.totalPages(doc),
+        page: parseInt(new URLSearchParams((doc.location || location).search).get("page") || "1"),
+      };
+    }
+
+    return {
+      id: "shopify",
+      label: "Shopify 스토어",
+      match, context, scrapeList,
+      totalPages: generic.totalPages,
+      resultCount: generic.resultCount,
+      nextPageUrl: generic.nextPageUrl,       // Shopify collections use ?page=N and keep filter params
+      isResultsPage: generic.isResultsPage,
+      fetchDetail, buildWorkbook: generic.buildWorkbook,
+      templateUrl: null,
+      _parseProductJson: parseProductJson, _categoryFromUrl: categoryFromUrl,
+    };
+  })();
+
+  // ---------------------------------------------------------------------------
   // Registry — order matters: more specific adapters must come before generic.
   // ---------------------------------------------------------------------------
-  const ADAPTERS = [walmart, generic];
+  const ADAPTERS = [walmart, shopify, generic];
 
   const SITES = {
     shared,
     adapters: ADAPTERS,
-    active(url) { return ADAPTERS.find(a => a.match(url)) || null; },
+    // doc is optional — adapters that detect by page content (e.g. shopify's
+    // cdn markers) use it; URL-pattern adapters (walmart) ignore it.
+    active(url, doc) { return ADAPTERS.find(a => a.match(url, doc)) || null; },
     get(id) { return ADAPTERS.find(a => a.id === id) || null; },
   };
 
