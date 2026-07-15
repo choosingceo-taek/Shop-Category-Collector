@@ -539,9 +539,212 @@
   })();
 
   // ---------------------------------------------------------------------------
-  // Registry
+  // Generic adapter — DOM-heuristic fallback for sites with no dedicated
+  // adapter. Trades accuracy for zero per-site setup: it finds repeated
+  // "product tile" elements (has a price + an image + a link, and at least a
+  // few near-identical siblings so a one-off promo price can't be mistaken for
+  // a listing) and reads only what's literally on the shelf — name, price,
+  // image, URL. It never guesses brand/category/colorway/composition/design;
+  // those stay "정보 확인" (excel.js's existing not-found rule), because those
+  // fields need per-site page structure knowledge a generic scan can't have.
+  //
+  // Scope is controlled by manifest.json, not by this adapter: match() is a
+  // catch-all (true) so it only ever runs on domains manifest.json already
+  // allow-listed (content scripts don't load on unlisted domains). Adding a
+  // new site with basic-field support = one manifest.json pattern, no code.
   // ---------------------------------------------------------------------------
-  const ADAPTERS = [walmart];
+  const generic = (function () {
+    const PRICE_RE = /(?:[$₩€£¥]\s?\d[\d,]*(?:\.\d{1,2})?|\d[\d,]*(?:\.\d{1,2})?\s?(?:원|USD|EUR|GBP))/;
+    const MAX_TILES = 400;
+
+    const textOf = el => ((el && el.textContent) || "").replace(/\s+/g, " ").trim();
+    const abs = (href, base) => { try { return new URL(href, base).toString(); } catch (e) { return href || ""; } };
+
+    function firstPrice(text) { const m = text.match(PRICE_RE); return m ? m[0] : ""; }
+
+    // Nearest ancestor (including self) of `el` that contains BOTH an <img>
+    // and an <a href>, searched within a shallow depth so we land on the tile,
+    // not the whole page body.
+    function tileAncestor(el, maxDepth) {
+      let node = el, depth = 0;
+      while (node && depth <= maxDepth) {
+        const hasImg = !!(node.querySelector && node.querySelector("img"));
+        const hasLink = (node.tagName === "A" && node.getAttribute("href")) ||
+          !!(node.querySelector && node.querySelector("a[href]"));
+        if (hasImg && hasLink) return node;
+        node = node.parentElement;
+        depth++;
+      }
+      return null;
+    }
+
+    // A crude structural signature used to check that a tile isn't a one-off:
+    // real listings repeat the same tag+class shape multiple times.
+    function signature(el) {
+      const cls = el.className && typeof el.className === "string"
+        ? el.className.trim().split(/\s+/).slice(0, 3).sort().join(".") : "";
+      return el.tagName + "|" + cls + "|" + (el.parentElement ? el.parentElement.tagName : "");
+    }
+
+    function bestImage(el) {
+      const img = el.querySelector && el.querySelector("img");
+      if (!img) return "";
+      const src = img.getAttribute("src") || img.getAttribute("data-src") || "";
+      if (src && !/^data:/i.test(src)) return src;
+      const srcset = img.getAttribute("data-srcset") || img.getAttribute("srcset") || "";
+      const m = srcset.match(/(\S+)\s*(?:\d|,|$)/);
+      return m ? m[1] : (src || "");
+    }
+
+    function bestUrl(el, base) {
+      const a = el.tagName === "A" ? el : (el.querySelector && el.querySelector("a[href]"));
+      return a ? abs(a.getAttribute("href"), base) : "";
+    }
+
+    // Name: prefer a heading/title-class element (the explicit product-name
+    // convention most listing markup uses), then image alt text (sites that
+    // skip a name element but write a specific alt), then the link's
+    // title/aria-label, then the longest remaining text run that isn't the
+    // price. Heading beats alt because alt is often a generic repeated label
+    // ("Product photo") while a title/name-class element is usually the one
+    // place the specific product name actually lives.
+    function bestName(el, priceText) {
+      const heading = el.querySelector && el.querySelector(
+        'h1,h2,h3,h4,h5,h6,[class*="title" i],[class*="name" i],[class*="heading" i]');
+      const ht = heading && textOf(heading);
+      if (ht && ht.length >= 3 && ht.length <= 200 && ht !== priceText) return ht;
+
+      const img = el.querySelector && el.querySelector("img");
+      const alt = img && (img.getAttribute("alt") || "").trim();
+      if (alt && alt.length >= 3 && alt.length <= 150 && !/^(image|photo|thumbnail)$/i.test(alt)) return alt;
+
+      const a = el.tagName === "A" ? el : (el.querySelector && el.querySelector("a[href]"));
+      const label = a && ((a.getAttribute("title") || a.getAttribute("aria-label") || "").trim());
+      if (label && label.length >= 3) return label;
+
+      // fallback: longest text node in the tile, excluding the price text
+      let best = "";
+      (el.querySelectorAll ? el.querySelectorAll("*") : []).forEach(n => {
+        if (n.children && n.children.length) return;   // only leaf-ish nodes
+        const t = textOf(n);
+        if (t && t !== priceText && !PRICE_RE.test(t) && t.length > best.length && t.length <= 200) best = t;
+      });
+      return best;
+    }
+
+    function scrapeList(doc, url) {
+      doc = doc || document;
+      if (!doc.querySelectorAll) return [];
+      const base = url || (doc.location && doc.location.href) || "";
+
+      // 1) price-bearing leaf-ish elements (own text matches, few/no element children)
+      const priceLeaves = [];
+      doc.querySelectorAll("*").forEach(el => {
+        if (priceLeaves.length >= MAX_TILES * 4) return;   // hard cap, pathological pages
+        if (el.children && el.children.length > 2) return;
+        const t = textOf(el);
+        if (t.length <= 40 && PRICE_RE.test(t)) priceLeaves.push(el);
+      });
+
+      // 2) climb to the tile (has image + link), dedupe by node
+      const tiles = new Map();   // node -> priceText
+      for (const leaf of priceLeaves) {
+        const tile = tileAncestor(leaf, 6);
+        if (tile && !tiles.has(tile)) tiles.set(tile, firstPrice(textOf(leaf)));
+      }
+
+      // 3) require repetition — reject signatures with < 3 members (promo one-offs)
+      const bySig = new Map();
+      tiles.forEach((price, tile) => {
+        const sig = signature(tile);
+        (bySig.get(sig) || bySig.set(sig, []).get(sig)).push(tile);
+      });
+      const validTiles = new Set();
+      bySig.forEach(list => { if (list.length >= 3) list.forEach(t => validTiles.add(t)); });
+
+      // 4) extract, dedupe by URL
+      const seen = new Set();
+      const out = [];
+      for (const [tile, price] of tiles) {
+        if (!validTiles.has(tile) || out.length >= MAX_TILES) continue;
+        const product_url = bestUrl(tile, base);
+        if (!product_url || seen.has(product_url)) continue;
+        const name = bestName(tile, price);
+        if (!name) continue;
+        seen.add(product_url);
+        out.push({
+          brand: "", category: "", department: "",
+          name, price, product_url,
+          image_url: bestImage(tile),
+          id: product_url,
+        });
+      }
+      return out;
+    }
+
+    // Best-effort page-count / result-count text scan; both are display hints
+    // only — the engine treats an unknown (null/0) as "probe the next page and
+    // stop when nothing new comes back", so a wrong guess here can't drop pages.
+    function totalPages(doc) {
+      doc = doc || document;
+      const nums = [...(doc.querySelectorAll
+        ? doc.querySelectorAll('nav[aria-label*="pagination" i] a, nav[aria-label*="pagination" i] button, ' +
+            '[class*="pagination" i] a, [class*="pagination" i] button, a[rel="next"]')
+        : [])].map(a => parseInt((a.textContent || "").trim())).filter(n => !isNaN(n) && n < 10000);
+      return nums.length ? Math.max(...nums) : null;
+    }
+    function resultCount(doc) {
+      doc = doc || document;
+      const body = (doc.body && doc.body.textContent) || "";
+      const m = body.match(/\b(\d[\d,]{1,6})\s*(?:results?|items?|products?)\b/i);
+      return m ? parseInt(m[1].replace(/,/g, "")) : 0;
+    }
+    function nextPageUrl(url, page) {
+      try {
+        const u = new URL(url);
+        u.searchParams.set("page", String(page + 1));
+        return u.toString();
+      } catch (e) { return null; }
+    }
+    function isResultsPage(doc) {
+      doc = doc || document;
+      const body = (doc.body && doc.body.textContent) || "";
+      return !/couldn.t be found|page not found|404 error|sorry.{0,20}that/i.test(body);
+    }
+
+    async function buildWorkbook(items, ctx) {
+      const WPBExcel = (typeof self !== "undefined" && self.WPBExcel) ||
+        (typeof global !== "undefined" && global.WPBExcel) ||
+        (typeof require !== "undefined" && require("./excel.js"));
+      return WPBExcel.buildKnitWorkbook(items, ctx);
+    }
+
+    function context(doc) {
+      doc = doc || document;
+      const h1 = (doc.querySelector && doc.querySelector("h1")) || {};
+      return {
+        brand: "", category: (h1.textContent || "").trim().slice(0, 80),
+        totalPages: totalPages(doc),
+        page: parseInt(new URLSearchParams((doc.location || location).search).get("page") || "1"),
+      };
+    }
+
+    return {
+      id: "generic",
+      label: "일반 사이트 (기본 정보만)",
+      match: () => true,   // catch-all; manifest.json's host allowlist is the real gate
+      context, scrapeList, totalPages, resultCount, nextPageUrl, buildWorkbook, isResultsPage,
+      templateUrl: null,
+      // fetchDetail intentionally omitted — content.js skips detail collection
+      // gracefully when an adapter doesn't implement it.
+      _tileAncestor: tileAncestor, _signature: signature, _bestName: bestName,
+    };
+  })();
+
+  // ---------------------------------------------------------------------------
+  // Registry — order matters: more specific adapters must come before generic.
+  // ---------------------------------------------------------------------------
+  const ADAPTERS = [walmart, generic];
 
   const SITES = {
     shared,

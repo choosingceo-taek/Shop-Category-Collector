@@ -264,7 +264,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.type === "reset" || m.type === "cancel") { clear().then(() => send({ ok: true })); return true; }
   if (m.type === "context") {
     const a = adapter();
-    send(a ? Object.assign({ site: a.label }, a.context(document)) : { site: null });
+    send(a ? Object.assign({ site: a.label, adapterId: a.id, hasDetail: typeof a.fetchDetail === "function" }, a.context(document)) : { site: null });
     return true;
   }
   if (m.type === "status") { g().then(j => send(j || {})); return true; }

@@ -1,9 +1,16 @@
-# Walmart Category Collector (v1.0)
+# Shop Category Collector (v1.2)
 
-월마트에서 **검색·필터링한 카테고리의 전체 상품**(모든 페이지)을 클릭 한 번으로
+쇼핑몰에서 **검색·필터링한 카테고리의 전체 상품**(모든 페이지)을 클릭 한 번으로
 **썸네일 이미지가 삽입된 엑셀**로 추출하는 크롬 확장 프로그램.
 추천 상품·연관 상품·스폰서 캐러셀은 제외하고, **실제 검색 결과만** 담습니다.
 전부 브라우저 안에서 동작 — 서버·유료 서비스 없음.
+
+**두 단계 지원**
+- **Walmart** — 전용 어댑터. 원단 조성·색상·디자인 디테일까지 정밀 추출.
+- **그 외 허용된 사이트** — 범용 어댑터. 사이트 구조를 몰라도 화면에서 "반복되는
+  상품 카드"를 찾아 **썸네일·상품명·가격·URL**을 뽑음. 브랜드/카테고리/색상/원단/
+  디자인은 사이트마다 구조가 달라 추측하지 않고 빨간 "정보 확인"으로 남김
+  (틀린 정보를 만들어내지 않는다는 원칙 유지).
 
 ---
 
@@ -74,13 +81,42 @@
 출력 전체를 개발자(또는 Claude)에게 전달하면 어댑터(`sites.js`)만 고쳐서 복구됩니다.
 4단계 폴백(JSON → 인라인 state → DOM) 덕분에 잔개편은 대부분 자동으로 버팁니다.
 
-## 구조 (다른 사이트 확장 대비)
+## 새 사이트 추가하기
+
+**2가지 방법이 있습니다.**
+
+### A. 기본 정보만 필요할 때 — 코드 작업 없음 (권장, 대부분의 경우)
+`sites.js`의 **범용 어댑터**가 화면에서 반복되는 상품 카드를 자동으로 찾아
+썸네일·상품명·가격·URL을 뽑습니다. 새 사이트를 추가하려면:
+
+1. `manifest.json`의 `host_permissions`와 `content_scripts.matches`에 그 사이트의
+   URL 패턴을 한 줄 추가 (예: `"https://www.example.com/category/*"`)
+2. 확장 리로드 → 그 사이트 카테고리 페이지에서 동일하게 사용
+
+브랜드/카테고리/색상/원단/디자인 칸은 사이트마다 구조가 달라 자동으로 못 채우고
+빨간 "정보 확인"으로 남습니다 — **틀린 값을 만들어내지 않는 게 원칙**이기 때문입니다.
+
+### B. Walmart 수준의 정밀 추출이 필요할 때 — 전용 어댑터 작성
+`sites.js`에 어댑터 객체를 하나 추가하고 `ADAPTERS` 배열에 **generic보다 앞에**
+등록하면 그 사이트에서 우선 적용됩니다 (`ADAPTERS = [walmart, 새어댑터, generic]`).
+
+어댑터 계약: `match / context / scrapeList / totalPages / resultCount /
+nextPageUrl / fetchDetail / buildWorkbook`. 공용 헬퍼(`SITES.shared`: JSON 전수
+스캔, 인라인 state 복구, 상품 배열 탐색 등)를 재사용하면 작업량이 줄어듭니다.
+Walmart 어댑터가 참고 구현입니다.
+
+> 두 경우 모두 `manifest.json`에 등록된 사이트에서만 확장이 동작합니다
+> (`<all_urls>` 전체 권한은 쓰지 않음 — Chrome 설치 경고를 최소화하기 위한 선택).
+
+## 구조
 
 - `content.js` — 사이트 무관 수집 엔진 (페이지 넘김·일시정지/재개·중복 제거·작업 서명)
-- `sites.js` — 사이트 어댑터 등록소. **새 사이트 지원 = 어댑터 1개 추가**
-  (`match / context / scrapeList / totalPages / resultCount / nextPageUrl / fetchDetail / buildWorkbook`)
+- `sites.js` — 사이트 어댑터 등록소. `walmart`(정밀) + `generic`(범용 폴백, DOM
+  휴리스틱으로 반복 상품 카드 탐지)
   - 공용 추출 헬퍼(`SITES.shared`): JSON 전수 스캔, 인라인 state 복구, 상품 배열 탐색 등
-- `excel.js` — 9컬럼 스타일 엑셀 빌더 (ExcelJS: 이미지 삽입 + 서식 + 출처 규칙)
+- `excel.js` — 11컬럼 스타일 엑셀 빌더 (ExcelJS: 이미지 삽입 + 서식 + 출처 규칙).
+  모든 어댑터가 공유 — 새 사이트를 추가해도 엑셀 형식은 그대로.
 - `background.js` — 썸네일 이미지 바이트 fetch (CORS 우회용 서비스워커)
-- `popup.html/js` — UI · `icons/` — 아이콘 · `exceljs.min.js` — ExcelJS (MIT)
+- `popup.html/js` — UI (일반 사이트에서는 "기본 정보만 수집" 안내 표시) ·
+  `icons/` — 아이콘 · `exceljs.min.js` — ExcelJS (MIT)
 - `diagnose-console.js` — 유지보수용 진단 스니펫 (확장에 로드되지 않음)

@@ -8,10 +8,12 @@ button.sec{background:#eee;color:#333}
 button.warn{background:#fbe9e9;color:#b00000}
 #status{margin-top:10px;padding:8px;background:#f4f6f8;border-radius:8px;min-height:18px;font-size:12px}
 label{display:flex;gap:6px;align-items:center;font-size:12px}
+#genericNote{display:none;background:#fff6e5;color:#8a5a00;border-radius:8px;padding:8px;font-size:11.5px;margin:8px 0}
 </style></head><body>
-<h3>Walmart Category Collector</h3>
+<h3>Category Collector</h3>
 <div class="row muted" id="ctx">페이지 감지 중…</div>
-<div class="row"><label><input type="checkbox" id="spec" checked> 상품 상세까지 수집 — 원단·색상·디자인 (느림)</label></div>
+<div class="row" id="specRow"><label><input type="checkbox" id="spec" checked> 상품 상세까지 수집 — 원단·색상·디자인 (느림)</label></div>
+<div id="genericNote">이 사이트는 전용 지원이 없어 기본 정보(썸네일·이름·가격·URL)만 수집됩니다. 색상/원단/디자인 칸은 "정보 확인"으로 남습니다.</div>
 <div class="row"><button id="go">이 카테고리 전 페이지 수집 → 엑셀</button></div>
 <div class="row"><button class="sec" id="pauseresume" disabled>⏸ 일시정지</button></div>
 <div class="row"><button class="warn" id="reset">🗑 새 작업 (현재 작업 삭제)</button></div>

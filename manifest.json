@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Walmart Category Collector",
-  "version": "1.1.2",
-  "description": "Collect all products in a Walmart search/category (every page) into a clean Excel with embedded thumbnails, one click. Excludes recommended/related carousels.",
+  "name": "Shop Category Collector",
+  "version": "1.2.0",
+  "description": "Collect every product in a filtered category/search (every page) into a clean Excel with embedded thumbnails, one click. Full detail (fabric/colorway/design) on Walmart; basic fields (name/price/image/URL) on other allow-listed sites. Excludes recommended/related carousels.",
   "permissions": ["storage", "downloads", "activeTab", "scripting"],
   "host_permissions": [
     "https://www.walmart.com/*",
@@ -17,7 +17,7 @@
   "background": { "service_worker": "background.js" },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Walmart Category Collector",
+    "default_title": "Shop Category Collector",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

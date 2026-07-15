@@ -15,7 +15,11 @@ async function refresh() {
     el("pauseresume").disabled = true;
     return;
   }
-  el("ctx").textContent = `${ctx.site} · ${ctx.brand || "브랜드?"} · ${ctx.totalPages ? "총 " + ctx.totalPages + "p" : "페이지 자동 감지"} (현재 ${ctx.page || 1})`;
+  const brandPart = ctx.brand ? ` · ${ctx.brand}` : "";
+  el("ctx").textContent = `${ctx.site}${brandPart} · ${ctx.totalPages ? "총 " + ctx.totalPages + "p" : "페이지 자동 감지"} (현재 ${ctx.page || 1})`;
+
+  el("specRow").style.display = ctx.hasDetail ? "" : "none";
+  el("genericNote").style.display = ctx.hasDetail ? "none" : "";
 
   const st = await send(tab.id, { type: "status" });
   const running = !!(st && st.active);
