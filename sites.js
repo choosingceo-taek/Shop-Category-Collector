@@ -634,7 +634,7 @@
 
       const img = el.querySelector && el.querySelector("img");
       const alt = img && (img.getAttribute("alt") || "").trim();
-      if (alt && alt.length >= 3 && alt.length <= 150 && !/^(image|photo|thumbnail)$/i.test(alt)) return alt;
+      if (alt && alt.length >= 3 && alt.length <= 150 && !/^(image|photo|thumbnail|product|products|img|picture)$/i.test(alt)) return alt;
 
       const a = el.tagName === "A" ? el : (el.querySelector && el.querySelector("a[href]"));
       const label = a && ((a.getAttribute("title") || a.getAttribute("aria-label") || "").trim());
@@ -648,6 +648,49 @@
         if (t && t !== priceText && !PRICE_RE.test(t) && t.length > best.length && t.length <= 200) best = t;
       });
       return best;
+    }
+
+    // Products from schema.org JSON-LD (ItemList / Product). Many storefronts
+    // (Salesforce Commerce, Magento, custom) server-render this, giving reliable
+    // name + url (+ often image/price) with no markup guessing. Currency symbol
+    // is derived from priceCurrency when the price is a bare number.
+    const CUR = { USD: "$", CAD: "$", AUD: "$", NZD: "$", GBP: "£", EUR: "€", JPY: "¥", KRW: "₩" };
+    function priceFromOffers(offers) {
+      const o = Array.isArray(offers) ? offers[0] : (offers || {});
+      const spec = o.priceSpecification || {};
+      const p = o.price != null ? o.price : (o.lowPrice != null ? o.lowPrice : spec.price);
+      if (p == null || p === "") return "";
+      const s = String(p);
+      if (/^[^\d]/.test(s)) return s;                 // already has a symbol
+      const cur = o.priceCurrency || spec.priceCurrency || "";
+      return (CUR[cur] || (cur ? cur + " " : "")) + s;
+    }
+    function firstImg(img) { return Array.isArray(img) ? (img[0] && (img[0].url || img[0]) || "") : (img && (img.url || img) || ""); }
+    function jsonLdProducts(doc, base) {
+      const out = [];
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        let data; try { data = JSON.parse(s.textContent); } catch (e) { return; }
+        const nodes = Array.isArray(data) ? data : (data["@graph"] ? data["@graph"] : [data]);
+        nodes.forEach(node => {
+          if (!node || typeof node !== "object") return;
+          const type = [].concat(node["@type"] || []).join(",");
+          if (/ItemList/i.test(type) && Array.isArray(node.itemListElement)) {
+            node.itemListElement.forEach(li => {
+              const it = (li && li.item) || li || {};
+              const url = it.url || it["@id"] || (typeof li.url === "string" ? li.url : "");
+              const name = it.name || "";
+              if (!url && !name) return;
+              out.push({ url: abs(url, base), name: String(name),
+                image: firstImg(it.image), price: priceFromOffers(it.offers) });
+            });
+          } else if (/(^|,)Product(,|$)/i.test(type) && node.name) {
+            const url = node.url || node["@id"] || base;
+            out.push({ url: abs(url, base), name: String(node.name),
+              image: firstImg(node.image), price: priceFromOffers(node.offers) });
+          }
+        });
+      });
+      return out;
     }
 
     function scrapeList(doc, url) {
@@ -687,17 +730,39 @@
         if (!validTiles.has(tile) || out.length >= MAX_TILES) continue;
         const product_url = bestUrl(tile, base);
         if (!product_url || seen.has(product_url)) continue;
-        const name = bestName(tile, price);
-        if (!name) continue;
         seen.add(product_url);
+        // keep the tile even if the name is weak/empty (generic alt) — JSON-LD
+        // below may supply the real name for this URL; unnamed rows are dropped
+        // at the end.
         out.push({
           brand: "", category: "", department: "",
-          name, price, product_url,
+          name: bestName(tile, price) || "", price, product_url,
           image_url: bestImage(tile),
           id: product_url,
         });
       }
-      return out;
+
+      // 5) merge JSON-LD products: fill fields on matched URLs, add any the DOM
+      //    scan missed. Keyed by pathname so absolute/relative forms unify.
+      const pathKey = u => { try { return new URL(u, base).pathname.replace(/\/$/, ""); } catch (e) { return u; } };
+      const byPath = new Map(out.map(r => [pathKey(r.product_url), r]));
+      jsonLdProducts(doc, base).forEach(p => {
+        if (!p.url || !/\/[a-z0-9]/i.test(p.url)) return;
+        const key = pathKey(p.url);
+        const existing = byPath.get(key);
+        if (existing) {
+          if (!existing.name && p.name) existing.name = p.name;
+          if (!existing.price && p.price) existing.price = p.price;
+          if (!existing.image_url && p.image) existing.image_url = p.image;
+        } else if (p.name && out.length < MAX_TILES) {
+          const rec = { brand: "", category: "", department: "",
+            name: p.name, price: p.price || "", product_url: p.url,
+            image_url: p.image || "", id: p.url };
+          byPath.set(key, rec); out.push(rec);
+        }
+      });
+      // drop any tile that never got a name (weak DOM match with no JSON-LD hit)
+      return out.filter(r => r.name);
     }
 
     // Best-effort page-count / result-count text scan; both are display hints
@@ -756,6 +821,7 @@
       // fetchDetail intentionally omitted — content.js skips detail collection
       // gracefully when an adapter doesn't implement it.
       _tileAncestor: tileAncestor, _signature: signature, _bestName: bestName,
+      _jsonLdProducts: jsonLdProducts,
     };
   })();
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shop Category Collector",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Collect every product in a filtered category/search (every page) into a clean Excel with embedded thumbnails, one click. Full detail (fabric/colorway/design) on Walmart; basic fields (name/price/image/URL) on other allow-listed sites. Excludes recommended/related carousels.",
   "permissions": ["storage", "downloads", "activeTab", "scripting"],
   "host_permissions": [
@@ -11,7 +11,10 @@
     "https://www.edikted.co.uk/*",
     "https://edikted.com/*",
     "https://www.edikted.com/*",
-    "https://*.shopify.com/*"
+    "https://*.shopify.com/*",
+    "https://cottonon.com/*",
+    "https://www.cottonon.com/*",
+    "https://*.cottonon.com/*"
   ],
   "icons": {
     "16": "icons/icon16.png",
@@ -41,7 +44,10 @@
         "https://edikted.co.uk/*",
         "https://www.edikted.co.uk/*",
         "https://edikted.com/*",
-        "https://www.edikted.com/*"
+        "https://www.edikted.com/*",
+        "https://cottonon.com/*",
+        "https://www.cottonon.com/*",
+        "https://*.cottonon.com/*"
       ],
       "js": ["exceljs.min.js", "excel.js", "sites.js", "content.js"],
       "run_at": "document_idle"
