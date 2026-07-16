@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset="utf-8"><style>
-body{font:13px system-ui;width:300px;padding:14px;margin:0}
+body{font:13px system-ui;width:308px;padding:14px;margin:0}
 h3{margin:0 0 8px;font-size:14px}
 .row{margin:8px 0}.muted{color:#666;font-size:12px}
 button{width:100%;padding:9px;border:0;border-radius:8px;background:#0071dc;color:#fff;font-weight:600;cursor:pointer}
@@ -9,11 +9,33 @@ button.warn{background:#fbe9e9;color:#b00000}
 #status{margin-top:10px;padding:8px;background:#f4f6f8;border-radius:8px;min-height:18px;font-size:12px}
 label{display:flex;gap:6px;align-items:center;font-size:12px}
 #genericNote{display:none;background:#fff6e5;color:#8a5a00;border-radius:8px;padding:8px;font-size:11.5px;margin:8px 0}
+details{margin:8px 0;border:1px solid #e5e5e5;border-radius:8px;padding:6px 10px}
+summary{cursor:pointer;font-size:12px;font-weight:600;color:#333}
+.f{margin:8px 0}
+.f label{display:block;margin-bottom:3px;color:#555;font-size:11.5px}
+.f input[type=text]{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:12px}
+.f small{color:#999;font-size:10.5px}
+.chk{display:flex;gap:6px;align-items:center;font-size:12px;margin:6px 0}
 </style></head><body>
 <h3>Category Collector</h3>
 <div class="row muted" id="ctx">페이지 감지 중…</div>
 <div class="row" id="specRow"><label><input type="checkbox" id="spec" checked> 상품 상세까지 수집 — 원단·색상·디자인 (느림)</label></div>
 <div id="genericNote">이 사이트는 전용 지원이 없어 기본 정보(썸네일·이름·가격·URL)만 수집됩니다. 색상/원단/디자인 칸은 "정보 확인"으로 남습니다.</div>
+
+<details>
+  <summary>필터 (선택) — 엑셀에 담기 전에 정제</summary>
+  <div class="chk"><input type="checkbox" id="fDomOnly"><label style="margin:0">주 브랜드만 (제3자 셀러 자동 제외)</label></div>
+  <div class="f"><label>브랜드만 남기기</label>
+    <input type="text" id="fBrand" placeholder="예: No Boundaries, Time and Tru">
+    <small>쉼표로 여러 개 · 비우면 전체</small></div>
+  <div class="f"><label>상품명 포함 (이 단어가 있는 것만)</label>
+    <input type="text" id="fInclude" placeholder="예: Women, Legging">
+    <small>쉼표 구분 · 비우면 전체</small></div>
+  <div class="f"><label>상품명 제외 (이 단어가 있으면 버림)</label>
+    <input type="text" id="fExclude" placeholder="예: Men's, Juniors">
+    <small>쉼표 구분</small></div>
+</details>
+
 <div class="row"><button id="go">이 카테고리 전 페이지 수집 → 엑셀</button></div>
 <div class="row"><button class="sec" id="pauseresume" disabled>⏸ 일시정지</button></div>
 <div class="row"><button class="warn" id="reset">🗑 새 작업 (현재 작업 삭제)</button></div>

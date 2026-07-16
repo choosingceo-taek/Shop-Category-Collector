@@ -208,10 +208,16 @@ async function runStep(j) {
       const ctx = {
         ExcelJS: self.ExcelJS,
         fetchImage: fetchImageViaBg,
+        filters: j.filters || {},
         onProgress: (i, total) => report(`엑셀 생성 중… 썸네일 ${i}/${total}`),
       };
       const { bytes, kept, dropped } = await a.buildWorkbook(j.items, ctx);
       const total = Object.values(kept).reduce((n, v) => n + (v.length || 0), 0);
+      // break the dropped list down by reason for a transparent summary
+      const dropByReason = {};
+      (dropped || []).forEach(d => { const r = d[1] || "기타"; dropByReason[r] = (dropByReason[r] || 0) + 1; });
+      const reasonKo = { duplicate: "중복", brand: "브랜드", "name-include": "이름필터", "name-exclude": "이름제외" };
+      const dropSummary = Object.keys(dropByReason).map(r => `${reasonKo[r] || r} ${dropByReason[r]}`).join(", ");
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const el = document.createElement("a");
@@ -228,7 +234,7 @@ async function runStep(j) {
       el.download = `${a.id}_${brandTag}${catTag ? "_" + catTag : ""}_${total}items_${stamp}.xlsx`;
       document.body.appendChild(el); el.click(); el.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      await report(`완료: ${total}개 기입${(dropped || []).length ? ", 중복 " + dropped.length + "개 제외" : ""} · 총 수집 ${j.items.length}개`);
+      await report(`완료: ${total}개 기입${dropSummary ? " · 제외(" + dropSummary + ")" : ""} · 총 수집 ${j.items.length}개`);
     } catch (e) {
       await report("엑셀 생성 실패: " + (e && e.message || e));
     }
@@ -240,7 +246,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.type === "start") {
     // always a FRESH job tagged with this page's collection signature
     s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
-        totalPages: 0, emptyStreak: 0, withSpec: m.withSpec,
+        totalPages: 0, emptyStreak: 0, withSpec: m.withSpec, filters: m.filters || {},
         sig: collectionSig(location.href), status: "시작…" })
       .then(() => {
         // collection always begins at page 1, wherever the user started from

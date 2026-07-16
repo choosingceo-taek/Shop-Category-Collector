@@ -51,14 +51,32 @@
 다른 카테고리로 옮겨가면 이전 작업은 **자동 폐기**됩니다(수집 서명 검사) —
 이전 카테고리 결과가 새 엑셀에 섞이는 일은 구조적으로 불가능합니다.
 
+## 필터 (선택) — 엑셀에 담기 전에 정제
+
+팝업의 **"필터"** 섹션을 펼쳐서, 수집한 결과를 엑셀로 내보내기 전에 걸러낼 수
+있습니다. 수집은 그대로 다 받고 **내보낼 때만** 적용되며, 상태창에 무엇이 몇 개
+제외됐는지 표시됩니다 (예: `제외(중복 2, 브랜드 5, 이름제외 3)`).
+
+- **주 브랜드만 (제3자 셀러 자동 제외)** — 검색한 주 브랜드만 남기고, 결과에 끼어든
+  마켓플레이스 제3자 셀러(예: ZHYou, BUIGTTKLOP)를 자동 제거
+- **브랜드만 남기기** — 특정 브랜드명 입력 (쉼표로 여러 개, 비우면 전체)
+- **상품명 포함** — 이 단어가 있는 상품만 (예: `Women, Legging`)
+- **상품명 제외** — 이 단어가 있으면 버림 (예: `Men's, Juniors`).
+  단어 경계로 매칭하므로 `Men's` 제외가 `Women's` 상품을 지우지 않습니다.
+
 ## 엑셀 출력
+
+12개 컬럼:
 
 | 컬럼 | 내용 |
 |---|---|
 | Thumbnail | **실제 상품 이미지 삽입** (불가 시 `=IMAGE()` 수식 + URL 메모) |
 | Product URL | 클릭 가능한 링크 |
-| Brand / Category / Product Name / Retail Price | 목록 페이지의 실제 값 |
+| Brand / Category / Product Name | 목록 페이지의 실제 값 (Category는 브랜드 제거) |
+| Retail Price / Current Price | 정가 / 현재가 — 다르면(세일) 둘 다 빨강 |
+| Size | 상품명에서 분리한 사이즈 범위 |
 | Colorways | 상세 페이지 색상 스와치 전체 (상세 수집 시) |
+| Color Count | 색상 개수 (Colorways 항목 수) |
 | Fabric Composition | 상세 페이지의 실제 원단 조성 (상세 수집 시) |
 | Key Design Details | 상세 "Key item features"의 Fit/Neckline/Sleeves/Features 등 |
 

@@ -29,9 +29,17 @@ async function refresh() {
   if (st && st.status) el("status").textContent = st.status;
 }
 
+const terms = id => el(id).value.split(",").map(s => s.trim()).filter(Boolean);
+
 el("go").onclick = async () => {
   const tab = await tabQ();
-  await send(tab.id, { type: "start", withSpec: el("spec").checked });
+  const filters = {
+    dominantBrandOnly: el("fDomOnly").checked,
+    brands: terms("fBrand"),
+    nameInclude: terms("fInclude"),
+    nameExclude: terms("fExclude"),
+  };
+  await send(tab.id, { type: "start", withSpec: el("spec").checked, filters });
   el("status").textContent = "시작했습니다. 팝업을 닫아도 진행됩니다.";
   refresh();
 };

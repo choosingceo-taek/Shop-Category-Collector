@@ -16,8 +16,9 @@
   "use strict";
 
   const HEADERS = ["Thumbnail", "Product URL", "Brand", "Category", "Product Name",
-    "Retail Price", "Current Price", "Size", "Colorways", "Fabric Composition", "Key Design Details"];
-  const WIDTHS = [16, 44, 15, 18, 36, 12, 12, 13, 22, 28, 32];
+    "Retail Price", "Current Price", "Size", "Colorways", "Color Count",
+    "Fabric Composition", "Key Design Details"];
+  const WIDTHS = [16, 42, 15, 18, 34, 12, 12, 13, 22, 10, 26, 30];
   const IMG_PX = 96;
   const ROW_H = 78;
 
@@ -111,8 +112,20 @@
       cur: cur ? { text: cur, kind } : check(),
     };
   }
+  // Split a colorways string ("Black; Navy; White") into its list. Tolerant of
+  // ';' , '/' and ',' separators.
+  function colorList(rec) {
+    const s = (rec.colorways && String(rec.colorways).trim()) || "";
+    if (!s) return [];
+    return s.split(/\s*[;/]\s*|\s*,\s*/).map(x => x.trim()).filter(Boolean);
+  }
   function fieldColorways(rec) {
-    return (rec.colorways && String(rec.colorways).trim()) ? real(String(rec.colorways).trim()) : check();
+    const s = (rec.colorways && String(rec.colorways).trim());
+    return s ? real(s) : check();
+  }
+  function fieldColorCount(rec) {
+    const n = colorList(rec).length;
+    return n ? real(String(n)) : check();   // unknown colorways -> unknown count (red)
   }
   function fieldComposition(rec) {
     if (rec.fabric_composition && String(rec.fabric_composition).trim())
@@ -135,28 +148,69 @@
       : FONT_REAL;
   }
 
-  // Keep every product on the page; only drop exact duplicates. Related/
-  // recommended/sponsored carousels are already excluded upstream (the collector
-  // reads the main results grid only), so nothing else needs filtering here.
-  function filterKept(items) {
+  const norm = s => String(s || "").toLowerCase().trim();
+  // Word-boundary term match: the term must start at a boundary (start of string
+  // or a non-alphanumeric char) but need not end at one, so "legging" matches
+  // "leggings" yet "men's" does NOT match inside "women's" (wo·men's). Without
+  // this, excluding "Men's" would wrongly drop every "Women's" product.
+  function hasTerm(hay, term) {
+    if (!term) return false;
+    const esc = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    try { return new RegExp("(?:^|[^a-z0-9])" + esc, "i").test(hay); }
+    catch (e) { return hay.includes(term); }
+  }
+
+  // The brand a shopper searched for is the MAJORITY brand; third-party
+  // marketplace sellers (ZHYou, BUIGTTKLOP, …) show up as different, sparse
+  // brand values. "제3자 셀러 제외" keeps only the dominant brand.
+  function dominantBrand(items) {
+    const count = new Map();
+    for (const r of items) { const b = norm(r.brand); if (b) count.set(b, (count.get(b) || 0) + 1); }
+    let best = "", n = 0;
+    count.forEach((c, b) => { if (c > n) { n = c; best = b; } });
+    return best;
+  }
+
+  // Apply de-dupe first, then the optional user filters. Returns kept + a
+  // reason-tagged dropped list so the UI can report what each filter removed.
+  // filters: { brands:[..], dominantBrandOnly:bool, nameInclude:[..], nameExclude:[..] }
+  function filterKept(items, filters) {
+    filters = filters || {};
+    const wantBrands = (filters.brands || []).map(norm).filter(Boolean);
+    const include = (filters.nameInclude || []).map(norm).filter(Boolean);
+    const exclude = (filters.nameExclude || []).map(norm).filter(Boolean);
+    const domOnly = !!filters.dominantBrandOnly;
+
     const kept = [], dropped = [], seen = new Set();
+    // de-dupe up front so dominant-brand vote isn't skewed by duplicates
+    const uniq = [];
     for (const rec of items) {
       const k = (rec.id || rec.product_url || rec.name || "").toLowerCase();
       if (k && seen.has(k)) { dropped.push([rec.name, "duplicate"]); continue; }
       if (k) seen.add(k);
+      uniq.push(rec);
+    }
+    const dom = domOnly ? dominantBrand(uniq) : "";
+
+    for (const rec of uniq) {
+      const brand = norm(rec.brand), name = norm(rec.name);
+      if (domOnly && dom && brand !== dom) { dropped.push([rec.name, "brand"]); continue; }
+      if (wantBrands.length && !wantBrands.some(b => brand.includes(b))) { dropped.push([rec.name, "brand"]); continue; }
+      if (include.length && !include.some(w => hasTerm(name, w))) { dropped.push([rec.name, "name-include"]); continue; }
+      if (exclude.length && exclude.some(w => hasTerm(name, w))) { dropped.push([rec.name, "name-exclude"]); continue; }
       kept.push(rec);
     }
     return { kept, dropped };
   }
 
-  // items: normalized records. ctx: { ExcelJS?, fetchImage?(url)->{ok,base64,ext}|null, onProgress? }
+  // items: normalized records. ctx: { ExcelJS?, fetchImage?, onProgress?, filters? }
   async function buildKnitWorkbook(items, ctx) {
     ctx = ctx || {};
     const ExcelJS = ctx.ExcelJS || root.ExcelJS || (typeof require !== "undefined" && require("exceljs"));
     const fetchImage = typeof ctx.fetchImage === "function" ? ctx.fetchImage : null;
     const onProgress = typeof ctx.onProgress === "function" ? ctx.onProgress : null;
 
-    const { kept, dropped } = filterKept(items);
+    const { kept, dropped } = filterKept(items, ctx.filters);
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Fabric-Scanner";
@@ -179,7 +233,7 @@
       const rowNo = i + 2;
       const row = ws.getRow(rowNo);
 
-      // columns 3..11 (thumbnail + URL handled separately)
+      // columns 3..12 (thumbnail + URL handled separately)
       const prices = fieldPrices(rec);
       const fields = [
         null,                    // 1 Thumbnail
@@ -191,8 +245,9 @@
         prices.cur,              // 7 Current Price (red pair when discounted)
         fieldSize(rec),          // 8
         fieldColorways(rec),     // 9
-        fieldComposition(rec),   // 10
-        fieldDesign(rec),        // 11
+        fieldColorCount(rec),    // 10 Color Count
+        fieldComposition(rec),   // 11
+        fieldDesign(rec),        // 12
       ];
       row.height = ROW_H;
       row.alignment = { vertical: "middle", wrapText: true };
@@ -204,7 +259,7 @@
         cell.font = fontFor(f.kind);
         cell.border = { bottom: { style: "hair", color: { argb: "FFDDDDDD" } } };
       }
-      for (const c of [6, 7, 8]) {
+      for (const c of [6, 7, 8, 10]) {   // price, size, color-count centered
         row.getCell(c).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
       }
 
