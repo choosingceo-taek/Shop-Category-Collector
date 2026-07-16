@@ -5,8 +5,11 @@
 추천 상품·연관 상품·스폰서 캐러셀은 제외하고, **실제 검색 결과만** 담습니다.
 전부 브라우저 안에서 동작 — 서버·유료 서비스 없음.
 
-**세 단계 지원**
+**지원 단계**
 - **Walmart** — 전용 어댑터. 원단 조성·색상·디자인 디테일까지 정밀 추출.
+- **Cotton On** — 전용 어댑터 (Salesforce Commerce Cloud). 상품명은 URL 슬러그에서,
+  카테고리는 cgid에서 즉시 채워지고, 상세 수집 시 **브랜드(JSON-LD) · 색상 전체
+  목록 · 사이즈 목록(variationAttributes) · 원단 조성(COMPOSITION, 섬유 검증)**까지.
 - **Shopify 스토어 (Edikted 등)** — 자동 감지. 목록은 화면(필터 반영)에서,
   상세는 Shopify 공개 상품 JSON에서: **색상 전체 목록 · 원단 조성(설명문에서
   섬유 검증) · 브랜드(vendor) · 정가(compare_at_price)**까지. Shopify 기반이면

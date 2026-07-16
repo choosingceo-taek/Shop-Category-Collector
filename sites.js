@@ -155,10 +155,20 @@
       .replace(/<\/(?:li|p|div|tr|h\d)>|<br\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, " ")
       .replace(/[ \t]+/g, " ");
-    const lab = t.match(/(?:fabric material|material|fabric content|fabric composition|composition|fabric)\s*[:\-]\s*([^.;\n]{3,140})/i);
-    if (lab && FIBER_RE.test(lab[1])) return lab[1].trim();
-    const bare = t.match(/\d{1,3}\s?%\s?[A-Za-z]+(?:[ ,/&+]+\d{1,3}\s?%\s?[A-Za-z]+)*/);
-    return bare ? bare[0].trim() : "";
+    // label style — separator optional so "COMPOSITION 95% COTTON" (no colon) works
+    const trimTail = s => String(s)
+      .replace(/\s*[—–|·].*$/, "")                                        // "… — Machine wash cold"
+      .replace(/\s*\b(machine wash|hand wash|care|country of origin)\b.*$/i, "")
+      .trim();
+    const lab = t.match(/(?:fabric material|material|fabric content|fabric composition|composition|fabric)\s*[:\-]?\s*([^.;\n]{3,140})/i);
+    if (lab && FIBER_RE.test(lab[1])) return trimTail(lab[1]);
+    // bare percentage runs — scan ALL of them and take the first that NAMES a
+    // fiber, so promo text like "20% off" earlier on the page can't shadow the
+    // real "95% Cotton 5% Elastane" later on
+    const FIBER_WORD = /\b(cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide)\b/i;
+    const runs = t.match(/\d{1,3}\s?%\s?[A-Za-z]+(?:[ ,/&+]+\d{1,3}\s?%\s?[A-Za-z]+)*/g) || [];
+    const hit = runs.find(r => FIBER_WORD.test(r));
+    return hit ? hit.trim() : "";
   }
 
   // Expose shared helpers so adapters (and tests) can reuse them.
@@ -955,9 +965,142 @@
   })();
 
   // ---------------------------------------------------------------------------
+  // Cotton On adapter — cottonon.com runs Salesforce Commerce Cloud (SFCC /
+  // Demandware): product URLs look like
+  //   /AU/hold-me-cami/2060406-02.html?dwvar_..._color=...&cgid=womens-sleeveless-tops
+  // The URL itself carries the product name (slug) and category (cgid), so the
+  // list phase can fill both without guessing at markup. The detail phase reads
+  // the PDP's JSON-LD (brand/name) and SFCC's standard variationAttributes
+  // JSON (colour + size lists), plus a fiber-validated composition scan.
+  // ---------------------------------------------------------------------------
+  const cottonon = (function () {
+    const titleCase = s => String(s || "").replace(/-/g, " ").trim().replace(/\b\w/g, c => c.toUpperCase());
+
+    // "/AU/hold-me-cami/2060406-02.html" -> "Hold Me Cami"
+    function nameFromUrl(url) {
+      try {
+        const segs = new URL(url).pathname.split("/").filter(Boolean);
+        const htmlIdx = segs.findIndex(s => /\.html$/i.test(s));
+        if (htmlIdx > 0) {
+          const slug = segs[htmlIdx - 1];
+          if (slug && slug.length > 2 && !/^[A-Z]{2}$/i.test(slug)) return titleCase(slug);
+        }
+        // fallback: slug-pid baked into the .html segment ("hold-me-cami-2060406.html")
+        if (htmlIdx >= 0) {
+          const base = segs[htmlIdx].replace(/\.html$/i, "").replace(/-?\d[\d-]*$/, "");
+          if (base.length > 2) return titleCase(base);
+        }
+      } catch (e) {}
+      return "";
+    }
+    function categoryFromUrl(url) {
+      try {
+        const cgid = new URL(url).searchParams.get("cgid") || "";
+        return cgid ? titleCase(cgid) : "";
+      } catch (e) { return ""; }
+    }
+
+    function scrapeList(doc, url) {
+      const items = generic.scrapeList(doc, url);
+      for (const r of items) {
+        const slugName = nameFromUrl(r.product_url);
+        if (slugName) r.name = slugName;           // canonical, beats scraped tile text
+        if (!r.category) r.category = categoryFromUrl(r.product_url) || categoryFromUrl(url);
+      }
+      return items.filter(r => /\.html/i.test(r.product_url));   // keep real PDP links only
+    }
+
+    // SFCC embeds the product model with variationAttributes:
+    //   [{ attributeId:"color", values:[{ displayValue:"Black" }, ...] },
+    //    { attributeId:"size",  values:[{ displayValue:"XS" }, ...] }]
+    function variationValues(obj, attrRe, acc, depth) {
+      depth = depth || 0; acc = acc || [];
+      if (!obj || depth > 14 || typeof obj !== "object") return acc;
+      if (Array.isArray(obj)) { obj.forEach(v => variationValues(v, attrRe, acc, depth + 1)); return acc; }
+      const attr = obj.attributeId || obj.id || obj.attribute || "";
+      if (attrRe.test(String(attr)) && Array.isArray(obj.values)) {
+        obj.values.forEach(v => {
+          const d = v && (v.displayValue || v.value || v.name);
+          if (d && !acc.includes(String(d))) acc.push(String(d));
+        });
+      }
+      for (const k in obj) variationValues(obj[k], attrRe, acc, depth + 1);
+      return acc;
+    }
+
+    function parseDetailDoc(doc, rawHtml) {
+      let brand = "", name = "";
+      // JSON-LD Product on the PDP
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
+          if (!name && n.name) name = String(n.name);
+          if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+        });
+      });
+      const blobs = jsonBlobs(doc);
+      const colors = [];
+      const sizes = [];
+      blobs.forEach(b => { variationValues(b, /colou?r/i, colors); variationValues(b, /^size$/i, sizes); });
+      const composition = compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
+      return {
+        composition, colorways: colors.join("; "), design: "",
+        brand, sizes: sizes.join("; "),
+        reason: composition ? "" : "not_found",
+      };
+    }
+
+    async function fetchDetail(url) {
+      const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
+      let html;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        try {
+          const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
+          if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
+          html = await res.text();
+        } finally { clearTimeout(timer); }
+      } catch (e) {
+        return empty((e && e.name === "AbortError") ? "timeout" : "error");
+      }
+      try {
+        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html);
+      } catch (e) { return empty("error"); }
+    }
+
+    function context(doc) {
+      doc = doc || document;
+      const url = (doc.location && doc.location.href) || (typeof location !== "undefined" ? location.href : "");
+      return {
+        brand: "",
+        category: categoryFromUrl(url),
+        totalPages: generic.totalPages(doc),
+        page: parseInt(new URLSearchParams((doc.location || location).search).get("page") || "1"),
+      };
+    }
+
+    return {
+      id: "cottonon",
+      label: "Cotton On",
+      match: url => /(^|\.)cottonon\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
+      context, scrapeList,
+      totalPages: generic.totalPages,
+      resultCount: generic.resultCount,
+      nextPageUrl: generic.nextPageUrl,
+      isResultsPage: generic.isResultsPage,
+      fetchDetail, buildWorkbook: generic.buildWorkbook,
+      templateUrl: null,
+      _nameFromUrl: nameFromUrl, _categoryFromUrl: categoryFromUrl,
+      _variationValues: variationValues, _parseDetailDoc: parseDetailDoc,
+    };
+  })();
+
+  // ---------------------------------------------------------------------------
   // Registry — order matters: more specific adapters must come before generic.
   // ---------------------------------------------------------------------------
-  const ADAPTERS = [walmart, shopify, generic];
+  const ADAPTERS = [walmart, cottonon, shopify, generic];
 
   const SITES = {
     shared,

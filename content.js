@@ -183,10 +183,12 @@ async function runStep(j) {
             it.fabric_composition = d.composition || "";
             if (d.colorways) it.colorways = d.colorways;   // fuller than the list swatches
             if (d.design) it.design = d.design;            // real "Key item features"
-            // optional enrichment some adapters provide (e.g. shopify vendor/type)
+            // optional enrichment some adapters provide (e.g. shopify vendor/type,
+            // SFCC size lists)
             if (d.brand && !it.brand) it.brand = d.brand;
             if (d.category && !it.category) it.category = d.category;
             if (d.price_was && !it.price_was) it.price_was = d.price_was;
+            if (d.sizes && !it.size_range) it.size_range = d.sizes;
             it._compReason = d.reason || "";
           } else { it.fabric_composition = d || ""; }
         } catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run

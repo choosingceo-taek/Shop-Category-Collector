@@ -93,6 +93,9 @@
     return name ? real(name) : check();
   }
   function fieldSize(rec) {
+    // detail-collected size list (e.g. SFCC variationAttributes) beats the
+    // name-derived range; both are literal site values
+    if (rec.size_range && String(rec.size_range).trim()) return real(String(rec.size_range).trim());
     const { size } = splitSize(rec.name);
     return size ? real(size) : check();
   }
