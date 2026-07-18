@@ -56,6 +56,25 @@
   const rawColour = html.match(/colou?r\s*[:="'>]{1,3}\s*[A-Za-z][A-Za-z0-9 .&/'-]{1,38}/i);
   log("[any colour-ish token in raw HTML source]:", rawColour ? cap(rawColour[0], 80) : "(none)");
 
+  // 4b) COLOUR SWATCHES — sibling PDP links sharing this product's slug.
+  // This is how the extension counts/names colours, so dump them verbatim.
+  const segs = new URL(link).pathname.split("/").filter(Boolean);
+  const hi = segs.findIndex(s => /\.html$/i.test(s));
+  const slug = hi > 0 ? segs[hi - 1] : (segs.slice(-2, -1)[0] || "");
+  log("\n[product slug]:", slug);
+  const swatch = [...doc.querySelectorAll(`a[href*="/${slug}/"]`)];
+  const seen = new Set();
+  const rows = [];
+  swatch.forEach(a => {
+    const href = a.getAttribute("href") || "";
+    const m = href.match(/\/(\d[\w-]*)\.html/i);
+    if (!m || seen.has(m[1])) return; seen.add(m[1]);
+    const img = a.querySelector("img");
+    rows.push(`  pid=${m[1]} | aria="${cap(a.getAttribute("aria-label"), 40)}" | title="${cap(a.getAttribute("title"), 40)}" | img-alt="${cap(img && img.getAttribute("alt"), 50)}"`);
+  });
+  log(`[sibling colour swatches sharing slug]: ${rows.length} distinct`);
+  rows.slice(0, 20).forEach(r => log(r));
+
   // 5) SIZE in the raw html
   const sizeAria = [...doc.querySelectorAll("[aria-label]")]
     .map(e => e.getAttribute("aria-label")).filter(a => /^size\s+/i.test(a || "")).slice(0, 8);

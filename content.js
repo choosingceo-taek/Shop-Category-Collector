@@ -182,6 +182,7 @@ async function runStep(j) {
           if (d && typeof d === "object") {
             it.fabric_composition = d.composition || "";
             if (d.colorways) it.colorways = d.colorways;   // fuller than the list swatches
+            if (d.color_count) it.color_count = d.color_count;   // authoritative swatch count
             if (d.design) it.design = d.design;            // real "Key item features"
             // optional enrichment some adapters provide (e.g. shopify vendor/type,
             // SFCC size lists)

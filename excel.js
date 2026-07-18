@@ -127,7 +127,10 @@
     return s ? real(s) : check();
   }
   function fieldColorCount(rec) {
-    const n = colorList(rec).length;
+    // prefer an explicit count from the adapter (e.g. Cotton On swatch count),
+    // which is authoritative even when the individual colour names aren't known;
+    // otherwise derive it from the colorways list.
+    const n = (parseInt(rec.color_count) || 0) || colorList(rec).length;
     return n ? real(String(n)) : check();   // unknown colorways -> unknown count (red)
   }
   function fieldComposition(rec) {

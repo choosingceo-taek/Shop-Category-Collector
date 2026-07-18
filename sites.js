@@ -1045,7 +1045,50 @@
       return v;
     }
 
-    function parseDetailDoc(doc, rawHtml) {
+    // --- Colour variants ------------------------------------------------------
+    // On a Cotton On PDP every colour is its OWN PDP that shares the product slug
+    // (/AU/<slug>/<pid>.html), shown as a row of swatch thumbnails. Counting the
+    // distinct sibling pids under this slug gives the true colour count; the
+    // swatch's aria-label / title / img-alt gives the names when present. This is
+    // far more reliable than the visible "Colour: <name>" label, which Cotton On
+    // renders client-side (so it's absent from the fetched HTML).
+    function slugFromUrl(url) {
+      try {
+        const segs = new URL(url).pathname.split("/").filter(Boolean);
+        const i = segs.findIndex(s => /\.html$/i.test(s));
+        if (i > 0) return segs[i - 1];
+        return segs.slice(-2, -1)[0] || "";
+      } catch (e) { return ""; }
+    }
+    // Turn a swatch label into a bare colour name, dropping any product-name
+    // prefix ("Original Graphic Tee - Glass Cherries / White" -> "Glass ...").
+    function cleanColourName(raw, productName) {
+      let s = String(raw || "").replace(/\s+/g, " ").trim();
+      if (!s) return "";
+      const dash = s.split(/\s[-–—]\s/);
+      if (dash.length > 1) s = dash[dash.length - 1].trim();
+      const inm = s.match(/\bin\s+([A-Za-z][A-Za-z0-9 .&/'’-]{1,38})$/i);
+      if (inm) s = inm[1].trim();
+      if (productName && s.toLowerCase() === String(productName).toLowerCase()) return "";
+      if (!/[A-Za-z]/.test(s) || s.length > 40 || /\d{4,}/.test(s)) return "";  // reject SKUs/junk
+      return s;
+    }
+    function colorSwatches(doc, slug, productName) {
+      const out = []; const seen = new Set();
+      if (!doc.querySelectorAll || !slug) return out;
+      doc.querySelectorAll(`a[href*="/${slug}/"]`).forEach(a => {
+        const href = a.getAttribute("href") || "";
+        const m = href.match(/\/(\d[\w-]*)\.html/i);   // sibling pid = one colour
+        if (!m || seen.has(m[1])) return; seen.add(m[1]);
+        const img = a.querySelector && a.querySelector("img");
+        const rawName = a.getAttribute("aria-label") || a.getAttribute("title") ||
+          (img && (img.getAttribute("alt") || img.getAttribute("title"))) || "";
+        out.push({ pid: m[1], name: cleanColourName(rawName, productName) });
+      });
+      return out;
+    }
+
+    function parseDetailDoc(doc, rawHtml, url) {
       let brand = "", name = "";
       const colors = [], sizes = [];
       const addTo = (arr, v) => {
@@ -1079,12 +1122,16 @@
           if (m) addTo(sizes, m[1]);
         });
       }
-      // Colour: cottonon shows the selected colour as a visible "Colour: <name>"
-      // label (each colour is its own PDP URL, so one colour per listing row).
-      // Prefer the label's own element — body.textContent glues neighbouring
-      // sections with no whitespace ("…CamiColour: cherry dream2XS"), which both
-      // breaks the leading word boundary and runs the value into the next
-      // section. Scan for the smallest element whose own text carries the label.
+      // Colour variants: the row of swatch thumbnails, each a sibling PDP that
+      // shares this product's slug. This is the authoritative colour SET + count.
+      const canon = doc.querySelector && doc.querySelector('link[rel="canonical"]');
+      const slug = slugFromUrl(url) || slugFromUrl((canon && canon.getAttribute("href")) || "");
+      const swatches = colorSwatches(doc, slug, name || nameFromUrl(url || ""));
+      let colorCount = swatches.length;
+      swatches.forEach(sw => { if (sw.name) addTo(colors, sw.name); });
+      // fallback for the CURRENT colour only: the visible "Colour: <name>" label,
+      // read from its own element (server HTML glues sections with no whitespace).
+      // No loose whole-page scan — that grabbed unrelated words like "HERE".
       if (!colors.length && doc.querySelectorAll) {
         let best = "";
         doc.querySelectorAll("*").forEach(el => {
@@ -1095,11 +1142,7 @@
         const c = colourFromText(best);
         if (c) addTo(colors, c);
       }
-      // last resort: server-rendered rawHtml often keeps real whitespace.
-      if (!colors.length && rawHtml) {
-        const c = colourFromText(rawHtml.replace(/<[^>]+>/g, " "));
-        if (c) addTo(colors, c);
-      }
+      if (!colorCount) colorCount = colors.length;   // named-but-no-swatch case
       // brand fallback: og:brand / site name / the store's own house brand.
       // cottonon.com is a single-house-brand site, so "Cotton On" is a factual
       // default (not a guess) when the page doesn't state it explicitly.
@@ -1109,8 +1152,8 @@
       } else if (!brand) { brand = "Cotton On"; }
       const composition = compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
       return {
-        composition, colorways: colors.join("; "), design: "",
-        brand, sizes: sizes.join("; "),
+        composition, colorways: colors.join("; "), color_count: colorCount || "",
+        design: "", brand, sizes: sizes.join("; "),
         reason: composition ? "" : "not_found",
       };
     }
@@ -1118,7 +1161,7 @@
     async function fetchDetail(url) {
       // Brand is factual for a single-house-brand site even when the fetch
       // fails, so return it on every path (colour/size still need the PDP).
-      const empty = r => ({ composition: "", colorways: "", design: "", brand: "Cotton On", reason: r });
+      const empty = r => ({ composition: "", colorways: "", color_count: "", design: "", brand: "Cotton On", reason: r });
       let html;
       try {
         const ctrl = new AbortController();
@@ -1132,7 +1175,7 @@
         return empty((e && e.name === "AbortError") ? "timeout" : "error");
       }
       try {
-        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html);
+        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html, url);
       } catch (e) { return empty("error"); }
     }
 
@@ -1200,6 +1243,7 @@
       _variationValues: variationValues, _parseDetailDoc: parseDetailDoc,
       _colourFromText: colourFromText,
       _nextPageUrl: nextPageUrl, _firstPageUrl: firstPageUrl, _gridPage: gridPage,
+      _colorSwatches: colorSwatches, _cleanColourName: cleanColourName,
     };
   })();
 
