@@ -1,11 +1,11 @@
 /* On-page floating scan button (FAB).
    Injected on every supported page, bottom-left. Clicking it does NOT scan
-   immediately — it expands into an options panel (same choices as the popup:
-   detail collection + post-scan filters) so the user picks what to collect,
-   then presses "수집 시작" to run. While a run is going it collapses to a live
-   status pill with pause/resume and stop controls. Because pagination reloads
-   the page, this script re-injects on every page and re-renders from the
-   stored job, so the button follows the whole run.
+   immediately — it expands into a full control panel (same as the popup):
+   detail-collection + post-scan filters, plus 작업 시작 / 일시정지·재개 /
+   새 작업(리셋). While a run is going it collapses to a live status pill; click
+   the pill any time to reopen the panel and pause, resume, or reset the job.
+   Because pagination reloads the page, this script re-injects on every page and
+   re-renders from the stored job, so the button follows the whole run.
 
    Rendered inside a Shadow DOM so site CSS can't restyle it. */
 (function () {
@@ -63,7 +63,7 @@
   #fab.running #spin { display: inline-block; }
   @keyframes r { to { transform: rotate(360deg); } }
 
-  /* --- the options panel (expands upward) --- */
+  /* --- the control panel (expands upward) --- */
   #panel {
     display: none; width: 300px; max-width: 82vw;
     background: #fff; color: #222; border-radius: 12px;
@@ -77,7 +77,9 @@
     background: rgba(255,255,255,.15); }
   #x:hover { background: rgba(255,255,255,.3); }
   .body { padding: 12px; }
-  #ctx { color: #555; font-size: 11.5px; margin-bottom: 10px; }
+  #ctx { color: #555; font-size: 11.5px; margin-bottom: 8px; }
+  #pstatus { display: none; margin: 8px 0; padding: 8px; background: #f4f6f8;
+    border-radius: 8px; font-size: 11.5px; color: #333; }
   .opt { display: flex; gap: 7px; align-items: flex-start; margin: 8px 0;
     cursor: pointer; }
   .opt input { margin-top: 1px; flex: 0 0 auto; }
@@ -93,9 +95,13 @@
   .f input[type=text] { width: 100%; padding: 6px; border: 1px solid #ccc;
     border-radius: 6px; font-size: 12px; }
   .f small { color: #999; font-size: 10px; }
-  #run { width: 100%; padding: 10px; background: #0071dc; color: #fff;
-    font-weight: 700; font-size: 12.5px; border-radius: 8px; justify-content: center; }
-  #run:hover { background: #005fbb; }
+  .act { width: 100%; padding: 10px; font-weight: 700; font-size: 12.5px;
+    border-radius: 8px; justify-content: center; margin-top: 8px; }
+  .act[disabled] { opacity: .45; cursor: default; }
+  #run { background: #0071dc; color: #fff; }
+  #run:not([disabled]):hover { background: #005fbb; }
+  #pr2 { background: #eee; color: #333; }
+  #reset2 { background: #fbe9e9; color: #b00000; }
   #hint { color: #888; font-size: 10.5px; margin-top: 8px; text-align: center; }
 </style>
 <div id="wrap">
@@ -103,6 +109,7 @@
     <div class="head"><b>이 페이지 상품 수집</b><button id="x" title="닫기">✕</button></div>
     <div class="body">
       <div id="ctx">페이지 감지 중…</div>
+      <div id="pstatus"></div>
       <label class="opt"><input type="checkbox" id="spec" checked>
         <span>상품 상세까지 수집 — 원단·색상·디자인 <b>(느림)</b></span></label>
       <div id="note">이 사이트는 전용 지원이 없어 기본 정보(썸네일·이름·가격·URL)만 수집됩니다. 색상/원단/디자인 칸은 "정보 확인"으로 남습니다.</div>
@@ -120,13 +127,15 @@
           <input type="text" id="fExclude" placeholder="예: Men's, Juniors">
           <small>쉼표 구분</small></div>
       </details>
-      <button id="run">이 카테고리 전 페이지 수집 → 엑셀</button>
+      <button id="run" class="act">이 카테고리 전 페이지 수집 → 엑셀</button>
+      <button id="pr2" class="act" disabled>⏸ 일시정지</button>
+      <button id="reset2" class="act">🗑 새 작업 (현재 작업 삭제)</button>
       <div id="hint">시작하면 팝업을 닫아도 계속 진행됩니다.</div>
     </div>
   </div>
   <div id="fab" class="idle">
     <span id="spin"></span>
-    <button id="main" title="스캔 옵션 열기">
+    <button id="main" title="스캔 옵션 / 작업 제어 열기">
       <svg viewBox="0 0 24 24" fill="none">
         <rect x="3" y="4" width="18" height="16" rx="2.5" fill="#fff"/>
         <rect x="3" y="4" width="18" height="5" rx="2.5" fill="#0071dc"/>
@@ -145,30 +154,41 @@
   const fab = el("fab");
   const panel = el("panel");
   const terms = id => (el(id).value || "").split(",").map(s => s.trim()).filter(Boolean);
+  const isFinished = job => !!(job && job.status && /완료|종료|실패/.test(job.status) && !(job && job.active));
 
+  let lastJob = null;
   let doneTimer = null;
-  function render(job) {
+
+  function setPillClass(c) { fab.classList.remove("idle", "open", "running", "paused", "done"); fab.classList.add(c); }
+
+  // the collapsed pill reflects job state (only when the panel is closed)
+  function paintPill(job) {
     clearTimeout(doneTimer);
-    if (job && job.active && job.paused) {
-      closePanel();
-      fab.classList.remove("idle", "open", "running", "done"); fab.classList.add("paused");
-      el("status").textContent = job.status || "일시정지됨";
-      el("pr").textContent = "▶";
-    } else if (job && job.active) {
-      closePanel();
-      fab.classList.remove("idle", "open", "paused", "done"); fab.classList.add("running");
-      el("status").textContent = job.status || "Scanning this page…";
-      el("pr").textContent = "⏸";
-    } else if (job && job.status && /완료|종료|실패/.test(job.status)) {
-      fab.classList.remove("idle", "open", "running", "paused"); fab.classList.add("done");
-      el("status").textContent = job.status;
-      doneTimer = setTimeout(() => { fab.classList.remove("done"); fab.classList.add("idle"); }, 8000);
-    } else if (!panel.classList.contains("show")) {
-      fab.classList.remove("running", "paused", "done", "open"); fab.classList.add("idle");
-    }
+    const active = job && job.active, paused = active && job.paused;
+    if (paused) { setPillClass("paused"); el("status").textContent = job.status || "일시정지됨"; el("pr").textContent = "▶"; }
+    else if (active) { setPillClass("running"); el("status").textContent = job.status || "Scanning this page…"; el("pr").textContent = "⏸"; }
+    else if (isFinished(job)) { setPillClass("done"); el("status").textContent = job.status; doneTimer = setTimeout(() => setPillClass("idle"), 8000); }
+    else { setPillClass("idle"); }
   }
 
-  // ---- options panel ----
+  // the panel's controls reflect job state (start disabled while running, etc.)
+  function paintPanel(job) {
+    const active = job && job.active, paused = active && job.paused;
+    el("run").disabled = !!active;                 // finish or reset before a new run
+    el("pr2").disabled = !active;
+    el("pr2").textContent = paused ? "▶ 재개" : "⏸ 일시정지";
+    const s = (job && job.status) || "";
+    el("pstatus").textContent = s;
+    el("pstatus").style.display = s ? "block" : "none";
+  }
+
+  function paint(job) {
+    lastJob = job || null;
+    paintPanel(lastJob);
+    if (!panel.classList.contains("show")) paintPill(lastJob);
+  }
+
+  // ---- panel open/close ----
   function fillContext() {
     const eng = engine();
     let a = null; try { a = eng && eng.adapter && eng.adapter(); } catch (e) {}
@@ -181,7 +201,6 @@
     el("spec").closest(".opt").style.display = hasDetail ? "" : "none";
     el("note").style.display = hasDetail ? "none" : "block";
   }
-
   function prefill() {
     try {
       chrome.storage.local.get(OPTS, o => {
@@ -195,24 +214,19 @@
       });
     } catch (e) {}
   }
-
   function openPanel() {
-    prefill(); fillContext();
+    prefill(); fillContext(); paintPanel(lastJob);
     panel.classList.add("show");
-    fab.classList.remove("idle"); fab.classList.add("open");
+    setPillClass("open");
   }
   function closePanel() {
     panel.classList.remove("show");
-    if (!/running|paused|done/.test(fab.className)) {
-      fab.classList.remove("open"); fab.classList.add("idle");
-    } else { fab.classList.remove("open"); }
+    paintPill(lastJob);                            // pill resumes showing job state
   }
 
-  el("main").addEventListener("click", async e => {
+  // ---- interactions ----
+  el("main").addEventListener("click", e => {
     e.stopPropagation();
-    const eng = engine(); if (!eng) return;
-    const j = await eng.getJob();
-    if (j && j.active) return;                 // running — controls handle it
     if (panel.classList.contains("show")) closePanel(); else openPanel();
   });
   el("x").addEventListener("click", e => { e.stopPropagation(); closePanel(); });
@@ -220,6 +234,8 @@
   el("run").addEventListener("click", async e => {
     e.stopPropagation();
     const eng = engine(); if (!eng) return;
+    const j = await eng.getJob();
+    if (j && j.active) return;                     // already running — use pause/reset
     const filters = {
       dominantBrandOnly: el("fDomOnly").checked,
       brands: terms("fBrand"),
@@ -229,24 +245,24 @@
     const withSpec = el("spec").checked;
     try { chrome.storage.local.set({ [OPTS]: { withSpec, filters } }); } catch (e) {}
     closePanel();
-    fab.classList.remove("idle", "open"); fab.classList.add("running");
+    setPillClass("running");
     el("status").textContent = "Scanning this page…";
     eng.startJob({ withSpec, filters });
   });
 
-  el("pr").addEventListener("click", async e => {
-    e.stopPropagation();
+  async function togglePause() {
     const eng = engine(); if (!eng) return;
     const j = await eng.getJob();
     if (j && j.active && j.paused) eng.resumeJob(); else if (j && j.active) eng.pauseJob();
-  });
-  el("stop").addEventListener("click", e => {
-    e.stopPropagation();
-    const eng = engine(); if (eng) eng.resetJob();
-    fab.classList.remove("running", "paused", "done", "open"); fab.classList.add("idle");
-  });
+  }
+  el("pr").addEventListener("click", e => { e.stopPropagation(); togglePause(); });
+  el("pr2").addEventListener("click", e => { e.stopPropagation(); togglePause(); });
 
-  // click anywhere outside the widget closes the options panel
+  function doReset() { const eng = engine(); if (eng) eng.resetJob(); paint(null); }
+  el("stop").addEventListener("click", e => { e.stopPropagation(); doReset(); });
+  el("reset2").addEventListener("click", e => { e.stopPropagation(); doReset(); });
+
+  // click anywhere outside the widget closes the panel
   document.addEventListener("click", e => {
     if (panel.classList.contains("show") && e.target !== host) closePanel();
   });
@@ -254,13 +270,13 @@
   // live updates: the engine persists the job to storage as it works
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === "local" && changes[JOB]) render(changes[JOB].newValue);
+      if (area === "local" && changes[JOB]) paint(changes[JOB].newValue);
     });
   } catch (e) {}
 
   function mount() {
     (document.body || document.documentElement).appendChild(host);
-    try { chrome.storage.local.get(JOB, o => render(o && o[JOB])); } catch (e) {}
+    try { chrome.storage.local.get(JOB, o => paint(o && o[JOB])); } catch (e) {}
   }
   if (document.body) mount();
   else document.addEventListener("DOMContentLoaded", mount, { once: true });
