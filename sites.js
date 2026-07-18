@@ -1030,19 +1030,36 @@
 
     function parseDetailDoc(doc, rawHtml) {
       let brand = "", name = "";
-      // JSON-LD Product on the PDP
+      const colors = [], sizes = [];
+      const addTo = (arr, v) => {
+        const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+        if (s && s.length <= 40 && !arr.some(x => x.toLowerCase() === s.toLowerCase())) arr.push(s);
+      };
+      // JSON-LD Product on the PDP — brand/name + schema.org color/size/hasVariant
       (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
         let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
         [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
           if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
           if (!name && n.name) name = String(n.name);
           if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+          [].concat(n.color || []).forEach(c => addTo(colors, c));
+          [].concat(n.size || []).forEach(z => addTo(sizes, z));
+          [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
         });
       });
+      // embedded SFCC variationAttributes JSON (when present)
       const blobs = jsonBlobs(doc);
-      const colors = [];
-      const sizes = [];
-      blobs.forEach(b => { variationValues(b, /colou?r/i, colors); variationValues(b, /^size$/i, sizes); });
+      blobs.forEach(b => {
+        variationValues(b, /colou?r/i).forEach(c => addTo(colors, c));
+        variationValues(b, /^size$/i).forEach(z => addTo(sizes, z));
+      });
+      // brand fallback: og:brand / site name / the store's own house brand.
+      // cottonon.com is a single-house-brand site, so "Cotton On" is a factual
+      // default (not a guess) when the page doesn't state it explicitly.
+      if (!brand && doc.querySelector) {
+        const og = doc.querySelector('meta[property="og:brand"], meta[name="brand"], meta[property="product:brand"]');
+        brand = (og && og.getAttribute("content")) || "Cotton On";
+      } else if (!brand) { brand = "Cotton On"; }
       const composition = compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
       return {
         composition, colorways: colors.join("; "), design: "",
