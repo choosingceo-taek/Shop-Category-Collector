@@ -10,7 +10,13 @@ async function refresh() {
   const tab = await tabQ();
   const ctx = tab ? await send(tab.id, { type: "context" }) : null;
   if (!ctx || !ctx.site) {
-    el("ctx").textContent = "지원 사이트의 카테고리 페이지에서 열어주세요.";
+    // tab.url is only populated when we hold host permission for this page —
+    // i.e. it IS a supported site but the content script isn't answering
+    // (usually the tab needs a refresh after an extension reload/update).
+    const url = (tab && tab.url) || "";
+    el("ctx").textContent = url
+      ? "이 페이지와 연결되지 않았습니다 — 페이지를 새로고침(F5) 후 다시 열어주세요. (확장 업데이트 직후엔 F5가 필요합니다)"
+      : "지원 사이트의 카테고리/검색 페이지에서 열어주세요.";
     el("go").disabled = true;
     el("pauseresume").disabled = true;
     return;
