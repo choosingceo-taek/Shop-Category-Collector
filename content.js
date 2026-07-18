@@ -244,36 +244,43 @@ async function runStep(j) {
   }
 }
 
+// ---- job controls, shared by the popup (via messages) and the on-page FAB ----
+async function startJob(opts) {
+  opts = opts || {};
+  // always a FRESH job tagged with this page's collection signature
+  await s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
+      totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false,
+      filters: opts.filters || {}, sig: collectionSig(location.href), status: "시작…" });
+  // collection always begins at page 1, wherever the user started from
+  const u = new URL(location.href);
+  if ((parseInt(u.searchParams.get("page")) || 1) > 1) {
+    u.searchParams.delete("page");
+    // let callers get their ack out before the navigation tears this page down
+    setTimeout(() => { location.href = u.toString(); }, 30);   // auto-resumes there (same sig)
+  } else { step(); }
+}
+async function pauseJob() {
+  const j = await g();
+  if (j && j.active) { j.paused = true; j.status = "일시정지됨 (재개 가능)"; await s(j); }
+}
+async function resumeJob() {
+  const j = await g();
+  if (j && j.active && j.paused) { j.paused = false; j.status = "재개…"; await s(j); step(); }
+}
+// reset = discard the job entirely so a wrong run can never resurface
+async function resetJob() { await clear(); }
+
+// same-world API for fab.js (loaded after this file)
+self.WPB_ENGINE = { startJob, pauseJob, resumeJob, resetJob, getJob: g, adapter };
+
 chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.type === "start") {
-    // always a FRESH job tagged with this page's collection signature
-    s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
-        totalPages: 0, emptyStreak: 0, withSpec: m.withSpec, filters: m.filters || {},
-        sig: collectionSig(location.href), status: "시작…" })
-      .then(() => {
-        // collection always begins at page 1, wherever the user started from
-        const u = new URL(location.href);
-        if ((parseInt(u.searchParams.get("page")) || 1) > 1) {
-          u.searchParams.delete("page");
-          send({ ok: true });
-          location.href = u.toString();   // auto-resumes there (same signature)
-        } else { step(); send({ ok: true }); }
-      });
+    startJob({ withSpec: m.withSpec, filters: m.filters }).then(() => send({ ok: true }));
     return true;
   }
-  if (m.type === "pause") {
-    g().then(j => { if (j && j.active) { j.paused = true; j.status = "일시정지됨 (재개 가능)"; return s(j); } })
-      .then(() => send({ ok: true }));
-    return true;
-  }
-  if (m.type === "resume") {
-    g().then(j => {
-      if (j && j.active && j.paused) { j.paused = false; j.status = "재개…"; return s(j).then(() => step()); }
-    }).then(() => send({ ok: true }));
-    return true;
-  }
-  // reset = discard the job entirely so a wrong run can never resurface
-  if (m.type === "reset" || m.type === "cancel") { clear().then(() => send({ ok: true })); return true; }
+  if (m.type === "pause") { pauseJob().then(() => send({ ok: true })); return true; }
+  if (m.type === "resume") { resumeJob().then(() => send({ ok: true })); return true; }
+  if (m.type === "reset" || m.type === "cancel") { resetJob().then(() => send({ ok: true })); return true; }
   if (m.type === "context") {
     const a = adapter();
     send(a ? Object.assign({ site: a.label, adapterId: a.id, hasDetail: typeof a.fetchDetail === "function" }, a.context(document)) : { site: null });

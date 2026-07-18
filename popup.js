@@ -39,6 +39,8 @@ el("go").onclick = async () => {
     nameInclude: terms("fInclude"),
     nameExclude: terms("fExclude"),
   };
+  // remember the choices so the on-page scan button reuses them
+  chrome.storage.local.set({ wpb_opts: { withSpec: el("spec").checked, filters } });
   await send(tab.id, { type: "start", withSpec: el("spec").checked, filters });
   el("status").textContent = "시작했습니다. 팝업을 닫아도 진행됩니다.";
   refresh();
