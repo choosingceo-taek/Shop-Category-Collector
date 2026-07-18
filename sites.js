@@ -1053,6 +1053,16 @@
         variationValues(b, /colou?r/i).forEach(c => addTo(colors, c));
         variationValues(b, /^size$/i).forEach(z => addTo(sizes, z));
       });
+      // DOM fallback (confirmed live on cottonon.com): size buttons carry
+      // aria-label="Size <value>, available" / ", sold out" / ", low stock" —
+      // no embedded JSON needed. Colour swatches use a similar pattern once
+      // located (see cottonon._sizeFromAriaLabels for the shared regex).
+      if (!sizes.length && doc.querySelectorAll) {
+        doc.querySelectorAll('[class*="size" i] [aria-label], [aria-label*="size" i]').forEach(el => {
+          const m = (el.getAttribute("aria-label") || "").match(/^size\s+([^,]+)/i);
+          if (m) addTo(sizes, m[1]);
+        });
+      }
       // brand fallback: og:brand / site name / the store's own house brand.
       // cottonon.com is a single-house-brand site, so "Cotton On" is a factual
       // default (not a guess) when the page doesn't state it explicitly.
