@@ -1028,6 +1028,23 @@
       return acc;
     }
 
+    // Colour label extractor. cottonon.com PDPs show the selected colour as a
+    // visible "Colour: cherry dream" text label (confirmed live via
+    // diagnose-color.js — one colour per PDP URL). Grab the name after the
+    // label and trim once the next UI section begins (Size/Select/Add/etc.),
+    // since page.textContent runs sections together with no separator.
+    function colourFromText(text) {
+      const m = String(text || "").match(/\bColou?r\s*:?\s*([A-Za-z][A-Za-z0-9 .&/'’-]{1,38})/i);
+      if (!m) return "";
+      let v = m[1]
+        // cut at the first word that begins the next section on the page
+        .replace(/\s+(?:Size|Select|Add|Please|Choose|Quantity|Qty|Online|In\s?store|Find|Delivery|Shipping|Details|Description|Composition|Material|Care|Reviews?|Share|Wishlist|Sold|Available|Low\s?stock)\b.*$/i, "")
+        .replace(/\s+/g, " ").trim();
+      // a real colour name is a few words at most; guard against runaway grabs
+      if (!v || v.split(" ").length > 5) return "";
+      return v;
+    }
+
     function parseDetailDoc(doc, rawHtml) {
       let brand = "", name = "";
       const colors = [], sizes = [];
@@ -1055,13 +1072,33 @@
       });
       // DOM fallback (confirmed live on cottonon.com): size buttons carry
       // aria-label="Size <value>, available" / ", sold out" / ", low stock" —
-      // no embedded JSON needed. Colour swatches use a similar pattern once
-      // located (see cottonon._sizeFromAriaLabels for the shared regex).
+      // no embedded JSON needed.
       if (!sizes.length && doc.querySelectorAll) {
         doc.querySelectorAll('[class*="size" i] [aria-label], [aria-label*="size" i]').forEach(el => {
           const m = (el.getAttribute("aria-label") || "").match(/^size\s+([^,]+)/i);
           if (m) addTo(sizes, m[1]);
         });
+      }
+      // Colour: cottonon shows the selected colour as a visible "Colour: <name>"
+      // label (each colour is its own PDP URL, so one colour per listing row).
+      // Prefer the label's own element — body.textContent glues neighbouring
+      // sections with no whitespace ("…CamiColour: cherry dream2XS"), which both
+      // breaks the leading word boundary and runs the value into the next
+      // section. Scan for the smallest element whose own text carries the label.
+      if (!colors.length && doc.querySelectorAll) {
+        let best = "";
+        doc.querySelectorAll("*").forEach(el => {
+          const t = el.textContent || "";
+          if (t.length > 120 || !/\bColou?r\s*:/i.test(t)) return;   // label leaf, not a big container
+          if (!best || t.length < best.length) best = t;
+        });
+        const c = colourFromText(best);
+        if (c) addTo(colors, c);
+      }
+      // last resort: server-rendered rawHtml often keeps real whitespace.
+      if (!colors.length && rawHtml) {
+        const c = colourFromText(rawHtml.replace(/<[^>]+>/g, " "));
+        if (c) addTo(colors, c);
       }
       // brand fallback: og:brand / site name / the store's own house brand.
       // cottonon.com is a single-house-brand site, so "Cotton On" is a factual
@@ -1121,6 +1158,7 @@
       templateUrl: null,
       _nameFromUrl: nameFromUrl, _categoryFromUrl: categoryFromUrl,
       _variationValues: variationValues, _parseDetailDoc: parseDetailDoc,
+      _colourFromText: colourFromText,
     };
   })();
 
