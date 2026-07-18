@@ -251,12 +251,21 @@ async function startJob(opts) {
   await s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
       totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false,
       filters: opts.filters || {}, sig: collectionSig(location.href), status: "시작…" });
-  // collection always begins at page 1, wherever the user started from
-  const u = new URL(location.href);
-  if ((parseInt(u.searchParams.get("page")) || 1) > 1) {
+  // collection always begins at the first page, wherever the user started from.
+  // Adapters whose pagination isn't ?page=N (e.g. SFCC's ?start=N&sz=M) provide
+  // firstPageUrl() to reset to the start; otherwise we just drop ?page.
+  const a = adapter();
+  let first;
+  if (a && typeof a.firstPageUrl === "function") {
+    first = a.firstPageUrl(location.href);
+  } else {
+    const u = new URL(location.href);
     u.searchParams.delete("page");
+    first = u.toString();
+  }
+  if (first && first !== location.href) {
     // let callers get their ack out before the navigation tears this page down
-    setTimeout(() => { location.href = u.toString(); }, 30);   // auto-resumes there (same sig)
+    setTimeout(() => { location.href = first; }, 30);          // auto-resumes there (same sig)
   } else { step(); }
 }
 async function pauseJob() {

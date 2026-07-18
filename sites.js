@@ -1116,7 +1116,9 @@
     }
 
     async function fetchDetail(url) {
-      const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
+      // Brand is factual for a single-house-brand site even when the fetch
+      // fails, so return it on every path (colour/size still need the PDP).
+      const empty = r => ({ composition: "", colorways: "", design: "", brand: "Cotton On", reason: r });
       let html;
       try {
         const ctrl = new AbortController();
@@ -1134,14 +1136,52 @@
       } catch (e) { return empty("error"); }
     }
 
+    // --- SFCC grid pagination (start/sz offsets, NOT ?page=N) ---------------
+    // cottonon.com's category grid loads more products with ?start=<offset>&sz=<n>
+    // ("load more" grows the grid 60 → 120 → 180…), so the page number is encoded
+    // in `start`, not a `page` param. sz is the batch size (60 on Cotton On).
+    const SFCC_SZ = 60;
+    function gridSize(url) {
+      try { return parseInt(new URL(url).searchParams.get("sz")) || SFCC_SZ; }
+      catch (e) { return SFCC_SZ; }
+    }
+    function gridPage(url) {
+      try {
+        const p = new URL(url).searchParams;
+        const start = parseInt(p.get("start")) || 0;
+        return Math.floor(start / (parseInt(p.get("sz")) || SFCC_SZ)) + 1;
+      } catch (e) { return 1; }
+    }
+    // reset to the first slice (start=0) so a scan started mid-grid still
+    // collects from the beginning.
+    function firstPageUrl(url) {
+      try {
+        const u = new URL(url);
+        u.searchParams.delete("start");
+        u.searchParams.delete("page");
+        return u.toString();
+      } catch (e) { return url; }
+    }
+    // next slice: page N (1-based) was scraped -> advance start to N*sz.
+    function nextPageUrl(url, page) {
+      try {
+        const u = new URL(url);
+        const sz = parseInt(u.searchParams.get("sz")) || SFCC_SZ;
+        u.searchParams.set("start", String(page * sz));
+        u.searchParams.set("sz", String(sz));
+        u.searchParams.delete("page");
+        return u.toString();
+      } catch (e) { return null; }
+    }
+
     function context(doc) {
       doc = doc || document;
       const url = (doc.location && doc.location.href) || (typeof location !== "undefined" ? location.href : "");
       return {
         brand: "",
         category: categoryFromUrl(url),
-        totalPages: generic.totalPages(doc),
-        page: parseInt(new URLSearchParams((doc.location || location).search).get("page") || "1"),
+        totalPages: null,          // SFCC total unknown up front -> probe to the end
+        page: gridPage(url),
       };
     }
 
@@ -1150,15 +1190,16 @@
       label: "Cotton On",
       match: url => /(^|\.)cottonon\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
       context, scrapeList,
-      totalPages: generic.totalPages,
+      totalPages: () => null,           // SFCC grid: probe to the end via start/sz
       resultCount: generic.resultCount,
-      nextPageUrl: generic.nextPageUrl,
+      nextPageUrl, firstPageUrl,        // SFCC start/sz offsets, not ?page=N
       isResultsPage: generic.isResultsPage,
       fetchDetail, buildWorkbook: generic.buildWorkbook,
       templateUrl: null,
       _nameFromUrl: nameFromUrl, _categoryFromUrl: categoryFromUrl,
       _variationValues: variationValues, _parseDetailDoc: parseDetailDoc,
       _colourFromText: colourFromText,
+      _nextPageUrl: nextPageUrl, _firstPageUrl: firstPageUrl, _gridPage: gridPage,
     };
   })();
 
