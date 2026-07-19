@@ -130,16 +130,24 @@
       cur: cur ? { text: cur, kind } : check(),
     };
   }
-  // Split a colorways string ("Black; Navy; White") into its list. Tolerant of
-  // ';' , '/' and ',' separators.
+  // A size token (XS, 2X, 14, "24 Plus", "XS-4X" …) is never a colour. Adapters
+  // read colours from variant lists that sometimes also hold sizes; filtering
+  // here means a leak can never be shown or counted as a colour, on ANY site.
+  // Real colour names ("Ruby Light Check", "Cream 100") never match this.
+  const SIZE_TOKEN = /^(?:one\s*size|o\/?s|x{0,3}s|m|x{0,4}l|\d{1,2}|\d{1,2}\s?x|\d{1,3}\s*plus|[\dxsml]{1,4}\s*-\s*[\dxsml]{1,4})$/i;
+  // Split a colorways string ("Black; Navy; White") into its list, dropping any
+  // leaked size tokens. Tolerant of ';' , '/' and ',' separators.
   function colorList(rec) {
     const s = (rec.colorways && String(rec.colorways).trim()) || "";
     if (!s) return [];
-    return s.split(/\s*[;/]\s*|\s*,\s*/).map(x => x.trim()).filter(Boolean);
+    return s.split(/\s*[;/]\s*|\s*,\s*/).map(x => x.trim())
+      .filter(x => x && !SIZE_TOKEN.test(x));
   }
   function fieldColorways(rec) {
-    const s = (rec.colorways && String(rec.colorways).trim());
-    return s ? real(s) : check();
+    const list = colorList(rec);
+    // one colour per line so a multi-colour product reads cleanly (centred via
+    // the col-9 alignment below) instead of a run-on "; "-joined blob.
+    return list.length ? real(list.join("\n")) : check();
   }
   function fieldColorCount(rec, familyCount) {
     // The count must never disagree with the Colorways cell, so take the MAX of:
@@ -304,7 +312,7 @@
         cell.font = fontFor(f.kind);
         cell.border = { bottom: { style: "hair", color: { argb: "FFDDDDDD" } } };
       }
-      for (const c of [6, 7, 8, 10]) {   // price, size, color-count centered
+      for (const c of [6, 7, 8, 9, 10]) {   // price, size, colorways, color-count centered
         row.getCell(c).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
       }
 
@@ -351,7 +359,7 @@
     return { bytes: new Uint8Array(buf), kept: { Products: kept }, dropped };
   }
 
-  const api = { HEADERS, buildKnitWorkbook, filterKept, literalDesign, reasonKo, _familyKey: familyKey };
+  const api = { HEADERS, buildKnitWorkbook, filterKept, literalDesign, reasonKo, _familyKey: familyKey, _colorList: colorList };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.WPBExcel = api;
 })(typeof self !== "undefined" ? self : this);

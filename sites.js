@@ -294,7 +294,11 @@
         const n = v && (v.name || v.value || v.swatchName || v.variantName || v.colorName);
         if (n) names.push(String(n));
       }); };
-      pull(it.variantList); pull(it.variants); pull(it.colorVariants);
+      // ONLY colour-identified sources. A bare variantList/variants also carries
+      // the SIZE variants (a single-colour, many-size item would otherwise report
+      // its 9 sizes as 9 "colours"), so we never pull those blindly — colours
+      // come from the explicitly-coloured field and the named colour criterion.
+      pull(it.colorVariants);
       if (Array.isArray(it.variantCriteria)) it.variantCriteria.forEach(c => {
         if (/colou?r/i.test((c && c.name) || "")) pull(c.variantList || c.values);
       });
