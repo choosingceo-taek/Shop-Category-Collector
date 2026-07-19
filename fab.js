@@ -69,10 +69,10 @@
 
   /* ---------- the control panel ---------- */
   #panel {
-    display: none; width: 320px; max-width: 86vw;
-    max-height: calc(100vh - 96px);          /* never taller than the viewport */
+    display: none; width: 320px; max-width: 88vw;
+    max-height: calc(100vh - 28px);          /* headroom so it rarely needs to scroll */
     flex-direction: column;
-    background: rgba(20,21,26,.86); color: #f2f2f7;
+    background: rgba(20,21,26,.9); color: #f2f2f7;
     border: 1px solid rgba(255,255,255,.10);
     border-radius: 18px; overflow: hidden;
     box-shadow: 0 16px 44px rgba(0,0,0,.5);
@@ -81,71 +81,74 @@
   }
   #panel.show { display: flex; }
   .head { flex: 0 0 auto; display: flex; align-items: center;
-    justify-content: space-between; padding: 14px 16px 10px; }
-  .head b { font-size: 14px; font-weight: 700; }
-  #x { color: #cdcdd4; width: 26px; height: 26px; font-size: 16px;
+    justify-content: space-between; padding: 12px 14px 6px; }
+  .head b { font-size: 13.5px; font-weight: 700; }
+  #x { color: #cdcdd4; width: 24px; height: 24px; font-size: 15px;
     background: rgba(255,255,255,.08); }
   #x:hover { background: rgba(255,255,255,.16); }
-  .body { flex: 1 1 auto; overflow-y: auto; padding: 4px 16px 16px; }
-  .body::-webkit-scrollbar { width: 8px; }
-  .body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 8px; }
+  .body { flex: 1 1 auto; overflow-y: auto; padding: 2px 14px 12px; }
+  .body::-webkit-scrollbar { width: 6px; }
+  .body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 6px; }
 
   /* progress / context card */
   .card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
-    border-radius: 14px; padding: 12px; margin-bottom: 12px; }
-  .crow { display: flex; justify-content: space-between; gap: 10px; margin: 3px 0;
-    font-size: 12px; }
+    border-radius: 12px; padding: 10px 11px; margin-bottom: 9px; }
+  .crow { display: flex; justify-content: space-between; gap: 10px; margin: 2px 0;
+    font-size: 11.5px; }
   .crow .k { color: #9a9aa4; }
   .crow .v { color: #f2f2f7; font-weight: 600; text-align: right;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
-  #progBar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.12);
-    overflow: hidden; margin: 10px 0 6px; }
+  #progBar { height: 7px; border-radius: 999px; background: rgba(255,255,255,.12);
+    overflow: hidden; margin: 8px 0 5px; }
   #progFill { height: 100%; width: 0%; border-radius: 999px;
     background: linear-gradient(90deg,#7b61ff,#ff6fae); transition: width .3s ease; }
   #progFill.indet { width: 38% !important; animation: slide 1.1s ease-in-out infinite; }
   @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
-  #progText { font-size: 11.5px; color: #c5c5cd; }
+  #progText { font-size: 11px; color: #c5c5cd; }
 
   /* switch toggle */
   .switchrow { display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; padding: 10px 2px; cursor: pointer; }
+    gap: 12px; padding: 7px 2px; cursor: pointer; }
   .switchrow .t { font-size: 12.5px; }
   .switchrow .t small { display: block; color: #9a9aa4; font-size: 10.5px; margin-top: 1px; }
-  .switch { position: relative; width: 44px; height: 26px; flex: 0 0 auto; }
+  .switch { position: relative; width: 42px; height: 24px; flex: 0 0 auto; }
   .switch input { opacity: 0; width: 0; height: 0; }
   .switch i { position: absolute; inset: 0; border-radius: 999px;
     background: rgba(255,255,255,.18); transition: background .2s; }
   .switch i::after { content: ""; position: absolute; top: 3px; left: 3px;
-    width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s; }
+    width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; }
   .switch input:checked + i { background: linear-gradient(90deg,#7b61ff,#ff6fae); }
   .switch input:checked + i::after { transform: translateX(18px); }
 
   #note { display: none; background: rgba(255,196,84,.12); color: #ffcf80;
-    border-radius: 10px; padding: 9px; font-size: 11px; margin: 6px 0; }
-  #filters { border: 1px solid rgba(255,255,255,.10); border-radius: 12px;
-    padding: 4px 12px; margin: 8px 0; background: rgba(255,255,255,.04); }
+    border-radius: 10px; padding: 8px; font-size: 11px; margin: 5px 0; }
+  #filters { border: 1px solid rgba(255,255,255,.10); border-radius: 11px;
+    padding: 2px 11px; margin: 7px 0; background: rgba(255,255,255,.04); }
+  #filters[data-active="1"] { border-color: rgba(255,111,174,.55); background: rgba(255,111,174,.08); }
   #filters summary { cursor: pointer; font-size: 12px; font-weight: 600;
-    color: #e6e6ea; padding: 8px 0; }
-  .f { margin: 8px 0; }
-  .f label { display: block; margin-bottom: 4px; color: #9a9aa4; font-size: 11px; }
-  .f input[type=text] { width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,.14);
+    color: #e6e6ea; padding: 8px 0; list-style: none; }
+  #fsum .badge { color: #ff9ec7; font-weight: 700; }
+  .f { margin: 7px 0; }
+  .f label { display: block; margin-bottom: 3px; color: #9a9aa4; font-size: 11px; }
+  .f input[type=text] { width: 100%; padding: 7px; border: 1px solid rgba(255,255,255,.14);
     border-radius: 8px; font-size: 12px; background: rgba(0,0,0,.25); color: #f2f2f7; }
   .f small { color: #77777f; font-size: 10px; }
-  .chk { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: 12px; }
+  .chk { display: flex; gap: 8px; align-items: center; margin: 7px 0; font-size: 12px; }
+  #fclear { display: block; width: 100%; padding: 7px; margin: 4px 0 8px;
+    font-size: 11.5px; color: #ffb0b0; background: rgba(255,92,92,.12); border-radius: 8px; }
 
-  .act { width: 100%; padding: 12px; font-weight: 700; font-size: 12.5px;
-    border-radius: 12px; justify-content: center; margin-top: 8px; }
+  .act { width: 100%; padding: 11px; font-weight: 700; font-size: 12.5px;
+    border-radius: 11px; justify-content: center; margin-top: 8px; }
   .act[disabled] { opacity: .4; cursor: default; }
-  #run { background: linear-gradient(90deg,#3b7bff,#0a5cff); color: #fff;
-    box-shadow: 0 6px 16px rgba(10,92,255,.35); }
+  #run { background: linear-gradient(90deg,#3b7bff,#0a5cff); color: #fff; }
   #run:not([disabled]):hover { filter: brightness(1.08); }
   .actrow { display: flex; gap: 8px; }
-  .actrow .act { margin-top: 8px; }
+  .actrow .act { flex: 1 1 0; margin-top: 8px; }
   #pr2 { background: rgba(255,255,255,.12); color: #f2f2f7; }
   #pr2:not([disabled]):hover { background: rgba(255,255,255,.2); }
   #reset2 { background: rgba(255,92,92,.16); color: #ff8a8a; }
   #reset2:hover { background: rgba(255,92,92,.26); }
-  #hint { color: #77777f; font-size: 10.5px; margin-top: 10px; text-align: center; }
+  #hint { color: #77777f; font-size: 10.5px; margin-top: 8px; text-align: center; }
 </style>
 <div id="wrap">
   <div id="panel">
@@ -164,7 +167,7 @@
       </label>
       <div id="note">이 사이트는 전용 지원이 없어 기본 정보(썸네일·이름·가격·URL)만 수집됩니다. 색상/원단/디자인 칸은 "정보 확인"으로 남습니다.</div>
       <details id="filters">
-        <summary>필터 (선택) — 엑셀에 담기 전에 정제</summary>
+        <summary><span id="fsum">필터 (선택) — 엑셀에 담기 전에 정제</span></summary>
         <div class="chk"><input type="checkbox" id="fDomOnly"><label style="margin:0;color:#cdcdd4">주 브랜드만 (제3자 셀러 자동 제외)</label></div>
         <div class="f"><label>브랜드만 남기기</label>
           <input type="text" id="fBrand" placeholder="예: No Boundaries, Time and Tru">
@@ -175,6 +178,7 @@
         <div class="f"><label>상품명 제외 (이 단어가 있으면 버림)</label>
           <input type="text" id="fExclude" placeholder="예: Men's, Juniors">
           <small>쉼표 구분</small></div>
+        <button id="fclear">✕ 필터 모두 지우기</button>
       </details>
       <button id="run" class="act">이 카테고리 전 페이지 수집 → 엑셀</button>
       <div class="actrow">
@@ -264,6 +268,17 @@
     el("spec").closest(".switchrow").style.display = hasDetail ? "" : "none";
     el("note").style.display = hasDetail ? "none" : "block";
   }
+  // reflect whether any filter is set — a stale filter silently dropping most
+  // results was a real footgun, so make it loud: badge + accent + auto-expand.
+  function refreshFilterState() {
+    const active = el("fDomOnly").checked || el("fBrand").value.trim() ||
+      el("fInclude").value.trim() || el("fExclude").value.trim();
+    el("filters").setAttribute("data-active", active ? "1" : "0");
+    el("fsum").innerHTML = active
+      ? '필터 <span class="badge">● 적용 중 — 일부 상품이 제외됩니다</span>'
+      : "필터 (선택) — 엑셀에 담기 전에 정제";
+    if (active) el("filters").open = true;
+  }
   function prefill() {
     try {
       chrome.storage.local.get(OPTS, o => {
@@ -274,6 +289,7 @@
         el("fBrand").value = (f.brands || []).join(", ");
         el("fInclude").value = (f.nameInclude || []).join(", ");
         el("fExclude").value = (f.nameExclude || []).join(", ");
+        refreshFilterState();
       });
     } catch (e) {}
   }
@@ -322,6 +338,19 @@
   el("pr2").addEventListener("click", e => { e.stopPropagation(); togglePause(); });
   function doReset() { const eng = engine(); if (eng) eng.resetJob(); paint(null); }
   el("reset2").addEventListener("click", e => { e.stopPropagation(); doReset(); });
+
+  // keep the filter badge in sync as the user edits, and let them clear in one tap
+  ["fDomOnly", "fBrand", "fInclude", "fExclude"].forEach(id => {
+    el(id).addEventListener("input", refreshFilterState);
+    el(id).addEventListener("change", refreshFilterState);
+  });
+  el("fclear").addEventListener("click", e => {
+    e.stopPropagation();
+    el("fDomOnly").checked = false;
+    el("fBrand").value = ""; el("fInclude").value = ""; el("fExclude").value = "";
+    setStore(OPTS, { withSpec: el("spec").checked, filters: {} });   // persist the cleared state
+    refreshFilterState();
+  });
 
   // click outside closes the panel (remembered so page-nav during a run respects it)
   document.addEventListener("click", e => {

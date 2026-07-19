@@ -995,8 +995,18 @@
     }
     function categoryFromUrl(url) {
       try {
-        const cgid = new URL(url).searchParams.get("cgid") || "";
-        return cgid ? titleCase(cgid) : "";
+        const u = new URL(url);
+        const cgid = u.searchParams.get("cgid") || "";
+        if (cgid) return titleCase(cgid);
+        // Sub-brand / gym listing URLs carry no cgid — derive the category from
+        // the last path segment (e.g. /AU/co/women/womens-activewear/womens-gym-tops/
+        // -> "Womens Gym Tops"). Skip PDP urls, where that segment is the product
+        // slug (product name), not a category.
+        const segs = u.pathname.split("/").filter(Boolean);
+        if (segs.some(s => /\.html$/i.test(s))) return "";      // PDP -> not a category
+        const cat = segs.filter(s => !/^[a-z]{2}$/i.test(s) && s.toLowerCase() !== "co");
+        const last = cat[cat.length - 1];
+        return last && last.length > 2 ? titleCase(last) : "";
       } catch (e) { return ""; }
     }
 
