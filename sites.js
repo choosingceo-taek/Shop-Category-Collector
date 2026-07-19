@@ -1012,10 +1012,13 @@
 
     function scrapeList(doc, url) {
       const items = generic.scrapeList(doc, url);
+      // one category for the whole page = what the user is browsing (breadcrumb/
+      // H1), not each product's primary cgid (which is often a narrower facet).
+      const pageCat = listingCategory(doc, url);
       for (const r of items) {
         const slugName = nameFromUrl(r.product_url);
         if (slugName) r.name = slugName;           // canonical, beats scraped tile text
-        if (!r.category) r.category = categoryFromUrl(r.product_url) || categoryFromUrl(url);
+        r.category = pageCat || categoryFromUrl(r.product_url) || categoryFromUrl(url);
       }
       return items.filter(r => /\.html/i.test(r.product_url));   // keep real PDP links only
     }
@@ -1123,9 +1126,11 @@
         .filter(s => s && s.length <= 200);
     }
 
-    // Category from the breadcrumb when the URL has no cgid (Cotton On's BODY /
-    // Typo / etc. sub-brand pages use path-based categories, cgid= is empty).
-    function breadcrumbCategory(doc, productName) {
+    // The breadcrumb trail (Home dropped) — JSON-LD BreadcrumbList first, then a
+    // DOM breadcrumb nav. This reflects the ON-SITE navigation names, which is
+    // what the user sees and expects — unlike URL slugs, which don't match the
+    // display name (a "Sweats & Hoodies" page can live at .../sweats-fleece-womens/).
+    function breadcrumbTrail(doc) {
       let trail = [];
       (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
         if (trail.length) return;
@@ -1142,13 +1147,32 @@
         if (nav) trail = [...nav.querySelectorAll("a,li,span")]
           .map(a => (a.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean);
       }
-      const uniq = [];
+      const out = [];
       trail.forEach(t => {
-        if (/^home$/i.test(t)) return;
-        if (productName && t.toLowerCase() === String(productName).toLowerCase()) return;  // drop the product crumb
-        if (!uniq.some(x => x.toLowerCase() === t.toLowerCase())) uniq.push(t);
+        if (!t || /^home$/i.test(t)) return;
+        if (!out.some(x => x.toLowerCase() === t.toLowerCase())) out.push(t);
       });
-      return uniq.slice(0, 3).join(" / ");
+      return out;
+    }
+    // PDP category: the trail minus the product crumb.
+    function breadcrumbCategory(doc, productName) {
+      const trail = breadcrumbTrail(doc)
+        .filter(t => !(productName && t.toLowerCase() === String(productName).toLowerCase()));
+      return trail.slice(0, 3).join(" / ");
+    }
+    // Listing category: the on-site name of the category the user is browsing.
+    // Prefer the breadcrumb leaf (current category), then the page H1, then the
+    // URL — because URL slugs can be an internal facet ("sweats-fleece-womens")
+    // that doesn't match the browse category ("Sweats & Hoodies").
+    function listingCategory(doc, url) {
+      const trail = breadcrumbTrail(doc);
+      if (trail.length) return trail[trail.length - 1];
+      const h1 = doc.querySelector && doc.querySelector("h1");
+      if (h1) {
+        const t = (h1.textContent || "").replace(/\s*\(\d[\d,]*\)\s*$/, "").replace(/\s+/g, " ").trim();
+        if (t && t.length <= 60) return t;
+      }
+      return categoryFromUrl(url);
     }
 
     function parseDetailDoc(doc, rawHtml, url) {
@@ -1288,7 +1312,7 @@
       const url = (doc.location && doc.location.href) || (typeof location !== "undefined" ? location.href : "");
       return {
         brand: "",
-        category: categoryFromUrl(url),
+        category: listingCategory(doc, url),   // on-site name (breadcrumb/H1), not URL slug
         totalPages: null,          // SFCC total unknown up front -> probe to the end
         page: gridPage(url),
       };
@@ -1311,6 +1335,7 @@
       _nextPageUrl: nextPageUrl, _firstPageUrl: firstPageUrl, _gridPage: gridPage,
       _colorSwatches: colorSwatches, _cleanColourName: cleanColourName,
       _featuresFromDoc: featuresFromDoc, _breadcrumbCategory: breadcrumbCategory,
+      _listingCategory: listingCategory, _breadcrumbTrail: breadcrumbTrail,
     };
   })();
 

@@ -126,8 +126,16 @@
     padding: 2px 11px; margin: 7px 0; background: rgba(255,255,255,.04); }
   #filters[data-active="1"] { border-color: rgba(255,111,174,.55); background: rgba(255,111,174,.08); }
   #filters summary { cursor: pointer; font-size: 12px; font-weight: 600;
-    color: #e6e6ea; padding: 8px 0; list-style: none; }
+    color: #e6e6ea; padding: 9px 2px; list-style: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #filters summary::-webkit-details-marker { display: none; }
   #fsum .badge { color: #ff9ec7; font-weight: 700; }
+  .chev { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px;
+    background: rgba(255,255,255,.12); color: #e6e6ea; font-size: 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: transform .18s ease; }
+  #filters[open] .chev { transform: rotate(180deg); }
+  #filters[data-active="1"] .chev { background: rgba(255,111,174,.3); color: #ff9ec7; }
   .f { margin: 7px 0; }
   .f label { display: block; margin-bottom: 3px; color: #9a9aa4; font-size: 11px; }
   .f input[type=text] { width: 100%; padding: 7px; border: 1px solid rgba(255,255,255,.14);
@@ -167,7 +175,7 @@
       </label>
       <div id="note">이 사이트는 전용 지원이 없어 기본 정보(썸네일·이름·가격·URL)만 수집됩니다. 색상/원단/디자인 칸은 "정보 확인"으로 남습니다.</div>
       <details id="filters">
-        <summary><span id="fsum">필터 (선택) — 엑셀에 담기 전에 정제</span></summary>
+        <summary><span id="fsum">필터 (선택) — 엑셀에 담기 전에 정제</span><span class="chev">▾</span></summary>
         <div class="chk"><input type="checkbox" id="fDomOnly"><label style="margin:0;color:#cdcdd4">주 브랜드만 (제3자 셀러 자동 제외)</label></div>
         <div class="f"><label>브랜드만 남기기</label>
           <input type="text" id="fBrand" placeholder="예: No Boundaries, Time and Tru">
@@ -354,9 +362,12 @@
   });
   el("fclear").addEventListener("click", e => { e.stopPropagation(); clearFilters(); });
 
-  // click outside closes the panel (remembered so page-nav during a run respects it)
+  // click outside closes the panel — but NOT while a job is active: the panel
+  // must stay open during a run so 일시정지 is always one tap away.
   document.addEventListener("click", e => {
-    if (panel.classList.contains("show") && e.target !== host) closePanel();
+    if (!panel.classList.contains("show") || e.target === host) return;
+    if (lastJob && lastJob.active) return;            // keep it open mid-run
+    closePanel();
   });
 
   try {
@@ -371,10 +382,9 @@
       chrome.storage.local.get([JOB, COLLAPSED], o => {
         const job = o && o[JOB];
         paint(job);
-        // during an active run, re-open the panel automatically so progress stays
-        // visible across the page reloads that pagination triggers (unless the
-        // user deliberately collapsed it).
-        if (job && job.active && !(o && o[COLLAPSED])) openPanel(false);
+        // during an active run, always re-open the panel so progress + 일시정지
+        // stay visible across the page reloads that pagination triggers.
+        if (job && job.active) openPanel(false);
       });
     } catch (e) {}
   }
