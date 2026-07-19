@@ -196,7 +196,15 @@ async function runStep(j) {
     // shelf), and chasing those would walk us onto a non-existent page.
     const COUNT_TOLERANCE = 2;
     const haveMore = j.resultCount && (j.resultCount - j.items.length) > COUNT_TOLERANCE;
-    const knownDone = j.totalPages && page >= j.totalPages && !haveMore;
+    // The reported total is both a completeness target AND a ceiling: once we've
+    // collected it (within tolerance), STOP — even when the page-count hint is
+    // unknown. Walking further spills past the last filtered page onto whatever
+    // the site serves for out-of-range pages; Walmart returns broader, unfiltered
+    // products there, which is how off-filter items (bags, shoes) crept into a
+    // T-Shirts/Tank-Tops result. When no count is reported we still walk to the
+    // 404 as before.
+    const reachedCount = !!j.resultCount && !haveMore;
+    const knownDone = reachedCount || (j.totalPages && page >= j.totalPages && !haveMore);
     const stalled = j.emptyStreak >= EMPTY_PAGE_LIMIT;
     const capped = page >= MAX_PAGES;
 
