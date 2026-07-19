@@ -45,6 +45,23 @@ const clear = () => new Promise(r => {
 function adapter() { return (self.SITES && SITES.active(location.href, document)) || null; }
 function itemKey(r) { return (r.id || r.product_url || r.name || "").toLowerCase(); }
 
+// This tab's id (from the service worker). A job is bound to the tab that
+// started it so other tabs never touch it. undefined = not asked yet, null =
+// couldn't determine (treated as "no binding", legacy behaviour).
+let _tabId;
+function myTabId() {
+  return new Promise(res => {
+    if (_tabId !== undefined) return res(_tabId);
+    if (!alive()) return res(null);
+    try {
+      chrome.runtime.sendMessage({ type: "whoami" }, resp => {
+        _tabId = (!chrome.runtime.lastError && resp && resp.tabId != null) ? resp.tabId : null;
+        res(_tabId);
+      });
+    } catch (e) { _tabId = null; res(null); }
+  });
+}
+
 // Identity of a collection = its search context, ignoring the page number and
 // noisy tracking params. A job only auto-resumes on pages with the SAME
 // signature, so an abandoned job from a different category can never resurface
@@ -303,9 +320,11 @@ async function runStep(j) {
 // ---- job controls, shared by the popup (via messages) and the on-page FAB ----
 async function startJob(opts) {
   opts = opts || {};
+  // bind the job to THIS tab so browsing in other tabs can't stop or divert it
+  const tabId = await myTabId();
   // always a FRESH job tagged with this page's collection signature
   await s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
-      totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false,
+      totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false, tabId,
       filters: opts.filters || {}, sig: collectionSig(location.href), status: "Starting…" });
   // collection always begins at the first page, wherever the user started from.
   // Adapters whose pagination isn't ?page=N (e.g. SFCC's ?start=N&sz=M) provide
@@ -355,13 +374,23 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   return true;
 });
 
-// resume across the page navigations that pagination triggers — but ONLY for the
-// same collection, and never while paused. A leftover active job from a different
-// search (or a legacy job with no signature) is abandoned and cleared, so it can
-// never emit stale items into a new category's output.
-g().then(j => {
+// Resume across the page navigations that pagination triggers — but ONLY in the
+// tab that started the job, and ONLY for the same collection, and never while
+// paused. Binding to the owning tab is what lets the user browse other brands
+// in other tabs without stopping or diverting a running scan: a different tab
+// leaves the job completely untouched (no step, no clear). Within the owning
+// tab, a different collection means the user navigated away — we keep the job
+// intact (they can return) and simply don't scrape the wrong page. The job is
+// only ever discarded explicitly (✕ / reset) or replaced by a new startJob, so
+// stale items can never leak into another category's output.
+// Pure decision: may THIS tab drive the stored job on the page with `sig`?
+function ownsAndMatches(job, myTab, sig) {
+  if (!job || !job.active || job.paused) return false;
+  if (job.tabId != null && myTab != null && job.tabId !== myTab) return false; // another tab — hands off
+  return !!job.sig && job.sig === sig;                                          // same collection only
+}
+(async () => {
+  const j = await g();
   if (!j || !j.active) return;
-  if (!j.sig || collectionSig(location.href) !== j.sig) { clear(); return; }
-  if (j.paused) return;   // user paused — wait for the resume button
-  step();
-});
+  if (ownsAndMatches(j, await myTabId(), collectionSig(location.href))) step();
+})();

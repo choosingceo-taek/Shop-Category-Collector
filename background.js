@@ -23,6 +23,14 @@ function toBase64(bytes) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
+  // Tell a content script which tab it runs in. A scan job is stored globally
+  // (chrome.storage.local is shared by every tab), so the job records its
+  // owning tab id and only that tab drives it — other tabs (e.g. the user
+  // browsing another brand) must never resume or clear it.
+  if (msg && msg.type === "whoami") {
+    send({ tabId: (_sender && _sender.tab && _sender.tab.id != null) ? _sender.tab.id : null });
+    return true;
+  }
   // Save the built workbook via chrome.downloads — deterministic on every site.
   // The old in-page <a download> click is silently swallowed on some retailers
   // (Target), so the content script sends the bytes here as base64 instead.
