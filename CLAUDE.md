@@ -12,11 +12,12 @@
 
 - 수집: 현재 카테고리/검색의 **전 페이지 자동 순회** (모르면 다음 페이지를 직접
   열어 확인하는 probe 방식 — 감지 실패로 페이지가 누락되지 않음)
-- 엔진 라우팅: `sites.js`의 어댑터 레지스트리 `[walmart, target, cottonon, shopify, generic]`
+- 엔진 라우팅: `sites.js`의 어댑터 레지스트리 `[walmart, target, cottonon, zara, shopify, generic]`
   - walmart: 커스텀 SPA 엔진 (embedded JSON 컨테이너 스코핑 + 상세 fetch)
   - target: 커스텀 SPA (?Nao=24 오프셋 페이지네이션, JSON-LD·불릿 상세, multiBrand)
   - shopify: **플랫폼 감지형** (페이지 내 CDN 마커) — Edikted 등 모든 Shopify 몰
   - cottonon: SFCC(Demandware) — URL 슬러그/cgid + PDP variationAttributes
+  - zara: 단일 브랜드 SPA (무한 스크롤 lazy-scroll 60라운드, -p코드.html 상품, JSON-LD 상세)
   - generic: DOM 휴리스틱 + JSON-LD 병합 폴백
 - 상세 수집(옵션): 원단 조성(섬유 검증), 색상 전체 목록, 사이즈, 브랜드, 정가
 - 출력: 12컬럼 xlsx (썸네일 이미지 임베드, 정가/현재가 세일 빨강, Color Count,

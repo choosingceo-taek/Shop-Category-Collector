@@ -5,7 +5,7 @@
 
 ## 현재까지 된 것 (요약)
 
-- 어댑터 레지스트리 `[walmart, target, cottonon, shopify, generic]`, 플랫폼 감지형(shopify)
+- 어댑터 레지스트리 `[walmart, target, cottonon, zara, shopify, generic]`, 플랫폼 감지형(shopify)
 - 전 페이지 자동 순회(probe 방식), 상세 수집(원단·색상·사이즈·브랜드·정가)
 - 12컬럼 xlsx(썸네일 임베드 + 출처 규칙), post-scan 필터, FAB + 팝업 UI
 - Node+jsdom 9개 스위트 139+ 케이스

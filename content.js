@@ -125,8 +125,11 @@ async function runStep(j) {
     // to the bottom repeatedly until the tile count AND page height stop
     // growing, THEN scrape — no selectors involved, the site renders itself.
     if (a.lazyScroll) {
+      // adapter may set a number = max scroll rounds (infinite-scroll sites like
+      // Zara hold whole categories on one page and need more than Target's 20)
+      const rounds = typeof a.lazyScroll === "number" ? a.lazyScroll : 20;
       let lastN = -1, lastH = -1, stable = 0;
-      for (let i = 0; i < 20 && stable < 2; i++) {
+      for (let i = 0; i < rounds && stable < 2; i++) {
         window.scrollTo(0, document.body.scrollHeight);
         await sleep(700);
         const live = await g();

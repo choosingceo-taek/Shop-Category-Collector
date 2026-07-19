@@ -1816,9 +1816,164 @@
   })();
 
   // ---------------------------------------------------------------------------
+  // Zara adapter — single-house-brand SPA (Inditex platform). Categories live at
+  // /<locale>/<lang>/<slug>-l<id>.html (one continuous infinite-scroll grid, no
+  // page param — the engine's lazy-scroll renders it out, then there is no next
+  // page); products at /<slug>-p<code>.html. Extraction is layered per project
+  // rule: generic tile scan + JSON-LD, slug-derived names, fiber-% text for
+  // composition. "ZARA" is the factual house brand (same rule as Cotton On).
+  // ---------------------------------------------------------------------------
+  const zara = (function () {
+    const compositionFromText = shared.compositionFromText;
+    const titleCase = s => String(s || "").replace(/-+/g, " ").trim().replace(/\b\w/g, c => c.toUpperCase());
+
+    // "/us/en/ribbed-tank-top-p04174304.html" -> "04174304"
+    function codeOf(url) {
+      try { const m = new URL(url).pathname.match(/-p(\d{5,})\.html/i); return m ? m[1] : ""; }
+      catch (e) { return ""; }
+    }
+    // "/us/en/ribbed-tank-top-p04174304.html" -> "Ribbed Tank Top"
+    function nameFromUrl(url) {
+      try {
+        const last = new URL(url).pathname.split("/").filter(Boolean).pop() || "";
+        const m = last.match(/^(.+)-p\d{5,}\.html$/i);
+        if (m) return titleCase(m[1]);
+      } catch (e) {}
+      return "";
+    }
+    // "/us/en/woman-tshirts-l1362.html" -> "Woman Tshirts"
+    function categoryFromUrl(url) {
+      try {
+        const last = new URL(url).pathname.split("/").filter(Boolean).pop() || "";
+        const m = last.match(/^(.+)-l\d+\.html$/i);
+        if (m) return titleCase(m[1]);
+      } catch (e) {}
+      return "";
+    }
+    function listingCategory(doc, url) {
+      // breadcrumb leaf -> H1 -> URL slug (same on-site-name-first rule)
+      let trail = [];
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        if (trail.length) return;
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (n && /BreadcrumbList/i.test([].concat(n["@type"] || []).join(","))) {
+            trail = [].concat(n.itemListElement || [])
+              .map(e => (e && (e.name || (e.item && e.item.name))) || "").filter(Boolean);
+          }
+        });
+      });
+      trail = trail.filter(t => t && !/^(home|zara)$/i.test(t));
+      if (trail.length) return trail[trail.length - 1];
+      const h1 = doc.querySelector && doc.querySelector("h1");
+      if (h1) {
+        const t = (h1.textContent || "").replace(/\s*\(\d[\d,]*\)\s*$/, "").replace(/\s+/g, " ").trim();
+        if (t && t.length <= 60 && !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
+      }
+      return categoryFromUrl(url);
+    }
+
+    function scrapeList(doc, url) {
+      // generic tile scan (reco carousels excluded, JSON-LD merged), kept to
+      // real product pages (-p<code>.html), one row per product code.
+      const raw = generic.scrapeList(doc, url).filter(r => codeOf(r.product_url));
+      const pageCat = listingCategory(doc, url);
+      const seen = new Set(); const out = [];
+      for (const r of raw) {
+        const id = codeOf(r.product_url);
+        if (seen.has(id)) continue; seen.add(id);
+        r.id = id;
+        const slugName = nameFromUrl(r.product_url);
+        if (slugName && (!r.name || r.name.length < 4)) r.name = slugName;
+        r.category = pageCat || r.category || "";
+        r.brand = "ZARA";                     // single-house-brand site — factual
+        out.push(r);
+      }
+      return out;
+    }
+
+    function parseDetailDoc(doc, rawHtml, url) {
+      let brand = "", name = "";
+      const colors = [], sizes = [];
+      const addTo = (arr, v) => {
+        const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+        if (s && s.length <= 40 && !arr.some(x => x.toLowerCase() === s.toLowerCase())) arr.push(s);
+      };
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
+          if (!name && n.name) name = String(n.name);
+          if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+          [].concat(n.color || []).forEach(c => addTo(colors, c));
+          [].concat(n.size || []).forEach(z => addTo(sizes, z));
+          [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
+        });
+      });
+      // composition: fiber-% text — li boundaries first, then raw HTML (whose
+      // closing tags compositionFromText turns into line breaks itself)
+      const liText = doc.querySelectorAll
+        ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
+      const composition = compositionFromText(liText) || compositionFromText(rawHtml || "");
+      return {
+        composition, colorways: colors.join("; "), design: "",
+        brand: brand || "ZARA", sizes: sizes.join("; "),
+        reason: composition ? "" : "not_found",
+      };
+    }
+
+    async function fetchDetail(url) {
+      const empty = r => ({ composition: "", colorways: "", design: "", brand: "ZARA", reason: r });
+      let html;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        try {
+          const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
+          if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
+          html = await res.text();
+        } finally { clearTimeout(timer); }
+      } catch (e) {
+        return empty((e && e.name === "AbortError") ? "timeout" : "error");
+      }
+      try {
+        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html, url);
+      } catch (e) { return empty("error"); }
+    }
+
+    function context(doc) {
+      doc = doc || document;
+      const url = (doc.location && doc.location.href) || (typeof location !== "undefined" ? location.href : "");
+      return {
+        brand: "",                            // single-brand: the panel shows the label
+        category: listingCategory(doc, url),
+        totalPages: null,
+        page: 1,                              // one continuous infinite-scroll grid
+      };
+    }
+
+    return {
+      id: "zara",
+      label: "Zara",
+      lazyScroll: 60,     // whole category on one infinite-scroll page — scroll it out
+      match: url => /(^|\.)zara\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
+      context, scrapeList,
+      totalPages: () => 1,                    // no page param — everything is on this page
+      resultCount: generic.resultCount,
+      nextPageUrl: () => null,                // nothing after the scrolled-out grid
+      firstPageUrl: url => url,
+      isResultsPage: generic.isResultsPage,
+      fetchDetail, buildWorkbook: generic.buildWorkbook,
+      templateUrl: null,
+      _codeOf: codeOf, _nameFromUrl: nameFromUrl, _categoryFromUrl: categoryFromUrl,
+      _listingCategory: listingCategory, _parseDetailDoc: parseDetailDoc,
+    };
+  })();
+
+  // ---------------------------------------------------------------------------
   // Registry — order matters: more specific adapters must come before generic.
   // ---------------------------------------------------------------------------
-  const ADAPTERS = [walmart, target, cottonon, shopify, generic];
+  const ADAPTERS = [walmart, target, cottonon, zara, shopify, generic];
 
   const SITES = {
     shared,
