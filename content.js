@@ -181,8 +181,10 @@ async function runStep(j) {
           const d = await a.fetchDetail(it.product_url);
           if (d && typeof d === "object") {
             it.fabric_composition = d.composition || "";
-            if (d.colorways) it.colorways = d.colorways;   // fuller than the list swatches
-            if (d.color_count) it.color_count = d.color_count;   // authoritative swatch count
+            // the LIVE listing already has reliable colours (swatch alts); the
+            // no-JS PDP fetch is weaker, so only fill gaps / take the larger count
+            if (d.colorways && !it.colorways) it.colorways = d.colorways;
+            if (d.color_count && (parseInt(d.color_count) || 0) > (parseInt(it.color_count) || 0)) it.color_count = d.color_count;
             if (d.design) it.design = d.design;            // real "Key item features"
             // optional enrichment some adapters provide (e.g. shopify vendor/type,
             // SFCC size lists)

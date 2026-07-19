@@ -1115,32 +1115,38 @@
         return m ? m[1] : "";
       } catch (e) { return ""; }
     }
-    // Each colour is its own swatch (confirmed by the user — individual badges,
-    // not a "+3" summary). A swatch may be an <a> to the colour's PDP, an <img>
-    // thumbnail, or an element carrying the pid in a data-* attribute — all of
-    // them reference the product's base pid with the colour code appended
-    // (2061433-04). Count the distinct colour codes across ALL of those.
+    const colourCase = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim()
+      .replace(/\b\w/g, c => c.toUpperCase());
+
+    // Colour variants on the LIVE listing. Confirmed structure (diagnose-listing-
+    // color.js on cottonon.com): each product's colour swatches share the base
+    // pid in their href (e.g. ?dwvar_2061433-04_color=…) and carry the colour
+    // NAME in the image alt as "Select Colour: WASHED BLACK"; the current colour
+    // is in the main image alt "…Jacket, WASHED CACTUS GREEN". Names are the
+    // reliable identity (the pid codes live in color= params, not the .html path).
     function colorsForBase(doc, base) {
-      const seen = new Set(); const names = [];
       if (!doc.querySelectorAll || !base) return { count: 0, colorways: "" };
-      const codeRe = new RegExp(base + "[-_]([A-Za-z0-9]{1,8})", "i");
+      const names = new Map();   // lowercased -> display name
+      const codes = new Set();   // fallback identity when no name is present
       const sel = ['a[href*="' + base + '"]', 'img[src*="' + base + '"]', 'img[data-src*="' + base + '"]',
         '[data-pid*="' + base + '"]', '[data-variant*="' + base + '"]', '[data-product-id*="' + base + '"]'].join(",");
       doc.querySelectorAll(sel).forEach(el => {
-        const hay = (el.getAttribute("href") || "") + " " + (el.getAttribute("src") || "") + " " +
-          (el.getAttribute("data-src") || "") + " " + (el.getAttribute("data-pid") || "") + " " +
-          (el.getAttribute("data-variant") || "") + " " + (el.getAttribute("data-product-id") || "");
-        const m = hay.match(codeRe);
-        if (!m) return;
-        const code = m[1];
-        if (/^html?$/i.test(code) || seen.has(code)) return;   // skip the ".html" tail token
-        seen.add(code);
         const img = (el.tagName === "IMG") ? el : (el.querySelector && el.querySelector("img"));
-        const nm = cleanColourName(el.getAttribute("aria-label") || el.getAttribute("title") ||
-          (img && (img.getAttribute("alt") || img.getAttribute("title"))) || "", "");
-        if (nm) names.push(nm);
+        const label = el.getAttribute("aria-label") || el.getAttribute("title") ||
+          (img && (img.getAttribute("alt") || img.getAttribute("title"))) || "";
+        if (/^\s*size\b/i.test(label)) return;                 // size buttons also carry the pid
+        const m = label.match(/select\s+colou?r\s*:\s*(.+)$/i) ||   // swatch: "Select Colour: X"
+          label.match(/,\s*([A-Za-z][A-Za-z0-9 /&'’-]{1,38})\s*$/); // main image: "…Jacket, X"
+        if (m) { const n = m[1].replace(/\s+/g, " ").trim(); if (n) names.set(n.toLowerCase(), colourCase(n)); }
+        // fallback colour identity from the variant code (color= param / pid)
+        const attrs = (el.getAttribute("href") || "") + " " + (el.getAttribute("src") || "") + " " +
+          (el.getAttribute("data-src") || "") + " " + (el.getAttribute("data-pid") || "");
+        const cm = attrs.match(new RegExp("color=" + base + "-([A-Za-z0-9]{1,8})", "i")) ||
+          attrs.match(new RegExp("/" + base + "-([A-Za-z0-9]{1,8})\\.html", "i"));
+        if (cm) codes.add(cm[1].toLowerCase());
       });
-      return { count: seen.size, colorways: names.join("; ") };
+      if (names.size) return { count: names.size, colorways: [...names.values()].join("; ") };
+      return { count: codes.size, colorways: "" };            // names unknown, count only
     }
 
     // Key design details: the PDP's "Features" list. Cotton On renders this
