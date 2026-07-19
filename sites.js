@@ -614,6 +614,30 @@
       return el.tagName + "|" + cls + "|" + (el.parentElement ? el.parentElement.tagName : "");
     }
 
+    // Recommendation / cross-sell modules ("Complete the look", "You may also
+    // like", "Looks we love", SFCC Einstein carousels, "Recently viewed", …)
+    // repeat the same tile shape as the real grid and would inflate the export.
+    // Exclude any tile whose ancestor container is semantically a recommendation
+    // — by class/id/aria/data attribute or a heading right above it. Kept to
+    // specific reco phrases so a real category (e.g. "Trending") isn't dropped.
+    const RECO_RE = /recommend|related[\s_-]?product|you[\s_-]?may[\s_-]?(?:also[\s_-]?)?like|complete[\s_-]?the[\s_-]?look|looks?[\s_-]?we[\s_-]?love|recently[\s_-]?viewed|also[\s_-]?(?:bought|viewed|like)|einstein|cross[\s_-]?sell|up[\s_-]?sell|shop[\s_-]?the[\s_-]?look|you[\s_-]?might[\s_-]?(?:also[\s_-]?)?like|customers[\s_-]?also/i;
+    function inRecommendation(tile) {
+      let node = tile;
+      for (let d = 0; node && d < 12; d++) {
+        const attr = (typeof node.className === "string" ? node.className : "") + " " + (node.id || "") + " " +
+          (node.getAttribute ? ((node.getAttribute("aria-label") || "") + " " + (node.getAttribute("data-component") || "") +
+            " " + (node.getAttribute("data-section") || "") + " " + (node.getAttribute("data-analytics") || "")) : "");
+        if (RECO_RE.test(attr)) return true;
+        let prev = node.previousElementSibling, hops = 0;
+        while (prev && hops++ < 3) {
+          if (/^H[1-6]$/.test(prev.tagName || "") && RECO_RE.test(prev.textContent || "")) return true;
+          prev = prev.previousElementSibling;
+        }
+        node = node.parentElement;
+      }
+      return false;
+    }
+
     function bestImage(el) {
       const img = el.querySelector && el.querySelector("img");
       if (!img) return "";
@@ -738,6 +762,7 @@
       const out = [];
       for (const [tile, price] of tiles) {
         if (!validTiles.has(tile) || out.length >= MAX_TILES) continue;
+        if (inRecommendation(tile)) continue;   // drop recommendation/cross-sell carousels
         const product_url = bestUrl(tile, base);
         if (!product_url || seen.has(product_url)) continue;
         seen.add(product_url);
@@ -831,7 +856,7 @@
       // fetchDetail intentionally omitted — content.js skips detail collection
       // gracefully when an adapter doesn't implement it.
       _tileAncestor: tileAncestor, _signature: signature, _bestName: bestName,
-      _jsonLdProducts: jsonLdProducts,
+      _jsonLdProducts: jsonLdProducts, _inRecommendation: inRecommendation,
     };
   })();
 
@@ -1137,7 +1162,13 @@
         if (/^\s*size\b/i.test(label)) return;                 // size buttons also carry the pid
         const m = label.match(/select\s+colou?r\s*:\s*(.+)$/i) ||   // swatch: "Select Colour: X"
           label.match(/,\s*([A-Za-z][A-Za-z0-9 /&'’-]{1,38})\s*$/); // main image: "…Jacket, X"
-        if (m) { const n = m[1].replace(/\s+/g, " ").trim(); if (n) names.set(n.toLowerCase(), colourCase(n)); }
+        if (m) {
+          let n = m[1].replace(/\s+/g, " ").trim();
+          // strip gallery-image noise so all views of one colour collapse to it:
+          // "Black - Example Image 1" / "Black - Front" / "Black View 2" -> "Black"
+          n = n.replace(/\s*[-–—]?\s*(?:example\s+)?(?:image|img|photo|view|front|back|side|angle|model|look|zoom)\b.*$/i, "").trim();
+          if (n && !/^(?:example|image|img|photo|view)\b/i.test(n)) names.set(n.toLowerCase(), colourCase(n));
+        }
         // fallback colour identity from the variant code (color= param / pid)
         const attrs = (el.getAttribute("href") || "") + " " + (el.getAttribute("src") || "") + " " +
           (el.getAttribute("data-src") || "") + " " + (el.getAttribute("data-pid") || "");

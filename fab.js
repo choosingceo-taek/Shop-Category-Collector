@@ -68,18 +68,28 @@
   @keyframes r { to { transform: rotate(360deg); } }
 
   /* ---------- the control panel ---------- */
+  /* the panel floats ABOVE the icon (absolute, so it doesn't push the pill) and
+     scales/fades out of the icon's corner — as if it flows from the icon. */
   #panel {
-    display: none; width: 320px; max-width: 88vw;
-    max-height: calc(100vh - 28px);          /* headroom so it rarely needs to scroll */
-    flex-direction: column;
+    position: absolute; left: 0; bottom: 54px;
+    display: flex; flex-direction: column;
+    width: 320px; max-width: 88vw;
+    max-height: calc(100vh - 84px);          /* headroom so it rarely needs to scroll */
     background: rgba(20,21,26,.9); color: #f2f2f7;
     border: 1px solid rgba(255,255,255,.10);
     border-radius: 18px; overflow: hidden;
     box-shadow: 0 16px 44px rgba(0,0,0,.5);
     -webkit-backdrop-filter: blur(24px) saturate(1.4);
     backdrop-filter: blur(24px) saturate(1.4);
+    transform-origin: 0 100%;                /* bottom-left = the icon */
+    transform: scale(.86) translateY(12px);
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: transform .2s cubic-bezier(.2,.8,.2,1.1), opacity .16s ease, visibility 0s .2s;
   }
-  #panel.show { display: flex; }
+  #panel.show {
+    transform: none; opacity: 1; visibility: visible; pointer-events: auto;
+    transition: transform .2s cubic-bezier(.2,.8,.2,1.1), opacity .16s ease;
+  }
   .head { flex: 0 0 auto; display: flex; align-items: center;
     justify-content: space-between; padding: 12px 14px 6px; }
   .head b { font-size: 13.5px; font-weight: 700; }
@@ -145,11 +155,14 @@
   #fclear { display: block; width: 100%; padding: 7px; margin: 4px 0 8px;
     font-size: 11.5px; color: #ffb0b0; background: rgba(255,92,92,.12); border-radius: 8px; }
 
-  .act { width: 100%; padding: 11px; font-weight: 700; font-size: 12.5px;
-    border-radius: 11px; justify-content: center; margin-top: 8px; }
+  .act { display: flex; width: 100%; min-width: 0; max-width: 100%;
+    padding: 10px 8px; font-weight: 700; font-size: 12px; line-height: 1.25;
+    border-radius: 11px; justify-content: center; text-align: center;
+    white-space: normal; word-break: keep-all; margin-top: 8px; }
   .act[disabled] { opacity: .4; cursor: default; }
-  #run { background: linear-gradient(90deg,#3b7bff,#0a5cff); color: #fff; }
-  #run:not([disabled]):hover { filter: brightness(1.08); }
+  /* accent matches the panel mood (same violet→pink as the progress bar/switch) */
+  #run { background: linear-gradient(90deg,#7b61ff,#c15fd6); color: #fff; }
+  #run:not([disabled]):hover { filter: brightness(1.1); }
   .actrow { display: flex; gap: 8px; }
   .actrow .act { flex: 1 1 0; margin-top: 8px; }
   #pr2 { background: rgba(255,255,255,.12); color: #f2f2f7; }
@@ -188,7 +201,7 @@
           <small>쉼표 구분</small></div>
         <button id="fclear">✕ 필터 모두 지우기</button>
       </details>
-      <button id="run" class="act">이 카테고리 전 페이지 수집 → 엑셀</button>
+      <button id="run" class="act">전 페이지 수집 → 엑셀</button>
       <div class="actrow">
         <button id="pr2" class="act" disabled>⏸ 일시정지</button>
         <button id="reset2" class="act">↺ 초기화</button>
@@ -198,12 +211,15 @@
   </div>
   <div id="fab" class="idle">
     <span id="spin"></span>
-    <button id="main" title="스캔 옵션 / 작업 제어 열기">
+    <button id="main" title="상품 정보 수집 — 옵션 / 작업 제어 열기">
       <svg viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="4" width="18" height="16" rx="2.5" fill="#fff"/>
-        <rect x="3" y="4" width="18" height="5" rx="2.5" fill="#3b7bff"/>
-        <line x1="3" y1="13.5" x2="21" y2="13.5" stroke="#0F3B5F" stroke-opacity=".35"/>
-        <line x1="12" y1="9" x2="12" y2="20" stroke="#0F3B5F" stroke-opacity=".35"/>
+        <!-- product grid being scanned + collected -->
+        <rect x="3" y="3.5" width="7" height="7" rx="1.6" fill="#fff"/>
+        <rect x="3" y="13" width="7" height="7" rx="1.6" fill="#fff" fill-opacity=".5"/>
+        <rect x="12.5" y="3.5" width="7" height="7" rx="1.6" fill="#fff" fill-opacity=".5"/>
+        <!-- magnifier scanning the products -->
+        <circle cx="15.3" cy="15.1" r="4.3" fill="none" stroke="#ff8fc4" stroke-width="2"/>
+        <line x1="18.5" y1="18.3" x2="21.4" y2="21.2" stroke="#ff8fc4" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </button>
     <span id="label">스캔 옵션</span>
