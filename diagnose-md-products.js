@@ -15,7 +15,7 @@
    the script grabs the most recent productsArray request from the page's
    Resource Timing and re-fetches it. */
 (async function () {
-  const URL_OVERRIDE = "";   // <- optionally paste your full productsArray URL here
+  const URL_OVERRIDE = "https://www.massimodutti.com/itxrest/3/catalog/store/34009527/30359506/productsArray?languageId=-1&appId=1&productIds=61729768,61734054,61735799,62585081,62051931,63092758,62412107,61734215,62051916,61733905,62681552,61729603,61729841,61729277,61729278,61729276,61733717,61735907,62904656,62408388";   // <- paste your full productsArray URL here (empty = auto-detect from Network timing)
 
   const R = []; const log = (...a) => R.push(a.join(" "));
   const j = (v, n) => { try { return JSON.stringify(v).slice(0, n || 400); } catch (e) { return String(v).slice(0, n || 400); } };
