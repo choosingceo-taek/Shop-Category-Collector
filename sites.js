@@ -628,6 +628,7 @@
     return {
       id: "walmart",
       label: "Walmart",
+      multiBrand: true,   // a retailer of many brands — show Retailer + Brand separately
       // Any walmart.com page routes to the full Walmart engine (detail collection).
       // The content script only injects on listing paths (manifest), so this can't
       // fire on product/cart pages; being permissive means a listing on a path the

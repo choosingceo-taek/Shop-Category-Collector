@@ -176,6 +176,7 @@
     <div class="head"><b>Collect Products</b><button id="x" title="Close">✕</button></div>
     <div class="body">
       <div class="card">
+        <div class="crow" id="pretailRow" style="display:none"><span class="k">Retailer</span><span class="v" id="pretail">—</span></div>
         <div class="crow"><span class="k">Brand</span><span class="v" id="pbrand">—</span></div>
         <div class="crow"><span class="k">Category</span><span class="v" id="pcat">—</span></div>
         <div id="progBar"><div id="progFill"></div></div>
@@ -277,10 +278,19 @@
   function fillContext() {
     const eng = engine();
     let a = null; try { a = eng && eng.adapter && eng.adapter(); } catch (e) {}
-    if (!a) { el("pbrand").textContent = "—"; el("pcat").textContent = "Open a supported store"; return; }
+    if (!a) { el("pretailRow").style.display = "none"; el("pbrand").textContent = "—"; el("pcat").textContent = "Open a supported store"; return; }
     let c = {}; try { c = a.context(document) || {}; } catch (e) {}
     const pages = c.totalPages ? `${c.totalPages}p total` : "auto-detect pages";
-    el("pbrand").textContent = c.brand || a.label || "—";
+    // Multi-brand retailers (Walmart/Target/Macy's…) show Retailer + Brand; a
+    // single-brand store (Cotton On, indie labels) shows just Brand.
+    if (a.multiBrand) {
+      el("pretailRow").style.display = "";
+      el("pretail").textContent = a.label || "—";
+      el("pbrand").textContent = c.brand || "—";
+    } else {
+      el("pretailRow").style.display = "none";
+      el("pbrand").textContent = c.brand || a.label || "—";
+    }
     el("pcat").textContent = c.category || "—";
     el("ctx").textContent = `${a.label} · ${pages} (page ${c.page || 1})`;   // kept for reference
     const hasDetail = typeof a.fetchDetail === "function";
