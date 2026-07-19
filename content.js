@@ -92,7 +92,7 @@ async function step() {
 
 async function runStep(j) {
   const a = adapter();
-  if (!a) { await report("이 페이지를 지원하는 어댑터가 없습니다."); j.active = false; await s(j); return; }
+  if (!a) { await report("No adapter supports this page."); j.active = false; await s(j); return; }
 
   // -------- phase: list (scrape + auto-paginate) --------
   if (j.phase === "list") {
@@ -114,7 +114,7 @@ async function runStep(j) {
     // past the last real page — finish with what we have instead of scraping it.
     if (page > 1 && typeof a.isResultsPage === "function" && !a.isResultsPage(document)) {
       // Normal end-of-category probe: we walked one page past the last real one.
-      await report(`마지막 페이지 확인 완료 — 총 ${j.items.length}개 수집, 다음 단계로 진행`);
+      await report(`Reached the last page — ${j.items.length} collected, moving on`);
       j.phase = j.withSpec ? "spec" : "build";
       j.specIdx = 0;
       await s(j); step();
@@ -122,7 +122,7 @@ async function runStep(j) {
     }
     let scraped = [];
     try { scraped = a.scrapeList(document, location.href) || []; }
-    catch (e) { scraped = []; await report(`페이지 ${page} 파싱 오류(건너뜀): ${e && e.message || e}`); }
+    catch (e) { scraped = []; await report(`Page ${page} parse error (skipped): ${e && e.message || e}`); }
     j.seen = j.seen || {};
     let added = 0;
     for (const r of scraped) {
@@ -136,7 +136,7 @@ async function runStep(j) {
     j.emptyStreak = added === 0 ? (j.emptyStreak || 0) + 1 : 0;
     await s(j);
     const target = j.resultCount ? "/" + j.resultCount : "";
-    await report(`수집 중… ${page}${j.totalPages ? "/" + j.totalPages + "p" : "p"} · ${j.items.length}${target}개 (이번 페이지 +${added})`);
+    await report(`Collecting… ${page}${j.totalPages ? "/" + j.totalPages + "p" : "p"} · ${j.items.length}${target} items (+${added} this page)`);
 
     const next = a.nextPageUrl(location.href, page);
     // Keep paginating while the site's reported total says items are missing —
@@ -155,12 +155,12 @@ async function runStep(j) {
       if (!cur || !cur.active || cur.paused) return;
       location.href = next;                        // navigation -> resume() re-enters step()
     } else {
-      if (capped) await report(`안전 상한(${MAX_PAGES}p) 도달 — 수집 중단하고 엑셀 생성.`);
+      if (capped) await report(`Safety cap (${MAX_PAGES}p) reached — stopping and building Excel.`);
       j.phase = j.withSpec ? "spec" : "build";
       j.specIdx = 0;
       await s(j);
       // announce the phase change immediately so the UI doesn't look frozen at "N/Np"
-      await report(j.withSpec ? `목록 ${j.items.length}개 완료 — 상품 상세 수집 시작…` : "목록 완료 — 엑셀 생성 준비…");
+      await report(j.withSpec ? `List done (${j.items.length}) — collecting details…` : "List done — preparing Excel…");
       step();
     }
     return;
@@ -198,7 +198,7 @@ async function runStep(j) {
         } catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run
       }
       it._specDone = true;
-      await report(`상품 상세 수집… ${i + 1}/${total}`);   // update every item so progress is visible
+      await report(`Collecting details… ${i + 1}/${total}`);   // update every item so progress is visible
       if (i % 5 === 0) await s(j);                          // persist periodically for resume
       await sleep(400 + Math.random() * 400);
     }
@@ -207,7 +207,7 @@ async function runStep(j) {
 
   // -------- phase: build (export) --------
   if (j.phase === "build") {
-    await report("엑셀 생성 중… (썸네일 이미지 포함, 잠시 걸립니다)");
+    await report("Building Excel… (embedding thumbnails)");
     // if composition was never collected, mark the cause so the cell can explain it
     if (!j.withSpec) j.items.forEach(it => { if (!it.fabric_composition && !it._compReason) it._compReason = "not_collected"; });
     try {
@@ -215,14 +215,14 @@ async function runStep(j) {
         ExcelJS: self.ExcelJS,
         fetchImage: fetchImageViaBg,
         filters: j.filters || {},
-        onProgress: (i, total) => report(`엑셀 생성 중… 썸네일 ${i}/${total}`),
+        onProgress: (i, total) => report(`Building Excel… images ${i}/${total}`),
       };
       const { bytes, kept, dropped } = await a.buildWorkbook(j.items, ctx);
       const total = Object.values(kept).reduce((n, v) => n + (v.length || 0), 0);
       // break the dropped list down by reason for a transparent summary
       const dropByReason = {};
-      (dropped || []).forEach(d => { const r = d[1] || "기타"; dropByReason[r] = (dropByReason[r] || 0) + 1; });
-      const reasonKo = { duplicate: "중복", brand: "브랜드", "name-include": "이름필터", "name-exclude": "이름제외" };
+      (dropped || []).forEach(d => { const r = d[1] || "other"; dropByReason[r] = (dropByReason[r] || 0) + 1; });
+      const reasonKo = { duplicate: "duplicate", brand: "brand", "name-include": "name filter", "name-exclude": "name exclude" };
       const dropSummary = Object.keys(dropByReason).map(r => `${reasonKo[r] || r} ${dropByReason[r]}`).join(", ");
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
@@ -240,9 +240,9 @@ async function runStep(j) {
       el.download = `${a.id}_${brandTag}${catTag ? "_" + catTag : ""}_${total}items_${stamp}.xlsx`;
       document.body.appendChild(el); el.click(); el.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      await report(`완료: ${total}개 기입${dropSummary ? " · 제외(" + dropSummary + ")" : ""} · 총 수집 ${j.items.length}개`);
+      await report(`Done: ${total} rows${dropSummary ? " · excluded (" + dropSummary + ")" : ""} · ${j.items.length} collected`);
     } catch (e) {
-      await report("엑셀 생성 실패: " + (e && e.message || e));
+      await report("Excel build failed: " + (e && e.message || e));
     }
     const done = await g(); if (done) { done.active = false; await s(done); }
   }
@@ -254,7 +254,7 @@ async function startJob(opts) {
   // always a FRESH job tagged with this page's collection signature
   await s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
       totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false,
-      filters: opts.filters || {}, sig: collectionSig(location.href), status: "시작…" });
+      filters: opts.filters || {}, sig: collectionSig(location.href), status: "Starting…" });
   // collection always begins at the first page, wherever the user started from.
   // Adapters whose pagination isn't ?page=N (e.g. SFCC's ?start=N&sz=M) provide
   // firstPageUrl() to reset to the start; otherwise we just drop ?page.
@@ -274,11 +274,11 @@ async function startJob(opts) {
 }
 async function pauseJob() {
   const j = await g();
-  if (j && j.active) { j.paused = true; j.status = "일시정지됨 (재개 가능)"; await s(j); }
+  if (j && j.active) { j.paused = true; j.status = "Paused (resumable)"; await s(j); }
 }
 async function resumeJob() {
   const j = await g();
-  if (j && j.active && j.paused) { j.paused = false; j.status = "재개…"; await s(j); step(); }
+  if (j && j.active && j.paused) { j.paused = false; j.status = "Resuming…"; await s(j); step(); }
 }
 // reset = discard the job entirely so a wrong run can never resurface
 async function resetJob() { await clear(); }

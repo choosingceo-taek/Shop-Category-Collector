@@ -186,9 +186,6 @@
       <div id="note">No dedicated support for this site — only basic info (thumbnail, name, price, URL) is collected. Color / fabric / design stay as "정보 확인".</div>
       <details id="filters">
         <summary><span id="fsum">Filters (optional)</span><span class="chev">▾</span></summary>
-        <div class="f"><label>Brand</label>
-          <input type="text" id="fBrand" placeholder="e.g. No Boundaries, Time and Tru">
-          <small>Keep only these brands · comma-separated · empty = all</small></div>
         <div class="f"><label>Name includes</label>
           <input type="text" id="fInclude" placeholder="e.g. Women, Legging">
           <small>Keep only items containing these words · comma-separated</small></div>
@@ -227,7 +224,7 @@
   const fab = el("fab");
   const panel = el("panel");
   const terms = id => (el(id).value || "").split(",").map(s => s.trim()).filter(Boolean);
-  const isFinished = job => !!(job && job.status && /완료|종료|실패/.test(job.status) && !(job && job.active));
+  const isFinished = job => !!(job && job.status && /\b(?:done|complete|finished|failed|error)\b/i.test(job.status) && !(job && job.active));
   const setStore = (k, v) => { try { chrome.storage.local.set({ [k]: v }); } catch (e) {} };
 
   let lastJob = null;
@@ -253,7 +250,7 @@
   function paintPill(job) {
     clearTimeout(doneTimer);
     const active = job && job.active, paused = active && job.paused;
-    if (paused) { setPillClass("paused"); el("status").textContent = job.status || "일시정지됨"; }
+    if (paused) { setPillClass("paused"); el("status").textContent = job.status || "Paused"; }
     else if (active) { setPillClass("running"); el("status").textContent = job.status || "Scanning…"; }
     else if (isFinished(job)) { setPillClass("done"); el("status").textContent = job.status; doneTimer = setTimeout(() => setPillClass("idle"), 8000); }
     else { setPillClass("idle"); }
@@ -299,7 +296,7 @@
   // reflect whether any filter is set — a stale filter silently dropping most
   // results was a real footgun, so make it loud: badge + accent + auto-expand.
   function refreshFilterState() {
-    const active = el("fBrand").value.trim() || el("fInclude").value.trim() || el("fExclude").value.trim();
+    const active = el("fInclude").value.trim() || el("fExclude").value.trim();
     el("filters").setAttribute("data-active", active ? "1" : "0");
     el("fsum").innerHTML = active
       ? 'Filters <span class="badge">● active — some items excluded</span>'
@@ -311,7 +308,6 @@
       chrome.storage.local.get(OPTS, o => {
         const opts = (o && o[OPTS]) || {};
         const f = opts.filters || {};
-        el("fBrand").value = (f.brands || []).join(", ");
         el("fInclude").value = (f.nameInclude || []).join(", ");
         el("fExclude").value = (f.nameExclude || []).join(", ");
         refreshFilterState();
@@ -342,7 +338,6 @@
     const j = await eng.getJob();
     if (j && j.active) return;
     const filters = {
-      brands: terms("fBrand"),
       nameInclude: terms("fInclude"),
       nameExclude: terms("fExclude"),
     };
@@ -361,7 +356,7 @@
   el("pr2").addEventListener("click", e => { e.stopPropagation(); togglePause(); });
   // clear the filter inputs + persist the cleared state (shared by Clear filters & Reset)
   function clearFilters() {
-    el("fBrand").value = ""; el("fInclude").value = ""; el("fExclude").value = "";
+    el("fInclude").value = ""; el("fExclude").value = "";
     setStore(OPTS, { withSpec: true, filters: {} });
     refreshFilterState();
   }
@@ -370,7 +365,7 @@
   el("reset2").addEventListener("click", e => { e.stopPropagation(); doReset(); });
 
   // keep the filter badge in sync as the user edits, and let them clear in one tap
-  ["fBrand", "fInclude", "fExclude"].forEach(id => {
+  ["fInclude", "fExclude"].forEach(id => {
     el(id).addEventListener("input", refreshFilterState);
     el(id).addEventListener("change", refreshFilterState);
   });

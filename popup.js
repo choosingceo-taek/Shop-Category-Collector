@@ -39,7 +39,6 @@ const terms = id => el(id).value.split(",").map(s => s.trim()).filter(Boolean);
 el("go").onclick = async () => {
   const tab = await tabQ();
   const filters = {
-    brands: terms("fBrand"),
     nameInclude: terms("fInclude"),
     nameExclude: terms("fExclude"),
   };

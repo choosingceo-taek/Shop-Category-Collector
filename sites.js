@@ -646,7 +646,15 @@
         const specs = {};
         blobs.forEach(b => collectSpecs(b, specs));
         collectSpecsFromDom(doc, specs);   // recover Material/Fit/Neckline/… from the visible bullets
-        const composition = pickComposition(specs, blobs);
+        // Composition: prefer a fiber-% reading from the visible "Key item
+        // features" bullets — some products give a BARE "60% Cotton/40% Polyester"
+        // bullet with no "Material" label. compositionFromText matches labeled
+        // AND bare fiber-% runs (and rejects promo "20% off"). Fall back to the
+        // structured/labeled specs, then the whole page.
+        const featText = doc.querySelectorAll
+          ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
+        let composition = compositionFromText(featText) || pickComposition(specs, blobs);
+        if (!composition) composition = compositionFromText((doc.body && doc.body.textContent) || html);
         const design = pickDesign(specs);
         const colorways = extractColorways(blobs).join("; ");
         const sizes = sizeRange(extractSizes(blobs));   // size from the PDP when the name has none
