@@ -142,11 +142,14 @@
     return s ? real(s) : check();
   }
   function fieldColorCount(rec, familyCount) {
-    // Prefer an explicit count from the adapter (e.g. a PDP swatch count), then
-    // the "product family" count — on sites like Cotton On each colour is its
-    // own listing row sharing the product slug, so counting the rows that share
-    // a slug gives the true number of colours; otherwise the colorways list.
-    const n = (parseInt(rec.color_count) || 0) || (familyCount > 1 ? familyCount : 0) || colorList(rec).length;
+    // The count must never disagree with the Colorways cell, so take the MAX of:
+    // the listed colour names, an explicit adapter count (e.g. a Cotton On swatch
+    // count when names aren't known), and the product-family count (Cotton On
+    // lists each colour as its own row sharing the product slug).
+    const n = Math.max(
+      colorList(rec).length,
+      parseInt(rec.color_count) || 0,
+      familyCount > 1 ? familyCount : 0);
     return n ? real(String(n)) : check();   // unknown colorways -> unknown count (red)
   }
   // group key: same site + same product slug (the segment before <pid>.html, or

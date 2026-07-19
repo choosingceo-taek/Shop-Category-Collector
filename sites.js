@@ -254,6 +254,14 @@
     }
     // Best-effort colorways from the list JSON (variant swatches). Full color
     // lists usually live on the product page; this catches what the shelf ships.
+    // Normalize a colour name: collapse spaces and drop trailing punctuation so
+    // "Dark Navy." / "Dark Navy.." don't survive as separate colours.
+    const cleanColor = s => String(s || "").replace(/\s+/g, " ").replace(/[.…,;]+\s*$/, "").trim();
+    function dedupeColors(names) {
+      const seen = new Set(), out = [];
+      names.forEach(s => { const c = cleanColor(s); const k = c.toLowerCase(); if (c && !seen.has(k)) { seen.add(k); out.push(c); } });
+      return out;
+    }
     function colorwaysOf(it) {
       const names = [];
       const pull = arr => { if (Array.isArray(arr)) arr.forEach(v => {
@@ -264,8 +272,7 @@
       if (Array.isArray(it.variantCriteria)) it.variantCriteria.forEach(c => {
         if (/colou?r/i.test((c && c.name) || "")) pull(c.variantList || c.values);
       });
-      const uniq = [...new Set(names.map(s => s.trim()).filter(Boolean))];
-      return uniq.length ? uniq.join("; ") : "";
+      return dedupeColors(names).join("; ");
     }
 
     // Walmart's MAIN results live in `searchResult.itemStacks[].items` (browse
@@ -503,7 +510,7 @@
     function extractColorways(blobs) {
       const colors = [];
       const seen = new Set();
-      const add = c => { const s = String(c || "").trim(); if (s && !seen.has(s.toLowerCase())) { seen.add(s.toLowerCase()); colors.push(s); } };
+      const add = c => { const s = cleanColor(c); if (s && !seen.has(s.toLowerCase())) { seen.add(s.toLowerCase()); colors.push(s); } };
       const walk = (o, d) => {
         if (!o || d > 16 || typeof o !== "object") return;
         if (Array.isArray(o)) { o.forEach(v => walk(v, d + 1)); return; }
@@ -531,6 +538,20 @@
       for (const b of blobs) { const v = findComposition(b); if (v) return v; }
       return "";
     }
+    // "Key item features" bullets (Material / Fit / Neckline / Closure / Pockets /
+    // Features …) are server-rendered as <li>Label: Value</li>. Some products
+    // expose these ONLY in the DOM, not the embedded JSON — so read them too,
+    // which recovers both the composition (Material) and the design attributes.
+    function collectSpecsFromDom(doc, out) {
+      if (!doc || !doc.querySelectorAll) return out;
+      doc.querySelectorAll("li").forEach(el => {
+        const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+        if (!t || t.length > 200) return;
+        const m = t.match(/^([A-Za-z][A-Za-z /&-]{1,26}):\s*(.+\S)$/);
+        if (m && !out[m[1].trim()]) out[m[1].trim()] = m[2].trim();
+      });
+      return out;
+    }
 
     // Fetch a product page and extract everything we can that's literally on it.
     // Returns { composition, colorways, design, reason }.
@@ -553,6 +574,7 @@
         const blobs = jsonBlobs(doc);
         const specs = {};
         blobs.forEach(b => collectSpecs(b, specs));
+        collectSpecsFromDom(doc, specs);   // recover Material/Fit/Neckline/… from the visible bullets
         const composition = pickComposition(specs, blobs);
         const design = pickDesign(specs);
         const colorways = extractColorways(blobs).join("; ");
@@ -594,6 +616,8 @@
       _findComposition: findComposition, _collectSpecs: collectSpecs,
       _extractColorways: extractColorways, _pickDesign: pickDesign,
       _categoryOf: categoryOf, _context: context,
+      _collectSpecsFromDom: collectSpecsFromDom, _pickComposition: pickComposition,
+      _colorwaysOf: colorwaysOf,
     };
   })();
 

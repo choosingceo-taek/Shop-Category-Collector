@@ -181,9 +181,10 @@ async function runStep(j) {
           const d = await a.fetchDetail(it.product_url);
           if (d && typeof d === "object") {
             it.fabric_composition = d.composition || "";
-            // the LIVE listing already has reliable colours (swatch alts); the
-            // no-JS PDP fetch is weaker, so only fill gaps / take the larger count
-            if (d.colorways && !it.colorways) it.colorways = d.colorways;
+            // keep whichever colour source is FULLER — Cotton On's listing swatches
+            // beat its weak no-JS PDP, while Walmart's PDP beats its sparse shelf.
+            const nColors = s => s ? String(s).split(/\s*[;,/]\s*/).map(x => x.trim()).filter(Boolean).length : 0;
+            if (d.colorways && nColors(d.colorways) > nColors(it.colorways)) it.colorways = d.colorways;
             if (d.color_count && (parseInt(d.color_count) || 0) > (parseInt(it.color_count) || 0)) it.color_count = d.color_count;
             if (d.design) it.design = d.design;            // real "Key item features"
             // optional enrichment some adapters provide (e.g. shopify vendor/type,
