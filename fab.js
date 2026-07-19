@@ -50,8 +50,8 @@
     backdrop-filter: blur(16px) saturate(1.3);
   }
   #fab.done { padding: 8px 14px; }
-  button { all: unset; cursor: pointer; display: inline-flex; align-items: center;
-    justify-content: center; border-radius: 999px; }
+  button { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex;
+    align-items: center; justify-content: center; border-radius: 999px; }
   #main { width: 30px; height: 30px; flex: 0 0 auto; }
   #main:hover { background: rgba(255,255,255,.12); }
   #main svg { width: 20px; height: 20px; display: block; }
