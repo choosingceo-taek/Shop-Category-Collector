@@ -120,6 +120,25 @@ async function runStep(j) {
       await s(j); step();
       return;
     }
+    // Lazily-rendered grids (Target): tiles only render as you scroll, so at
+    // load time just the first viewport-full exists (e.g. 14 of 24/97). Scroll
+    // to the bottom repeatedly until the tile count AND page height stop
+    // growing, THEN scrape — no selectors involved, the site renders itself.
+    if (a.lazyScroll) {
+      let lastN = -1, lastH = -1, stable = 0;
+      for (let i = 0; i < 20 && stable < 2; i++) {
+        window.scrollTo(0, document.body.scrollHeight);
+        await sleep(700);
+        const live = await g();
+        if (!live || !live.active || live.paused) return;   // honor pause/stop mid-scroll
+        let n = 0; try { n = (a.scrapeList(document, location.href) || []).length; } catch (e) {}
+        const h = document.body.scrollHeight;
+        if (n === lastN && h === lastH) stable++; else stable = 0;
+        lastN = n; lastH = h;
+        await report(`Loading all items… ${n} rendered`);
+      }
+      window.scrollTo(0, 0);
+    }
     let scraped = [];
     try { scraped = a.scrapeList(document, location.href) || []; }
     catch (e) { scraped = []; await report(`Page ${page} parse error (skipped): ${e && e.message || e}`); }
@@ -224,9 +243,6 @@ async function runStep(j) {
       (dropped || []).forEach(d => { const r = d[1] || "other"; dropByReason[r] = (dropByReason[r] || 0) + 1; });
       const reasonKo = { duplicate: "duplicate", brand: "brand", "name-include": "name filter", "name-exclude": "name exclude" };
       const dropSummary = Object.keys(dropByReason).map(r => `${reasonKo[r] || r} ${dropByReason[r]}`).join(", ");
-      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = URL.createObjectURL(blob);
-      const el = document.createElement("a");
       // unique, descriptive filename so a new run never collides with an old file
       // (which made it look like "the previous result" when the old file was opened)
       const brandTag = (j.items[0] && j.items[0].brand || a.label || "collect").replace(/\W+/g, "");
@@ -236,10 +252,31 @@ async function runStep(j) {
         catTag = (j.items[0] && j.items[0].category || q).replace(/[^A-Za-z0-9]+/g, "").slice(0, 24);
       } catch (e) {}
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T-]/g, "").slice(8); // HHMMSS
-      el.href = url;
-      el.download = `${a.id}_${brandTag}${catTag ? "_" + catTag : ""}_${total}items_${stamp}.xlsx`;
-      document.body.appendChild(el); el.click(); el.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      const filename = `${a.id}_${brandTag}${catTag ? "_" + catTag : ""}_${total}items_${stamp}.xlsx`;
+      // Save via the service worker (chrome.downloads) — the in-page <a download>
+      // click is silently swallowed on some retailers (Target). Fall back to the
+      // anchor only if the worker path fails.
+      let b64 = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      b64 = btoa(b64);
+      const saved = await new Promise(res => {
+        try {
+          chrome.runtime.sendMessage({ type: "downloadXlsx", filename, b64 }, r => {
+            if (chrome.runtime.lastError) return res(false);
+            res(!!(r && r.ok));
+          });
+        } catch (e) { res(false); }
+      });
+      if (!saved) {
+        const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const url = URL.createObjectURL(blob);
+        const el = document.createElement("a");
+        el.href = url; el.download = filename;
+        document.body.appendChild(el); el.click(); el.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
       await report(`Done: ${total} rows${dropSummary ? " · excluded (" + dropSummary + ")" : ""} · ${j.items.length} collected`);
     } catch (e) {
       await report("Excel build failed: " + (e && e.message || e));

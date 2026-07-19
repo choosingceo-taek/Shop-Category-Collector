@@ -23,6 +23,22 @@ function toBase64(bytes) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
+  // Save the built workbook via chrome.downloads — deterministic on every site.
+  // The old in-page <a download> click is silently swallowed on some retailers
+  // (Target), so the content script sends the bytes here as base64 instead.
+  if (msg && msg.type === "downloadXlsx" && msg.b64 && msg.filename) {
+    try {
+      chrome.downloads.download({
+        url: "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," + msg.b64,
+        filename: String(msg.filename).replace(/[^\w.-]+/g, "_"),
+        saveAs: false,
+      }, id => {
+        const err = chrome.runtime.lastError;
+        send({ ok: !err && id != null, error: err && err.message });
+      });
+    } catch (e) { send({ ok: false, error: String((e && e.message) || e) }); }
+    return true;
+  }
   if (msg && msg.type === "fetchImage" && msg.url) {
     (async () => {
       try {

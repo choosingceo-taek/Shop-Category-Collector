@@ -1800,6 +1800,7 @@
       id: "target",
       label: "Target",
       multiBrand: true,   // a retailer of many brands — Retailer + Brand shown separately
+      lazyScroll: true,   // tiles render on scroll — engine scrolls to the end before scraping
       match: url => /(^|\.)target\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
       context, scrapeList,
       totalPages: () => null,
