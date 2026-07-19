@@ -152,15 +152,19 @@
       familyCount > 1 ? familyCount : 0);
     return n ? real(String(n)) : check();   // unknown colorways -> unknown count (red)
   }
-  // group key: same site + same product slug (the segment before <pid>.html, or
-  // the last path segment). Colour variants of one product share this; unrelated
-  // products don't, so grouping can only ever unite genuine colour siblings.
+  // group key: same site + same product slug. For a "<slug>/<pid>.html" URL the
+  // slug is the segment before the .html file; otherwise it's the LAST path
+  // segment (e.g. Massimo Dutti "/us/<slug>-l<ref>", COS "/…/<slug>"). Colour
+  // variants of one product share this; unrelated products don't. (Using the
+  // last segment — not the second-to-last — matters for two-segment paths like
+  // "/us/<slug>", where second-to-last is the locale and would wrongly unite the
+  // whole page into one family, inflating every colour count.)
   function familyKey(rec) {
     try {
       const u = new URL(rec.product_url || "");
       const segs = u.pathname.split("/").filter(Boolean);
       const i = segs.findIndex(s => /\.html$/i.test(s));
-      const slug = i > 0 ? segs[i - 1] : segs.slice(-2, -1)[0];
+      const slug = i > 0 ? segs[i - 1] : segs[segs.length - 1];
       return slug ? (u.host + "/" + slug.toLowerCase()) : "";
     } catch (e) { return ""; }
   }
@@ -347,7 +351,7 @@
     return { bytes: new Uint8Array(buf), kept: { Products: kept }, dropped };
   }
 
-  const api = { HEADERS, buildKnitWorkbook, filterKept, literalDesign, reasonKo };
+  const api = { HEADERS, buildKnitWorkbook, filterKept, literalDesign, reasonKo, _familyKey: familyKey };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.WPBExcel = api;
 })(typeof self !== "undefined" ? self : this);

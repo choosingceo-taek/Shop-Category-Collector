@@ -2202,12 +2202,13 @@
     }
 
     // -------- live-page capture (browser only) --------------------------------
-    // The category grid is virtualized: off-screen tiles are removed from the
-    // DOM, so scraping never sees all products at once, and the itxrest
-    // `productsArray` calls the page fires while scrolling are dropped from
-    // resource-timing (evicted / cleared). A PerformanceObserver records each
-    // one as it happens, giving us BOTH the store/catalog ids and the complete
-    // set of productIds regardless of virtualization. See diagnose-md-full.js.
+    // The category grid is virtualized (off-screen tiles leave the DOM) and the
+    // page fetches every product through the itxrest `productsArray` API at
+    // load, so neither DOM scraping nor resource-timing (the SPA clears it) sees
+    // the full set. md-capture.js hooks fetch/XHR in the PAGE world at
+    // document_start and parks the running {store/catalog, productIds} on the
+    // `data-md-capture` attribute; we read it here. A PerformanceObserver is
+    // kept as a secondary source. See diagnose-md-full.js.
     const capture = { sc: null, ids: new Set() };
     function ingest(u) {
       u = String(u || "");
@@ -2219,8 +2220,21 @@
         ids.split(",").forEach(x => { x = x.trim(); if (/^\d+$/.test(x)) capture.ids.add(x); });
       }
     }
+    // read whatever the page-world hook has captured so far (any id set/cleared
+    // in resource timing is irrelevant — the attribute is cumulative).
+    function ingestDom() {
+      try {
+        const raw = (typeof document !== "undefined") &&
+          document.documentElement.getAttribute("data-md-capture");
+        if (!raw) return;
+        const d = JSON.parse(raw);
+        if (d && d.sc && d.sc.store && d.sc.catalog && !capture.sc) capture.sc = d.sc;
+        if (d && d.ids) d.ids.forEach(id => { if (/^\d+$/.test(String(id))) capture.ids.add(String(id)); });
+      } catch (e) {}
+    }
     let observing = false;
     function startCapture() {
+      ingestDom();
       if (observing || typeof PerformanceObserver === "undefined") return;
       observing = true;
       try { (performance.getEntriesByType("resource") || []).forEach(e => ingest(e.name)); } catch (e) {}

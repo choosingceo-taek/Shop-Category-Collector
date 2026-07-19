@@ -68,6 +68,15 @@
       ],
       "js": ["exceljs.min.js", "excel.js", "sites.js", "content.js", "fab.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.massimodutti.com/*",
+        "https://massimodutti.com/*"
+      ],
+      "js": ["md-capture.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ]
 }
