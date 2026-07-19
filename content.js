@@ -218,7 +218,15 @@ async function runStep(j) {
             // price, so reflect the on-page sale in Current Price.
             if (d.price_was && d.price) { it.price = d.price; it.price_was = d.price_was; }
             else if (d.price_was && !it.price_was) it.price_was = d.price_was;
+            if (d.price && !it.price) it.price = d.price;   // API-only price (e.g. Inditex list has none)
             if (d.sizes && !it.size_range) it.size_range = d.sizes;
+            // adapters that build the whole row from an API (Inditex) fill name/
+            // image/link only at the detail step — take them when the list left
+            // them empty, and replace a synthetic pelement-only link once the
+            // real product URL is known (a real MD link carries a "-l<ref>" slug).
+            if (d.name && !it.name) it.name = d.name;
+            if (d.image_url && !it.image_url) it.image_url = d.image_url;
+            if (d.product_url && !/-l\d/i.test(it.product_url || "")) it.product_url = d.product_url;
             it._compReason = d.reason || "";
           } else { it.fabric_composition = d || ""; }
         } catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run

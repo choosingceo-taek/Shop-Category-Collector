@@ -2098,12 +2098,51 @@
       catch (e) { return ""; }
     }
 
-    // Pure parser — a single productsArray product object -> detail fields.
-    // Kept side-effect-free so the Node suite can exercise it without a browser.
+    // "https://www.massimodutti.com/us/women/t-shirts-n1444" -> ".../us" so a
+    // productUrl slug can be turned back into an absolute PDP link.
+    function hrefBaseOf(url) {
+      try { const m = String(url).match(/^(https?:\/\/[^/]+\/[^/?#]+)/); return m ? m[1] : ""; }
+      catch (e) { return ""; }
+    }
+
+    // Key Design Details = the descriptive part of the copy. The first sentence
+    // states the fabric ("… crafted from 100% cotton"); design detail is what
+    // follows — anchored on "Features" when present, else the material sentence
+    // is dropped. (composition itself comes from the structured field, not here.)
+    function designFromDescription(desc) {
+      let t = String(desc == null ? "" : desc).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      if (!t) return "";
+      const fi = t.search(/\bFeatures?\b/i);
+      if (fi > 0) return t.slice(fi).trim();
+      const sents = t.split(/(?<=[.!])\s+/);
+      if (sents.length > 1 && /\b(crafted|made)\b|\bblend\b|\bfabric\b|\d+\s*%/i.test(sents[0])) {
+        return sents.slice(1).join(" ").trim();
+      }
+      return t;
+    }
+
+    // absolute product image from the xmedia block (first media of first item).
+    function imageOf(product) {
+      const bps = (product && product.bundleProductSummaries) || [];
+      for (const b of bps) {
+        const xm = (b && b.detail && b.detail.xmedia) || [];
+        for (const set of xm) for (const item of (set.xmediaItems || [])) {
+          for (const m of (item.medias || [])) {
+            const u = m && (m.url || (m.extraInfo && m.extraInfo.url) || m.deliveryUrl);
+            if (u && /^https?:\/\//.test(u)) return u;
+          }
+        }
+      }
+      return "";
+    }
+
+    // Pure parser — a single productsArray product object -> row/detail fields.
+    // Side-effect-free so the Node suite can exercise it without a browser.
     function parseProduct(product, opts) {
       opts = opts || {};
       const sym = opts.currency || "$";
       const bps = (product && product.bundleProductSummaries) || [];
+      const bd0 = (bps[0] && bps[0].detail) || {};
 
       // composition: the first summary that carries one. Each fiber = "<pct>% <Fiber>";
       // a multi-zone garment (shell/lining) yields several distinct parts joined "; ".
@@ -2126,9 +2165,9 @@
       const colorNames = ((product && product.bundleColors) || [])
         .map(c => prettify(c && c.name)).filter(Boolean);
 
-      // sizes + price: walk every summary/colour/size. Current = cheapest live
-      // size; a size's oldPrice > price proves a markdown (Inditex only sets
-      // oldPrice when on sale).
+      // sizes + price: walk every summary/colour/size. Current = cheapest size;
+      // a size's oldPrice > price proves a markdown (Inditex only sets oldPrice
+      // when on sale). Prices are minor units -> ÷100.
       const sizeSet = [], seenSz = Object.create(null);
       let cur = Infinity, old = 0;
       for (const b of bps) for (const c of ((b && b.detail && b.detail.colors) || [])) {
@@ -2141,134 +2180,166 @@
       }
       const money = n => sym + (n / 100).toFixed(2);
       const onSale = old > 0 && cur !== Infinity && old > cur;
+
+      const id = String((product && (product.id != null ? product.id : product.productUrlParam)) || "");
+      const slug = product && product.productUrl;
+      const product_url = (opts.hrefBase && slug) ? `${opts.hrefBase}/${slug}?pelement=${id}` : "";
+
       return {
+        name: (product && product.name) || "",
         composition,
         colorways: colorNames.join("; "),
         color_count: colorNames.length || "",
         sizes: sizeSet.join("; "),
-        design: "",
-        // only assert a price pair when we can prove the sale — otherwise leave
-        // the listing tile's price untouched (content.js keeps it).
-        price: onSale ? money(cur) : "",
-        price_was: onSale ? money(old) : "",
+        design: designFromDescription(bd0.longDescription || bd0.description),
+        price: cur !== Infinity ? money(cur) : "",     // current price (always, from API)
+        price_was: onSale ? money(old) : "",           // struck-through price only when on sale
         brand: opts.brand || "",
+        image_url: imageOf(product),
+        product_url,
         reason: composition ? "" : "not_found",
       };
     }
 
-    // absolute product image from the xmedia block (first media of first item).
-    function imageOf(product) {
-      const bps = (product && product.bundleProductSummaries) || [];
-      for (const b of bps) {
-        const xm = (b && b.detail && b.detail.xmedia) || [];
-        for (const set of xm) for (const item of (set.xmediaItems || [])) {
-          for (const m of (item.medias || [])) {
-            const u = m && (m.url || (m.extraInfo && m.extraInfo.url) || m.deliveryUrl);
-            if (u && /^https?:\/\//.test(u)) return u;
-          }
-        }
+    // -------- live-page capture (browser only) --------------------------------
+    // The category grid is virtualized: off-screen tiles are removed from the
+    // DOM, so scraping never sees all products at once, and the itxrest
+    // `productsArray` calls the page fires while scrolling are dropped from
+    // resource-timing (evicted / cleared). A PerformanceObserver records each
+    // one as it happens, giving us BOTH the store/catalog ids and the complete
+    // set of productIds regardless of virtualization. See diagnose-md-full.js.
+    const capture = { sc: null, ids: new Set() };
+    function ingest(u) {
+      u = String(u || "");
+      const s = u.match(/catalog\/store\/(\d+)\/(\d+)\//);
+      if (s && !capture.sc) capture.sc = { store: s[1], catalog: s[2] };
+      const pm = u.match(/productsArray[^]*?productIds=([\d%2Cc,]+)/i);
+      if (pm) {
+        let ids = pm[1]; try { ids = decodeURIComponent(ids); } catch (e) {}
+        ids.split(",").forEach(x => { x = x.trim(); if (/^\d+$/.test(x)) capture.ids.add(x); });
       }
-      return "";
+    }
+    let observing = false;
+    function startCapture() {
+      if (observing || typeof PerformanceObserver === "undefined") return;
+      observing = true;
+      try { (performance.getEntriesByType("resource") || []).forEach(e => ingest(e.name)); } catch (e) {}
+      try { new PerformanceObserver(list => { for (const e of list.getEntries()) ingest(e.name); })
+        .observe({ type: "resource", buffered: true }); } catch (e) {}
     }
 
-    // Build a store-bound fetchDetail. brandId selects the Inditex brand
-    // (Massimo Dutti = 3); store/catalog are discovered from the live page.
-    function makeDetailFetcher(opts) {
+    function currencyFromDoc(doc) {
+      try {
+        const t = ((doc && doc.body && doc.body.innerText) || "").slice(0, 30000);
+        const m = t.match(/[$€£]/); if (m) return m[0];
+      } catch (e) {}
+      return "$";
+    }
+
+    // Build a store-bound brand helper (scrapeList + fetchDetail). brandId picks
+    // the Inditex brand (Massimo Dutti = 3); fallbackSC is a list of known
+    // store/catalog pairs tried (and self-validated) when live capture missed.
+    function makeBrand(opts) {
       opts = opts || {};
       const brandId = opts.brandId, brand = opts.brand || "";
-      let SC = null, CUR = null;
+      const fallbackSC = opts.fallbackSC || [];
+      const cache = { products: new Map(), sc: null, cur: null, loaded: false, loading: null };
 
-      const scFrom = str => {
-        const m = String(str || "").match(/catalog\/store\/(\d+)\/(\d+)\//);
-        return m ? { store: m[1], catalog: m[2] } : null;
-      };
-      // sync discovery: an itxrest URL is almost always embedded in the page
-      // (inline config/scripts) or left in resource timing.
-      function scSync(doc) {
-        if (SC) return SC;
+      async function fetchArray(sc, ids) {
+        const u = `/itxrest/3/catalog/store/${sc.store}/${sc.catalog}/productsArray?languageId=-1&appId=1&productIds=${ids.join(",")}`;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 15000);
         try {
-          const perf = (typeof performance !== "undefined" && performance.getEntriesByType)
-            ? performance.getEntriesByType("resource").map(e => e.name) : [];
-          for (const n of perf) { const sc = scFrom(n); if (sc) return (SC = sc); }
-        } catch (e) {}
-        try { const sc = scFrom(doc && doc.documentElement && doc.documentElement.innerHTML); if (sc) return (SC = sc); }
-        catch (e) {}
-        return SC;
+          const r = await fetch(u, { credentials: "include", headers: { Accept: "application/json" }, signal: ctrl.signal });
+          if (!r.ok) return null;
+          const j = await r.json();
+          return (j && j.products) || [];
+        } catch (e) { return null; } finally { clearTimeout(timer); }
       }
-      // async fallback: the store-config endpoint carries store + catalog ids.
-      async function scAsync() {
-        if (SC) return SC;
-        for (const v of ["3", "2", "1"]) {
-          try {
-            const txt = await fetch(`/itxrest/${v}/catalog/store?languageId=-1&appId=1&brandId=${brandId}`,
-              { credentials: "include" }).then(r => r.ok ? r.text() : "");
-            const sc = scFrom(txt);
-            if (sc) return (SC = sc);
-            let cfg; try { cfg = JSON.parse(txt); } catch (e) {}
-            if (cfg) {
-              const store = String(cfg.id || cfg.storeId || "");
-              let catalog = "";
-              (function dig(o, d) {
-                if (!o || typeof o !== "object" || d > 5 || catalog) return;
-                for (const k in o) {
-                  if (/^catalog(Id)?$/i.test(k) && /^\d+$/.test(String(o[k]))) { catalog = String(o[k]); return; }
-                  if (typeof o[k] === "object") dig(o[k], d + 1);
-                }
-              })(cfg, 0);
-              if (/^\d{4,}$/.test(store) && catalog) return (SC = { store, catalog });
-            }
-          } catch (e) {}
+      // pick a working store/catalog by validating a seed id against the API.
+      async function resolveSC(seedId) {
+        if (cache.sc) return cache.sc;
+        const cands = [];
+        if (capture.sc) cands.push(capture.sc);
+        fallbackSC.forEach(sc => cands.push(sc));
+        for (const sc of cands) {
+          const prods = await fetchArray(sc, [seedId]);
+          if (prods && prods.length) return (cache.sc = sc);
         }
         return null;
       }
-
-      async function fetchProducts(sc, id) {
-        const u = `/itxrest/3/catalog/store/${sc.store}/${sc.catalog}/productsArray?languageId=-1&appId=1&productIds=${id}`;
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 12000);
-        try {
-          const r = await fetch(u, { credentials: "include", headers: { Accept: "application/json" }, signal: ctrl.signal });
-          if (!r.ok) return { err: r.status === 404 ? "not_found" : "blocked" };
-          const j = await r.json();
-          return { products: (j && j.products) || [] };
-        } catch (e) {
-          return { err: (e && e.name === "AbortError") ? "timeout" : "error" };
-        } finally { clearTimeout(timer); }
+      // fetch + parse every captured id once, in batches, into the cache.
+      function ensureLoaded(doc, seedId, url) {
+        if (cache.loaded) return Promise.resolve();
+        if (cache.loading) return cache.loading;
+        cache.loading = (async () => {
+          cache.cur = currencyFromDoc(doc);
+          const hrefBase = hrefBaseOf(url);
+          const sc = await resolveSC(seedId);
+          if (sc) {
+            const ids = new Set(capture.ids); if (seedId) ids.add(String(seedId));
+            const all = [...ids];
+            for (let i = 0; i < all.length; i += 40) {
+              const prods = await fetchArray(sc, all.slice(i, i + 40));
+              (prods || []).forEach(p => cache.products.set(String(p.id), parseProduct(p, { currency: cache.cur, brand, hrefBase })));
+            }
+          }
+          cache.loaded = true;
+        })();
+        return cache.loading;
       }
 
-      function currencyFromDoc(doc) {
-        try {
-          const t = ((doc && doc.body && doc.body.innerText) || "").slice(0, 30000);
-          const m = t.match(/[$€£]/);
-          if (m) return m[0];
-        } catch (e) {}
-        return "$";
-      }
-
-      return async function fetchDetail(url) {
+      async function fetchDetail(url) {
         const empty = r => ({ composition: "", colorways: "", design: "", brand, reason: r });
         const id = pelementOf(url);
         if (!id) return empty("not_found");
         const doc = (typeof document !== "undefined") ? document : null;
-        if (CUR == null) CUR = currencyFromDoc(doc);
+        await ensureLoaded(doc, id, url);
+        const hit = cache.products.get(String(id));
+        if (hit) return hit;
+        // not in the batch (e.g. detail-only run) — fetch this one id directly.
+        const sc = cache.sc || await resolveSC(id);
+        if (!sc) return empty("error");
+        const prods = await fetchArray(sc, [id]);
+        const p = prods && prods.find(x => String(x.id) === String(id));
+        if (!p) return empty("not_found");
+        return parseProduct(p, { currency: cache.cur || currencyFromDoc(doc), brand, hrefBase: hrefBaseOf(url) });
+      }
 
-        let sc = scSync(doc);
-        let res = sc ? await fetchProducts(sc, id) : { err: "error" };
-        if (!res.products || !res.products.length) {   // sync store/catalog wrong or missing
-          const sc2 = await scAsync();
-          if (sc2) res = await fetchProducts(sc2, id);
-        }
-        if (!res.products || !res.products.length) return empty(res.err || "not_found");
+      // list = DOM pelement links (carry a real URL + image) UNIONED with the
+      // productIds the observer captured while scrolling (the virtualized-away
+      // ones). Captured-only rows get a pelement URL so the detail phase can
+      // fetch them; their real URL/name/image are filled in there.
+      function scrapeList(doc, url, category) {
+        startCapture();
+        try { (performance.getEntriesByType("resource") || []).forEach(e => ingest(e.name)); } catch (e) {}
+        const base = hrefBaseOf(url);
+        const rows = new Map();
+        (doc.querySelectorAll ? doc.querySelectorAll('a[href*="pelement="]') : []).forEach(a => {
+          const href = a.getAttribute("href") || "";
+          const id = (href.match(/pelement=(\d+)/) || [])[1];
+          if (!id || rows.has(id)) return;
+          let abs = href; try { abs = new URL(href, url).toString(); } catch (e) {}
+          const img = a.querySelector && a.querySelector("img");
+          rows.set(id, {
+            id, product_url: abs, name: "", price: "", price_was: "", category, brand,
+            image_url: img ? (img.getAttribute("src") || img.getAttribute("data-src") || "") : "",
+          });
+        });
+        capture.ids.forEach(id => {
+          if (rows.has(id)) return;
+          rows.set(id, {
+            id, product_url: base ? `${base}/?pelement=${id}` : "?pelement=" + id,
+            name: "", price: "", price_was: "", category, brand, image_url: "",
+          });
+        });
+        return [...rows.values()];
+      }
 
-        const product = res.products.find(p => String(p && p.id) === String(id)) || res.products[0];
-        if (!product) return empty("not_found");
-        const out = parseProduct(product, { currency: CUR || "$", brand });
-        out.image_url = imageOf(product);   // absolute CDN image (adapter may use it)
-        return out;
-      };
+      return { scrapeList, fetchDetail, _resolveSC: resolveSC, _cache: cache };
     }
 
-    return { pelementOf, parseProduct, imageOf, makeDetailFetcher };
+    return { pelementOf, parseProduct, imageOf, designFromDescription, capture, startCapture, makeBrand };
   })();
 
   // ---------------------------------------------------------------------------
@@ -2430,15 +2501,34 @@
 
   // Massimo Dutti (Inditex, same platform family as Zara) —
   // massimodutti.com/<locale>/<gender>/<category>-n<id>. One continuous grid.
-  const massimodutti = houseBrandAdapter({
-    id: "massimodutti", label: "Massimo Dutti", brand: "Massimo Dutti",
-    match: url => /(^|\.)massimodutti\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
-    trailSkip: /^(home|massimo\s*dutti)$/i,
-    // Composition/colors/sizes/sale-price come from the Inditex catalog API
-    // (brandId 3), not the JS-rendered PDP. List scrape stays DOM-based; only
-    // the per-product detail switches to productsArray.
-    fetchDetail: inditex.makeDetailFetcher({ brandId: 3, brand: "Massimo Dutti" }),
-  });
+  // Massimo Dutti is fully API-driven (Inditex catalog API, brandId 3): the
+  // grid is virtualized and the PDP is JS-rendered, so both the product LIST
+  // and the per-product detail come from `productsArray`. We start from the
+  // house-brand base (for context/category-from-breadcrumb) and swap in the
+  // API list+detail. 34009527/30359506 is the US store/catalog, used only as a
+  // self-validated fallback when live capture hasn't seen one yet.
+  const massimodutti = (function () {
+    const base = houseBrandAdapter({
+      id: "massimodutti", label: "Massimo Dutti", brand: "Massimo Dutti",
+      match: url => /(^|\.)massimodutti\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
+      trailSkip: /^(home|massimo\s*dutti)$/i,
+    });
+    const brandApi = inditex.makeBrand({
+      brandId: 3, brand: "Massimo Dutti",
+      fallbackSC: [{ store: "34009527", catalog: "30359506" }],
+    });
+    const listingCategory = base._listingCategory;
+    base.scrapeList = (doc, url) => brandApi.scrapeList(doc, url, listingCategory(doc, url));
+    base.fetchDetail = brandApi.fetchDetail;
+    base._brandApi = brandApi;
+    return base;
+  })();
+
+  // Start capturing the page's itxrest calls as early as possible on a Massimo
+  // Dutti page (before the user scrolls), so no product batch is missed.
+  try {
+    if (typeof location !== "undefined" && /(^|\.)massimodutti\.com$/i.test(location.hostname)) inditex.startCapture();
+  } catch (e) {}
 
   // ---------------------------------------------------------------------------
   // Registry — order matters: more specific adapters must come before generic.
