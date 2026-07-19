@@ -1019,6 +1019,9 @@
         const slugName = nameFromUrl(r.product_url);
         if (slugName) r.name = slugName;           // canonical, beats scraped tile text
         r.category = pageCat || categoryFromUrl(r.product_url) || categoryFromUrl(url);
+        // colours from this tile's swatch links (live listing DOM only)
+        const c = colorsForBase(doc, productBase(r.product_url));
+        if (c.count > 1) { r.color_count = c.count; if (c.colorways) r.colorways = c.colorways; }
       }
       return items.filter(r => /\.html/i.test(r.product_url));   // keep real PDP links only
     }
@@ -1101,29 +1104,81 @@
       return out;
     }
 
-    // Key design details: the PDP's "Features" bullet list (server-rendered in
-    // the same Description block as Composition, which already extracts fine).
-    // Take the first three bullets, per the user's spec.
+    // Colour variants from the LIVE listing (unlike the PDP fetch, the listing
+    // DOM is JS-rendered, so a tile's colour swatches are present). Every colour
+    // of a product shares the same base pid (2061433-04 -> base 2061433), so the
+    // swatch links for one product all carry "<base>-<colourcode>.html". Count
+    // the distinct colour codes; names come from the swatch img-alt/aria/title.
+    function productBase(url) {
+      try {
+        const m = new URL(url).pathname.match(/\/(\d{4,})-[A-Za-z0-9]+\.html/i);
+        return m ? m[1] : "";
+      } catch (e) { return ""; }
+    }
+    function colorsForBase(doc, base) {
+      const seen = new Set(); const names = [];
+      if (!doc.querySelectorAll || !base) return { count: 0, colorways: "" };
+      const re = new RegExp("/" + base + "-([A-Za-z0-9]+)\\.html", "i");
+      doc.querySelectorAll('a[href*="' + base + '-"]').forEach(a => {
+        const m = (a.getAttribute("href") || "").match(re);
+        if (!m || seen.has(m[1])) return; seen.add(m[1]);
+        const img = a.querySelector && a.querySelector("img");
+        const nm = cleanColourName(a.getAttribute("aria-label") || a.getAttribute("title") ||
+          (img && (img.getAttribute("alt") || img.getAttribute("title"))) || "", "");
+        if (nm) names.push(nm);
+      });
+      return { count: seen.size, colorways: names.join("; ") };
+    }
+
+    // Key design details: the PDP's "Features" list. Cotton On renders this
+    // inconsistently — sometimes as a <ul><li> list, sometimes as plain lines
+    // with NO bullets (e.g. the Knox jacket) — so don't require <li>. Collect
+    // the lines that follow the "Features" heading until the next section
+    // (Composition / Ingredients / Dimensions / Care / Product Code / …).
     function featuresFromDoc(doc) {
       if (!doc.querySelectorAll) return [];
+      const STOP = /^(compositions?|ingredients?|dimensions?|care|product\s*code|complete\s+the\s+look|reviews?|size\b|colou?r\b)/i;
       let anchor = null;
       const cand = doc.querySelectorAll("h1,h2,h3,h4,h5,h6,strong,b,p,div,span,dt");
       for (let i = 0; i < cand.length; i++) {
         if (/^\s*features\s*:?\s*$/i.test(cand[i].textContent || "")) { anchor = cand[i]; break; }
       }
-      let ul = null;
-      if (anchor) {
-        let sib = anchor.nextElementSibling;
-        for (let i = 0; i < 5 && sib && !ul; i++) {
-          if (sib.matches && sib.matches("ul,ol")) ul = sib;
-          else if (sib.querySelector) ul = sib.querySelector("ul,ol");
-          sib = sib.nextElementSibling;
-        }
-        if (!ul && anchor.parentElement) ul = anchor.parentElement.querySelector("ul,ol");
+      if (!anchor) return [];
+      const out = [];
+      const take = el => {
+        if (!el) return;
+        const ul = (el.matches && el.matches("ul,ol")) ? el : (el.querySelector && el.querySelector("ul,ol"));
+        if (ul) { ul.querySelectorAll("li").forEach(li => out.push(li.textContent || "")); return; }
+        // plain (bullet-less) lines: <br>-separated inside one element, or the
+        // element itself is one line.
+        const html = el.innerHTML || "";
+        if (/<br/i.test(html)) html.split(/<br\s*\/?>/i).forEach(part => {
+          const t = part.replace(/<[^>]+>/g, " "); out.push(t);
+        });
+        else out.push(el.textContent || "");
+      };
+      // walk the siblings after the "Features" heading until the next section
+      let sib = anchor.nextElementSibling, steps = 0;
+      while (sib && steps++ < 14) {
+        const t = (sib.textContent || "").replace(/\s+/g, " ").trim();
+        if (STOP.test(t)) break;
+        if (t) take(sib);
+        sib = sib.nextElementSibling;
       }
-      const lis = ul ? [...ul.querySelectorAll("li")] : [];
-      return lis.map(li => (li.textContent || "").replace(/\s+/g, " ").trim())
-        .filter(s => s && s.length <= 200);
+      // some layouts put the label + items inside one container, as siblings of
+      // the label rather than after it — sweep the parent's children too.
+      if (!out.length && anchor.parentElement) {
+        let after = false;
+        [...anchor.parentElement.children].forEach(ch => {
+          if (ch === anchor) { after = true; return; }
+          if (!after) return;
+          const t = (ch.textContent || "").replace(/\s+/g, " ").trim();
+          if (STOP.test(t)) { after = false; return; }
+          if (t) take(ch);
+        });
+      }
+      return out.map(s => String(s).replace(/\s+/g, " ").trim())
+        .filter(s => s && s.length <= 200 && !/^features:?$/i.test(s));
     }
 
     // The breadcrumb trail (Home dropped) — JSON-LD BreadcrumbList first, then a
@@ -1336,6 +1391,7 @@
       _colorSwatches: colorSwatches, _cleanColourName: cleanColourName,
       _featuresFromDoc: featuresFromDoc, _breadcrumbCategory: breadcrumbCategory,
       _listingCategory: listingCategory, _breadcrumbTrail: breadcrumbTrail,
+      _productBase: productBase, _colorsForBase: colorsForBase,
     };
   })();
 
