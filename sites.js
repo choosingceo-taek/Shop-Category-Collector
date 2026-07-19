@@ -476,12 +476,27 @@
       return "";
     }
 
-    // Design feature labels to pull from the product page "Key item features".
-    // These are literal on-page values, so they satisfy the provenance rule.
-    const DESIGN_LABELS = ["Silhouette", "Fit", "Neckline", "Collar", "Sleeve Type",
-      "Sleeve Length", "Sleeve Style", "Sleeves", "Sleeve", "Closure", "Length",
-      "Hem", "Waist", "Rise", "Pockets", "Features", "Feature", "Style", "Design Details"];
-    const SPEC_SKIP = /^(material|fabric|care|country|size|brand|gender|age|model|price|color|assembled|manufacturer|warranty|count|weight)/i;
+    // Base design categories to pull from "Key item features". Matched as a WORD
+    // ANYWHERE in the label, so Walmart's AI-generated descriptive labels map to
+    // the base category: "Relaxed Fit" -> Fit, "Trendy Features" -> Features,
+    // "Functional Closure" -> Closure, "Practical Pockets" -> Pockets, etc.
+    // Order matters: multi-word / more specific categories first.
+    const DESIGN_CATS = ["Design Details", "Sleeve Length", "Sleeve Type", "Sleeve Style",
+      "Silhouette", "Neckline", "Collar", "Sleeves", "Sleeve", "Closure", "Waistband",
+      "Waist", "Rise", "Hemline", "Hem", "Pockets", "Pocket", "Features", "Feature",
+      "Fit", "Hood", "Length"];
+    const SPEC_SKIP = /^(?:material|fabric|care|country|size|brand|gender|age|model|price|color|assembled|manufacturer|warranty|count|weight|pack|dimension)/i;
+    function designCat(label) {
+      for (const cat of DESIGN_CATS) {
+        if (new RegExp("\\b" + cat.replace(/\s+/g, "\\s+") + "\\b", "i").test(label)) {
+          if (/^feature/i.test(cat)) return "Features";
+          if (/^pocket/i.test(cat)) return "Pockets";
+          if (/^sleeve/i.test(cat)) return "Sleeves";
+          return cat;
+        }
+      }
+      return "";
+    }
 
     // Gather a label -> value map from a product page, from both shapes:
     //   { name:"Fit", value:"Relaxed" }   and   "Fit: Relaxed"  (highlight bullet)
@@ -525,15 +540,24 @@
     }
 
     function pickDesign(specs) {
-      const parts = [];
-      for (const label of DESIGN_LABELS) {
-        if (specs[label] && !SPEC_SKIP.test(label)) parts.push(`${label}: ${specs[label]}`);
+      const parts = [], used = new Set();
+      for (const label in specs) {
+        if (SPEC_SKIP.test(label)) continue;          // material / care / size / colour / …
+        const cat = designCat(label);
+        if (!cat || used.has(cat.toLowerCase())) continue;
+        let v = String(specs[label]).replace(/\s+/g, " ").trim();
+        if (v.length > 90) v = v.slice(0, 90).replace(/[\s,;]+\S*$/, "") + "…";   // trim long AI blurbs
+        used.add(cat.toLowerCase());
+        parts.push(`${cat}: ${v}`);
       }
-      return parts.join("; ").slice(0, 300);
+      return parts.join("; ").slice(0, 400);
     }
     function pickComposition(specs, blobs) {
-      for (const key of ["Fabric Material", "Material", "Fabric Content", "Fabric Composition", "Composition", "Shell", "Fabric"]) {
-        if (specs[key] && FIBER.test(specs[key])) return cleanComp(specs[key]);
+      // any spec whose LABEL names a composition field (Material / Fabric /
+      // Composition / Shell / Body — incl. "Material Composition") and whose value
+      // actually lists fibers.
+      for (const label in specs) {
+        if (COMP_LABEL.test(label) && FIBER.test(specs[label])) return cleanComp(specs[label]);
       }
       for (const b of blobs) { const v = findComposition(b); if (v) return v; }
       return "";
@@ -617,7 +641,7 @@
       _extractColorways: extractColorways, _pickDesign: pickDesign,
       _categoryOf: categoryOf, _context: context,
       _collectSpecsFromDom: collectSpecsFromDom, _pickComposition: pickComposition,
-      _colorwaysOf: colorwaysOf,
+      _colorwaysOf: colorwaysOf, _designCat: designCat,
     };
   })();
 
