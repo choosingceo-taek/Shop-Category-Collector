@@ -111,6 +111,18 @@ async function runStep(j) {
   const a = adapter();
   if (!a) { await report("No adapter supports this page."); j.active = false; await s(j); return; }
 
+  // Page-by-page scanning is done once we leave the list phase. Detail collection
+  // fetches each product by URL and the build reads already-collected items, so
+  // neither needs the visible page — bring the tab back to where the user started
+  // (pagination left it on a "no more pages" 404) so they watch "Collecting
+  // details…" on their own page. Done once (j.returned); the reload re-enters
+  // this same phase and continues from the saved progress, so nothing is lost.
+  if (j.phase !== "list" && j.startUrl && !j.returned && j.startUrl !== location.href) {
+    j.returned = true; await s(j);
+    location.href = j.startUrl;
+    return;
+  }
+
   // -------- phase: list (scrape + auto-paginate) --------
   if (j.phase === "list") {
     // The page number comes from the URL, not a counter, so pausing/resuming or
@@ -313,16 +325,8 @@ async function runStep(j) {
     } catch (e) {
       await report("Excel build failed: " + (e && e.message || e));
     }
-    const done = await g();
-    if (done) {
-      done.active = false; await s(done);
-      // bring the tab back to where the scan was started — pagination usually
-      // left it on a "no more pages" 404. The job is now inactive, so this load
-      // won't restart a scan; a short delay lets the "Done" status show first.
-      if (done.startUrl && done.startUrl !== location.href) {
-        setTimeout(() => { try { location.href = done.startUrl; } catch (e) {} }, 1500);
-      }
-    }
+    const done = await g(); if (done) { done.active = false; await s(done); }
+    // (the tab was already returned to startUrl when detail/build began)
   }
 }
 
