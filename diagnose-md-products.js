@@ -52,69 +52,66 @@
   log("products count:", products.length);
   if (!products.length) { log("!! no products array — full dump:", j(data, 1200)); console.log(R.join("\n")); return R.join("\n"); }
 
-  // full schema walk of one representative product
+  // PROBE 2 — the real data lives under bundleProductSummaries[0].detail
+  // (product.detail.colors/composition are empty for these bundle products).
+  // Dig into price, image (xmedia), colors, sizes, and product URL there.
   const p = products[0];
   log("");
-  log("--- product[0] full keys:", keys(p));
-  log("    id:", j(p.id, 60), "| name:", j(p.name, 120), "| nameEn:", j(p.nameEn, 80));
+  log("--- product[0]: id=", j(p.id), "| name=", j(p.name, 100));
+  log("    productUrl:", j(p.productUrl, 200));
+  log("    productUrlParam:", j(p.productUrlParam, 200));
+  log("    onSpecial:", j(p.onSpecial), "| isBuyable:", j(p.isBuyable), "| mainColorid:", j(p.mainColorid));
+  log("    bundleColors:", j(p.bundleColors, 400));
+  log("    family/subFamily(EN):", j(p.familyNameEN), "/", j(p.subFamilyNameEN), "| tags:", j(p.tags, 200));
 
-  const d = p.detail || p;
-  log("--- detail keys:", keys(d));
-  // price fields anywhere under detail (Inditex nests price on color/size, sometimes at detail)
-  ["price", "oldPrice", "minPrice", "maxPrice", "displayDiscountPercentage", "priceUnavailable"].forEach(k => {
-    if (d[k] != null) log("    detail." + k + ":", j(d[k], 80));
-  });
-  log("--- seo:", j(p.seo || d.seo, 300));
-  log("--- family/section:", "familyName=", j(p.familyName || d.familyName), "| sectionName=", j(p.sectionName || d.sectionName), "| subfamily=", j(p.subFamilyName || d.subFamilyName));
+  const bps = p.bundleProductSummaries || [];
+  log("--- bundleProductSummaries length:", bps.length);
+  const bd = (bps[0] && bps[0].detail) || {};
+  log("--- bps[0] keys:", keys(bps[0]));
+  log("--- bps[0].detail keys:", keys(bd));
+  log("    bps[0].detail.reference:", j(bd.reference), "| displayReference:", j(bd.displayReference));
 
-  // colors -> sizes -> price
-  const colors = d.colors || p.colors || [];
-  log("--- colors count:", colors.length);
-  if (colors[0]) {
-    const c = colors[0];
-    log("    color[0] keys:", keys(c));
-    log("    color[0]:", "id=", j(c.id), "| name=", j(c.name), "| price=", j(c.price), "| oldPrice=", j(c.oldPrice));
-    log("    color[0].image:", j(c.image, 400));
-    log("    color[0].xmedia:", j(c.xmedia, 500));
+  const colors = bd.colors || [];
+  log("--- bps[0].detail.colors length:", colors.length);
+  colors.slice(0, 3).forEach((c, i) => {
+    log("  color[" + i + "] keys:", keys(c));
+    log("  color[" + i + "]: id=", j(c.id), "| name=", j(c.name), "| price=", j(c.price), "| oldPrice=", j(c.oldPrice), "| colorId=", j(c.colorId));
+    // price can also sit on the color as a nested object or on sizes
+    ["priceUnavailable", "originalPrice", "salePrice", "productPrice"].forEach(k => { if (c[k] != null) log("    color[" + i + "]." + k + ":", j(c[k], 120)); });
+    // xmedia / image → how to build an absolute URL
+    log("    color[" + i + "].image:", j(c.image, 300));
+    log("    color[" + i + "].xmedia:", j(c.xmedia, 600));
     const sizes = c.sizes || [];
-    log("    color[0] sizes count:", sizes.length);
+    log("    color[" + i + "] sizes count:", sizes.length);
     if (sizes[0]) {
       log("    size[0] keys:", keys(sizes[0]));
       log("    size[0]:", j(sizes[0], 400));
     }
-  }
-
-  // composition / care — Inditex uses several shapes; find whichever exists
-  ["composition", "care", "xmedia", "compositionByZones", "attributes", "productAttributes"].forEach(k => {
-    if (d[k] != null) log("--- detail." + k + ":", j(d[k], 700));
-    if (p[k] != null && p[k] !== d[k]) log("--- product." + k + ":", j(p[k], 700));
   });
 
-  // any deep field whose key mentions composition/fabric/fiber/material
-  const found = new Set();
+  // composition (confirmed present here) — show final shape we'll parse
+  log("--- bps[0].detail.composition:", j(bd.composition, 500));
+  if (colors[0]) log("--- color[0].composition:", j(colors[0].composition, 500));
+
+  // hunt any price-ish key anywhere under bps[0] so we don't miss the real one
+  const seen = new Set();
   (function walk(o, path, depth) {
     if (!o || typeof o !== "object" || depth > 6) return;
     for (const k in o) {
-      if (/composit|fabric|fiber|fibre|material|yarn/i.test(k) && !found.has(path + "." + k)) {
-        found.add(path + "." + k);
-        log("    [fiber-ish] " + path + "." + k + " =", j(o[k], 300));
+      if (/price|oldprice|amount|discount/i.test(k) && typeof o[k] !== "object" && !seen.has(path + "." + k)) {
+        seen.add(path + "." + k);
+        if (seen.size <= 25) log("    [price-ish] " + path + "." + k + " =", j(o[k], 80));
       }
       if (typeof o[k] === "object") walk(o[k], path + "." + k, depth + 1);
     }
-  })(p, "product[0]", 0);
+  })(bps[0], "bps[0]", 0);
 
-  // image URL: show how to build an absolute src from xmedia paths
+  // second product: confirm the SAME paths hold (not accidental on [0])
   log("");
-  log("--- IMAGE URL SAMPLES (first 2 products) ---");
-  products.slice(0, 2).forEach((pp, i) => {
-    const dd = pp.detail || pp; const cc = (dd.colors || [])[0] || {};
-    log("  p[" + i + "] image:", j(cc.image, 200));
-    log("  p[" + i + "] xmedia[0]:", j((cc.xmedia || [])[0], 300));
-  });
-
-  // second product to confirm fields are consistent (not accidental on [0])
-  log("");
-  log("--- product[1] sanity: keys=", keys(products[1]), "| name=", j(products[1] && products[1].name, 80));
+  const p2 = products[1], bd2 = (p2.bundleProductSummaries && p2.bundleProductSummaries[0] && p2.bundleProductSummaries[0].detail) || {};
+  const c2 = (bd2.colors || [])[0] || {};
+  log("--- product[1] sanity: name=", j(p2.name, 60), "| colors=", (bd2.colors || []).length,
+      "| color[0].price=", j(c2.price), "| oldPrice=", j(c2.oldPrice), "| composition=", j(bd2.composition, 200));
 
   log("=== END (copy everything above) ===");
   const text = R.join("\n");
