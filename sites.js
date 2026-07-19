@@ -1115,15 +1115,28 @@
         return m ? m[1] : "";
       } catch (e) { return ""; }
     }
+    // Each colour is its own swatch (confirmed by the user — individual badges,
+    // not a "+3" summary). A swatch may be an <a> to the colour's PDP, an <img>
+    // thumbnail, or an element carrying the pid in a data-* attribute — all of
+    // them reference the product's base pid with the colour code appended
+    // (2061433-04). Count the distinct colour codes across ALL of those.
     function colorsForBase(doc, base) {
       const seen = new Set(); const names = [];
       if (!doc.querySelectorAll || !base) return { count: 0, colorways: "" };
-      const re = new RegExp("/" + base + "-([A-Za-z0-9]+)\\.html", "i");
-      doc.querySelectorAll('a[href*="' + base + '-"]').forEach(a => {
-        const m = (a.getAttribute("href") || "").match(re);
-        if (!m || seen.has(m[1])) return; seen.add(m[1]);
-        const img = a.querySelector && a.querySelector("img");
-        const nm = cleanColourName(a.getAttribute("aria-label") || a.getAttribute("title") ||
+      const codeRe = new RegExp(base + "[-_]([A-Za-z0-9]{1,8})", "i");
+      const sel = ['a[href*="' + base + '"]', 'img[src*="' + base + '"]', 'img[data-src*="' + base + '"]',
+        '[data-pid*="' + base + '"]', '[data-variant*="' + base + '"]', '[data-product-id*="' + base + '"]'].join(",");
+      doc.querySelectorAll(sel).forEach(el => {
+        const hay = (el.getAttribute("href") || "") + " " + (el.getAttribute("src") || "") + " " +
+          (el.getAttribute("data-src") || "") + " " + (el.getAttribute("data-pid") || "") + " " +
+          (el.getAttribute("data-variant") || "") + " " + (el.getAttribute("data-product-id") || "");
+        const m = hay.match(codeRe);
+        if (!m) return;
+        const code = m[1];
+        if (/^html?$/i.test(code) || seen.has(code)) return;   // skip the ".html" tail token
+        seen.add(code);
+        const img = (el.tagName === "IMG") ? el : (el.querySelector && el.querySelector("img"));
+        const nm = cleanColourName(el.getAttribute("aria-label") || el.getAttribute("title") ||
           (img && (img.getAttribute("alt") || img.getAttribute("title"))) || "", "");
         if (nm) names.push(nm);
       });
@@ -1271,6 +1284,11 @@
       const swatches = colorSwatches(doc, slug, name || nameFromUrl(url || ""));
       let colorCount = swatches.length;
       swatches.forEach(sw => { if (sw.name) addTo(colors, sw.name); });
+      // broader swatch scan by base pid: catches <img>/data-* swatches too, in
+      // case the thumbnails are server-rendered even when the slug links aren't.
+      const byBase = colorsForBase(doc, productBase(url || ""));
+      if (byBase.count > colorCount) colorCount = byBase.count;
+      if (byBase.colorways) byBase.colorways.split("; ").forEach(c => addTo(colors, c));
       // fallback for the CURRENT colour only: the visible "Colour: <name>" label,
       // read from its own element (server HTML glues sections with no whitespace).
       // No loose whole-page scan — that grabbed unrelated words like "HERE".
