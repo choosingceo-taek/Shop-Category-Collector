@@ -336,7 +336,15 @@
     if (j && j.active && j.paused) eng.resumeJob(); else if (j && j.active) eng.pauseJob();
   }
   el("pr2").addEventListener("click", e => { e.stopPropagation(); togglePause(); });
-  function doReset() { const eng = engine(); if (eng) eng.resetJob(); paint(null); }
+  // clear the filter inputs + persist the cleared state (shared by 필터 지우기 and 초기화)
+  function clearFilters() {
+    el("fDomOnly").checked = false;
+    el("fBrand").value = ""; el("fInclude").value = ""; el("fExclude").value = "";
+    setStore(OPTS, { withSpec: el("spec").checked, filters: {} });
+    refreshFilterState();
+  }
+  // 초기화 = discard the job AND clear the filters, so nothing carries into the next run
+  function doReset() { const eng = engine(); if (eng) eng.resetJob(); clearFilters(); paint(null); }
   el("reset2").addEventListener("click", e => { e.stopPropagation(); doReset(); });
 
   // keep the filter badge in sync as the user edits, and let them clear in one tap
@@ -344,13 +352,7 @@
     el(id).addEventListener("input", refreshFilterState);
     el(id).addEventListener("change", refreshFilterState);
   });
-  el("fclear").addEventListener("click", e => {
-    e.stopPropagation();
-    el("fDomOnly").checked = false;
-    el("fBrand").value = ""; el("fInclude").value = ""; el("fExclude").value = "";
-    setStore(OPTS, { withSpec: el("spec").checked, filters: {} });   // persist the cleared state
-    refreshFilterState();
-  });
+  el("fclear").addEventListener("click", e => { e.stopPropagation(); clearFilters(); });
 
   // click outside closes the panel (remembered so page-nav during a run respects it)
   document.addEventListener("click", e => {
