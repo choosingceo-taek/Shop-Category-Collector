@@ -5,7 +5,7 @@
 
 ## 현재까지 된 것 (요약)
 
-- 어댑터 레지스트리 `[walmart, cottonon, shopify, generic]`, 플랫폼 감지형(shopify)
+- 어댑터 레지스트리 `[walmart, target, cottonon, shopify, generic]`, 플랫폼 감지형(shopify)
 - 전 페이지 자동 순회(probe 방식), 상세 수집(원단·색상·사이즈·브랜드·정가)
 - 12컬럼 xlsx(썸네일 임베드 + 출처 규칙), post-scan 필터, FAB + 팝업 UI
 - Node+jsdom 9개 스위트 139+ 케이스
@@ -20,7 +20,7 @@
       → 다른 SFCC 몰(수많은 패션 리테일러)이 코드 없이 라우팅됨.
 - [ ] **엔진 = {shopify, sfcc, custom-spa(walmart류), generic}** 로 재정리.
       `sites.js`를 adapter→engine 2계층으로. walmart는 custom-spa 엔진의 config.
-- [ ] Target 추가 검토(커스텀 SPA, Walmart와 유사). 실제 페이지 진단 필요.
+- [x] Target 추가(커스텀 SPA, ?Nao=24 오프셋). 상세 추출은 실제 페이지 진단으로 보정 예정.
 
 ## Phase 2 — 카테고리 taxonomy 인식
 

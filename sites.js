@@ -1588,9 +1588,236 @@
   })();
 
   // ---------------------------------------------------------------------------
+  // Target adapter — custom-SPA multi-brand retailer (SPEC Phase 1), like
+  // Walmart. Listings live at /c/<category-slug>/-/N-<id> and /s?searchTerm=…;
+  // products at /p/<slug>/-/A-<tcin>. Pagination is an offset param
+  // (?Nao=24 — 24 tiles per slice), probed to the end like Cotton On.
+  // Extraction is layered per project rule (structured data first, DOM
+  // heuristics via the generic engine, no guessed CSS selectors): the list
+  // comes from generic.scrapeList filtered to real /p/ product links; detail
+  // reads JSON-LD, embedded-JSON "Label: Value" strings, the visible bullet
+  // list, then a fiber-% text scan.
+  // ---------------------------------------------------------------------------
+  const target = (function () {
+    const compositionFromText = shared.compositionFromText;
+    const titleCase = s => String(s || "").replace(/-+/g, " ").trim().replace(/\b\w/g, c => c.toUpperCase());
+    const NAO_STEP = 24;                        // Target's listing slice size
+
+    // /p/<slug>/-/A-89573361 -> tcin "89573361" (the stable product id)
+    function tcinOf(url) {
+      try { const m = new URL(url).pathname.match(/\/A-(\d{4,})/i); return m ? m[1] : ""; }
+      catch (e) { return ""; }
+    }
+    // /p/women-s-slim-fit-tank-top-a-new-day/-/A-895… -> "Women S Slim Fit Tank Top A New Day"
+    function nameFromUrl(url) {
+      try {
+        const segs = new URL(url).pathname.split("/").filter(Boolean);
+        const i = segs.indexOf("p");
+        if (i >= 0 && segs[i + 1] && segs[i + 1] !== "-") return titleCase(segs[i + 1]);
+      } catch (e) {}
+      return "";
+    }
+
+    // breadcrumb (JSON-LD BreadcrumbList / nav) — same on-site-name rule as the
+    // other adapters: what the shopper sees beats URL slugs.
+    function breadcrumbTrail(doc) {
+      let trail = [];
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        if (trail.length) return;
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (n && /BreadcrumbList/i.test([].concat(n["@type"] || []).join(","))) {
+            trail = [].concat(n.itemListElement || [])
+              .map(e => (e && (e.name || (e.item && e.item.name))) || "").filter(Boolean);
+          }
+        });
+      });
+      if (!trail.length && doc.querySelector) {
+        const nav = doc.querySelector('nav[aria-label*="readcrumb" i], [class*="readcrumb" i]');
+        if (nav) trail = [...nav.querySelectorAll("a,li,span")]
+          .map(a => (a.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+      }
+      return trail.filter(t => t && !/^(home|target)$/i.test(t));
+    }
+    function listingCategory(doc, url) {
+      const trail = breadcrumbTrail(doc);
+      if (trail.length) return trail[trail.length - 1];
+      const h1 = doc.querySelector && doc.querySelector("h1");
+      if (h1) {
+        const t = (h1.textContent || "").replace(/\s*\(\d[\d,]*\)\s*$/, "").replace(/\s+/g, " ").trim();
+        if (t && t.length <= 60 && !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
+      }
+      try {
+        const segs = new URL(url).pathname.split("/").filter(Boolean);
+        const i = segs.indexOf("c");
+        if (i >= 0 && segs[i + 1]) return titleCase(segs[i + 1]);
+      } catch (e) {}
+      return "";
+    }
+
+    function scrapeList(doc, url) {
+      // generic tile scan (price leaf -> tile, reco carousels excluded, JSON-LD
+      // merged), then keep only real /p/…/A-<tcin> product links, one per tcin —
+      // Target tiles carry several links (image + title) to the same product.
+      const raw = generic.scrapeList(doc, url).filter(r => /\/p\//i.test(r.product_url) && tcinOf(r.product_url));
+      const pageCat = listingCategory(doc, url);
+      const seen = new Set(); const out = [];
+      for (const r of raw) {
+        const id = tcinOf(r.product_url);
+        if (seen.has(id)) continue; seen.add(id);
+        r.id = id;
+        if (!r.name || r.name.length < 4) { const n = nameFromUrl(r.product_url); if (n) r.name = n; }
+        r.category = pageCat || r.category || "";
+        out.push(r);
+      }
+      return out;
+    }
+
+    // --- offset pagination (?Nao=0/24/48…), reset + probe like SFCC ----------
+    function gridPage(url) {
+      try { return Math.floor((parseInt(new URL(url).searchParams.get("Nao")) || 0) / NAO_STEP) + 1; }
+      catch (e) { return 1; }
+    }
+    function firstPageUrl(url) {
+      try { const u = new URL(url); u.searchParams.delete("Nao"); u.searchParams.delete("page"); return u.toString(); }
+      catch (e) { return url; }
+    }
+    function nextPageUrl(url, page) {
+      try {
+        const u = new URL(url);
+        u.searchParams.set("Nao", String(page * NAO_STEP));
+        u.searchParams.delete("page");
+        return u.toString();
+      } catch (e) { return null; }
+    }
+
+    // Embedded-JSON spec strings: Target's product data carries bullets like
+    // "<B>Material:</B> 60% Cotton, 40% Polyester" — strip tags, keep the pair.
+    function collectSpecStrings(obj, out, depth) {
+      depth = depth || 0;
+      if (obj == null || depth > 16) return out;
+      if (typeof obj === "string") {
+        const t = obj.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        const m = t.match(/^([A-Za-z][A-Za-z /&-]{1,26}):\s*(.+\S)$/);
+        if (m && m[2].length <= 240 && !out[m[1].trim()]) out[m[1].trim()] = m[2].trim();
+        return out;
+      }
+      if (Array.isArray(obj)) { for (const v of obj) collectSpecStrings(v, out, depth + 1); return out; }
+      if (typeof obj === "object") { for (const k in obj) collectSpecStrings(obj[k], out, depth + 1); }
+      return out;
+    }
+
+    function parseDetailDoc(doc, rawHtml) {
+      let brand = "", name = "";
+      const colors = [], sizes = [];
+      const addTo = (arr, v) => {
+        const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+        if (s && s.length <= 40 && !arr.some(x => x.toLowerCase() === s.toLowerCase())) arr.push(s);
+      };
+      // JSON-LD Product — Target PDPs server-render brand (A New Day, Wild Fable…)
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
+          if (!name && n.name) name = String(n.name);
+          if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+          [].concat(n.color || []).forEach(c => addTo(colors, c));
+          [].concat(n.size || []).forEach(z => addTo(sizes, z));
+          [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
+        });
+      });
+      // specs from embedded JSON strings + the visible bullet list (walmart's
+      // DOM bullet reader is shape-agnostic <li>Label: Value</li>)
+      const blobs = shared.jsonBlobs(doc);
+      const specs = {};
+      blobs.forEach(b => collectSpecStrings(b, specs));
+      walmart._collectSpecsFromDom(doc, specs);
+      if (!brand && specs.Brand) brand = specs.Brand;
+      // composition: labeled spec that actually names fibers -> bare fiber-% text
+      let composition = "";
+      for (const label in specs) {
+        if (/material|fabric|composition|shell|body/i.test(label) && shared.FIBER_RE.test(specs[label])) {
+          composition = specs[label]; break;
+        }
+      }
+      if (!composition) {
+        // bullet lines first (li boundaries preserved), then raw HTML — whose
+        // closing tags compositionFromText converts to line breaks itself.
+        // body.textContent is NOT used: it glues "…Polyester" + "Machine…" together.
+        const liText = doc.querySelectorAll
+          ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
+        composition = compositionFromText(liText) || compositionFromText(rawHtml || "");
+      }
+      // design: same base-category mapping as Walmart (Fit/Neckline/Closure/…)
+      const parts = []; const used = new Set();
+      for (const label in specs) {
+        if (/^(?:material|fabric|care|country|size|brand|gender|age|model|price|color|assembled|manufacturer|warranty|count|weight|pack|dimension|tcin|upc|origin|street)/i.test(label)) continue;
+        const cat = walmart._designCat(label);
+        if (!cat || used.has(cat)) continue;
+        used.add(cat);
+        let v = String(specs[label]).replace(/\s+/g, " ").trim();
+        if (v.length > 90) v = v.slice(0, 90).replace(/[\s,;]+\S*$/, "") + "…";
+        parts.push(`${cat}: ${v}`);
+      }
+      return {
+        composition, colorways: colors.join("; "), design: parts.join("; ").slice(0, 400),
+        brand, sizes: sizes.join("; "),
+        reason: composition ? "" : "not_found",
+      };
+    }
+
+    async function fetchDetail(url) {
+      const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
+      let html;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        try {
+          const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
+          if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
+          html = await res.text();
+        } finally { clearTimeout(timer); }
+      } catch (e) {
+        return empty((e && e.name === "AbortError") ? "timeout" : "error");
+      }
+      try {
+        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html);
+      } catch (e) { return empty("error"); }
+    }
+
+    function context(doc) {
+      doc = doc || document;
+      const url = (doc.location && doc.location.href) || (typeof location !== "undefined" ? location.href : "");
+      return {
+        brand: "",                          // per-product brands (A New Day, …) fill via detail
+        category: listingCategory(doc, url),
+        totalPages: null,                   // offset grid -> probe to the end
+        page: gridPage(url),
+      };
+    }
+
+    return {
+      id: "target",
+      label: "Target",
+      multiBrand: true,   // a retailer of many brands — Retailer + Brand shown separately
+      match: url => /(^|\.)target\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
+      context, scrapeList,
+      totalPages: () => null,
+      resultCount: generic.resultCount,
+      nextPageUrl, firstPageUrl,
+      isResultsPage: generic.isResultsPage,
+      fetchDetail, buildWorkbook: generic.buildWorkbook,
+      templateUrl: null,
+      _tcinOf: tcinOf, _nameFromUrl: nameFromUrl, _listingCategory: listingCategory,
+      _gridPage: gridPage, _nextPageUrl: nextPageUrl, _firstPageUrl: firstPageUrl,
+      _parseDetailDoc: parseDetailDoc, _collectSpecStrings: collectSpecStrings,
+    };
+  })();
+
+  // ---------------------------------------------------------------------------
   // Registry — order matters: more specific adapters must come before generic.
   // ---------------------------------------------------------------------------
-  const ADAPTERS = [walmart, cottonon, shopify, generic];
+  const ADAPTERS = [walmart, target, cottonon, shopify, generic];
 
   const SITES = {
     shared,
