@@ -213,13 +213,39 @@
       const facet = (new URLSearchParams((doc.location || location).search).get("facet") || "");
       return facet.replace(/.*brand:/i, "").split("||")[0] || "";
     }
-    // Category from the page heading, with the brand stripped so the cell holds
-    // ONLY the category: "Time and Tru Leggings in Time and Tru" -> "Leggings".
+    // The breadcrumb leaf is the real category name ("Clothing / Fashion Brands /
+    // Time and Tru / Time and Tru Tops & Tees" -> "Time and Tru Tops & Tees").
+    function breadcrumbLeaf(doc) {
+      let trail = [];
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        if (trail.length) return;
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (n && /BreadcrumbList/i.test([].concat(n["@type"] || []).join(","))) {
+            trail = [].concat(n.itemListElement || [])
+              .map(e => (e && (e.name || (e.item && e.item.name))) || "").filter(Boolean);
+          }
+        });
+      });
+      if (!trail.length && doc.querySelector) {
+        const nav = doc.querySelector('nav[aria-label*="readcrumb" i], [class*="readcrumb" i]');
+        if (nav) trail = [...nav.querySelectorAll("a,li,span")]
+          .map(a => (a.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+      }
+      trail = trail.filter(t => t && !/^home$/i.test(t));
+      return trail.length ? trail[trail.length - 1] : "";
+    }
+    // Category: prefer the breadcrumb leaf (the true category — the H1 on a
+    // filtered brand shelf is often just "115 results"). Fall back to the H1
+    // with the brand stripped, but never return a bare result-count.
     function categoryOf(doc, brand) {
+      const leaf = breadcrumbLeaf(doc);
+      if (leaf) return leaf;
       const h1 = (doc.querySelector && doc.querySelector("h1")) || {};
       let t = (h1.textContent || "").replace(/\(\d[\d,]*\).*/, "").trim();
       t = t.split("|")[0].trim();                                    // drop "... | Walmart" title tail
       t = t.replace(/\s+in\s+[A-Za-z][^,]*$/i, "").trim();          // drop "... in <brand/dept>"
+      if (/^\d[\d,]*\s*(?:results?|items?|products?)$/i.test(t)) return "";   // "115 results" is not a category
       const b = String(brand || "").trim();
       if (b && t.toLowerCase().startsWith(b.toLowerCase() + " ")) { // drop leading brand
         t = t.slice(b.length).trim();
@@ -567,6 +593,7 @@
       _priceOf: priceOf, _imageOf: imageOf, _resultsFromStacks: resultsFromStacks,
       _findComposition: findComposition, _collectSpecs: collectSpecs,
       _extractColorways: extractColorways, _pickDesign: pickDesign,
+      _categoryOf: categoryOf, _context: context,
     };
   })();
 

@@ -173,40 +173,35 @@
 </style>
 <div id="wrap">
   <div id="panel">
-    <div class="head"><b>이 페이지 상품 수집</b><button id="x" title="닫기">✕</button></div>
+    <div class="head"><b>Collect Products</b><button id="x" title="Close">✕</button></div>
     <div class="body">
       <div class="card">
-        <div class="crow"><span class="k">브랜드</span><span class="v" id="pbrand">—</span></div>
-        <div class="crow"><span class="k">카테고리</span><span class="v" id="pcat">—</span></div>
+        <div class="crow"><span class="k">Brand</span><span class="v" id="pbrand">—</span></div>
+        <div class="crow"><span class="k">Category</span><span class="v" id="pcat">—</span></div>
         <div id="progBar"><div id="progFill"></div></div>
-        <div id="progText">대기 중 — 시작을 누르세요</div>
+        <div id="progText">Ready — press Scan</div>
         <div id="ctx" style="display:none"></div>
       </div>
-      <label class="switchrow">
-        <span class="t">상품 상세까지 수집<small>원단·색상·디자인 (느림)</small></span>
-        <span class="switch"><input type="checkbox" id="spec" checked><i></i></span>
-      </label>
-      <div id="note">이 사이트는 전용 지원이 없어 기본 정보(썸네일·이름·가격·URL)만 수집됩니다. 색상/원단/디자인 칸은 "정보 확인"으로 남습니다.</div>
+      <div id="note">No dedicated support for this site — only basic info (thumbnail, name, price, URL) is collected. Color / fabric / design stay as "정보 확인".</div>
       <details id="filters">
-        <summary><span id="fsum">필터 (선택)</span><span class="chev">▾</span></summary>
-        <div class="chk"><input type="checkbox" id="fDomOnly"><label style="margin:0;color:#cdcdd4">대표 브랜드만 남기기 <small style="color:#77777f">— 섞여 들어온 다른 브랜드 제외</small></label></div>
-        <div class="f"><label>브랜드</label>
-          <input type="text" id="fBrand" placeholder="예: No Boundaries, Time and Tru">
-          <small>이 브랜드만 남김 · 쉼표로 여러 개 · 비우면 전체</small></div>
-        <div class="f"><label>상품명 포함</label>
-          <input type="text" id="fInclude" placeholder="예: Women, Legging">
-          <small>이 단어가 있는 것만 · 쉼표 구분</small></div>
-        <div class="f"><label>상품명 제외</label>
-          <input type="text" id="fExclude" placeholder="예: Men's, Juniors">
-          <small>이 단어가 있으면 버림 · 쉼표 구분</small></div>
-        <button id="fclear">✕ 필터 모두 지우기</button>
+        <summary><span id="fsum">Filters (optional)</span><span class="chev">▾</span></summary>
+        <div class="f"><label>Brand</label>
+          <input type="text" id="fBrand" placeholder="e.g. No Boundaries, Time and Tru">
+          <small>Keep only these brands · comma-separated · empty = all</small></div>
+        <div class="f"><label>Name includes</label>
+          <input type="text" id="fInclude" placeholder="e.g. Women, Legging">
+          <small>Keep only items containing these words · comma-separated</small></div>
+        <div class="f"><label>Name excludes</label>
+          <input type="text" id="fExclude" placeholder="e.g. Men's, Juniors">
+          <small>Drop items containing these words · comma-separated</small></div>
+        <button id="fclear">✕ Clear filters</button>
       </details>
-      <button id="run" class="act">전 페이지 수집 → 엑셀</button>
+      <button id="run" class="act">Scan All Pages → Excel</button>
       <div class="actrow">
-        <button id="pr2" class="act" disabled>⏸ 일시정지</button>
-        <button id="reset2" class="act">↺ 초기화</button>
+        <button id="pr2" class="act" disabled>⏸ Pause</button>
+        <button id="reset2" class="act">↺ Reset</button>
       </div>
-      <div id="hint">시작하면 팝업을 닫아도 계속 진행됩니다.</div>
+      <div id="hint">Keeps running after you start, even if you close this.</div>
     </div>
   </div>
   <div id="fab" class="idle">
@@ -222,7 +217,7 @@
         <line x1="18.5" y1="18.3" x2="21.4" y2="21.2" stroke="#ff8fc4" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </button>
-    <span id="label">스캔 옵션</span>
+    <span id="label">Scan</span>
     <span id="status"></span>
   </div>
 </div>`;
@@ -239,18 +234,18 @@
 
   // --- derive a 0..100 progress + label from the stored job ---
   function progress(job) {
-    if (!job) return { pct: 0, text: "대기 중 — 시작을 누르세요", indet: false };
+    if (!job) return { pct: 0, text: "Ready — press Scan", indet: false };
     const items = (job.items && job.items.length) || 0;
     if (isFinished(job)) return { pct: 100, text: job.status, indet: false };
     if (job.phase === "spec") {
       const t = items, i = job.specIdx || 0;
-      return { pct: t ? 62 + Math.round((i / t) * 33) : 62, text: `상품 상세 수집… ${i}/${t}`, indet: false };
+      return { pct: t ? 62 + Math.round((i / t) * 33) : 62, text: `Collecting details… ${i}/${t}`, indet: false };
     }
-    if (job.phase === "build") return { pct: 97, text: "엑셀 생성 중… (썸네일 포함)", indet: true };
+    if (job.phase === "build") return { pct: 97, text: "Building Excel… (embedding images)", indet: true };
     // list phase
-    if (job.resultCount) return { pct: Math.min(58, Math.round((items / job.resultCount) * 58)), text: `상품 수집… ${items}/${job.resultCount}`, indet: false };
-    if (job.totalPages) return { pct: Math.min(58, Math.round(((job.pagesDone || 0) / job.totalPages) * 58)), text: `페이지 ${job.pagesDone || 0}/${job.totalPages} · ${items}개`, indet: false };
-    return { pct: 12, text: `상품 수집 중… ${items}개 (${job.pagesDone || 0}p)`, indet: !!(job.active) };  // total unknown -> indeterminate
+    if (job.resultCount) return { pct: Math.min(58, Math.round((items / job.resultCount) * 58)), text: `Collecting… ${items}/${job.resultCount}`, indet: false };
+    if (job.totalPages) return { pct: Math.min(58, Math.round(((job.pagesDone || 0) / job.totalPages) * 58)), text: `Page ${job.pagesDone || 0}/${job.totalPages} · ${items} items`, indet: false };
+    return { pct: 12, text: `Collecting… ${items} items (p${job.pagesDone || 0})`, indet: !!(job.active) };  // total unknown -> indeterminate
   }
 
   function setPillClass(c) { fab.classList.remove("idle", "open", "running", "paused", "done"); fab.classList.add(c); }
@@ -266,11 +261,11 @@
     const active = job && job.active, paused = active && job.paused;
     el("run").disabled = !!active;
     el("pr2").disabled = !active;
-    el("pr2").textContent = paused ? "▶ 재개" : "⏸ 일시정지";
+    el("pr2").textContent = paused ? "▶ Resume" : "⏸ Pause";
     const p = progress(job);
     el("progFill").style.width = p.pct + "%";
     el("progFill").classList.toggle("indet", !!p.indet);
-    el("progText").textContent = paused ? "⏸ 일시정지됨 — ▶ 재개로 이어집니다" : p.text;
+    el("progText").textContent = paused ? "⏸ Paused — press Resume to continue" : p.text;
   }
   function paint(job) {
     lastJob = job || null;
@@ -282,34 +277,30 @@
   function fillContext() {
     const eng = engine();
     let a = null; try { a = eng && eng.adapter && eng.adapter(); } catch (e) {}
-    if (!a) { el("pbrand").textContent = "—"; el("pcat").textContent = "지원 사이트에서 열어주세요"; return; }
+    if (!a) { el("pbrand").textContent = "—"; el("pcat").textContent = "Open a supported store"; return; }
     let c = {}; try { c = a.context(document) || {}; } catch (e) {}
-    const pages = c.totalPages ? `총 ${c.totalPages}p` : "페이지 자동 감지";
+    const pages = c.totalPages ? `${c.totalPages}p total` : "auto-detect pages";
     el("pbrand").textContent = c.brand || a.label || "—";
     el("pcat").textContent = c.category || "—";
-    el("ctx").textContent = `${a.label} · ${pages} (현재 ${c.page || 1})`;   // kept for reference
+    el("ctx").textContent = `${a.label} · ${pages} (page ${c.page || 1})`;   // kept for reference
     const hasDetail = typeof a.fetchDetail === "function";
-    el("spec").closest(".switchrow").style.display = hasDetail ? "" : "none";
     el("note").style.display = hasDetail ? "none" : "block";
   }
   // reflect whether any filter is set — a stale filter silently dropping most
   // results was a real footgun, so make it loud: badge + accent + auto-expand.
   function refreshFilterState() {
-    const active = el("fDomOnly").checked || el("fBrand").value.trim() ||
-      el("fInclude").value.trim() || el("fExclude").value.trim();
+    const active = el("fBrand").value.trim() || el("fInclude").value.trim() || el("fExclude").value.trim();
     el("filters").setAttribute("data-active", active ? "1" : "0");
     el("fsum").innerHTML = active
-      ? '필터 <span class="badge">● 적용 중 — 일부 상품 제외됨</span>'
-      : "필터 (선택)";
+      ? 'Filters <span class="badge">● active — some items excluded</span>'
+      : "Filters (optional)";
     if (active) el("filters").open = true;
   }
   function prefill() {
     try {
       chrome.storage.local.get(OPTS, o => {
         const opts = (o && o[OPTS]) || {};
-        el("spec").checked = opts.withSpec !== false;
         const f = opts.filters || {};
-        el("fDomOnly").checked = !!f.dominantBrandOnly;
         el("fBrand").value = (f.brands || []).join(", ");
         el("fInclude").value = (f.nameInclude || []).join(", ");
         el("fExclude").value = (f.nameExclude || []).join(", ");
@@ -341,17 +332,15 @@
     const j = await eng.getJob();
     if (j && j.active) return;
     const filters = {
-      dominantBrandOnly: el("fDomOnly").checked,
       brands: terms("fBrand"),
       nameInclude: terms("fInclude"),
       nameExclude: terms("fExclude"),
     };
-    const withSpec = el("spec").checked;
-    setStore(OPTS, { withSpec, filters });
+    setStore(OPTS, { withSpec: true, filters });   // detail collection is always on
     setStore(COLLAPSED, false);                 // keep the panel open through the run
-    eng.startJob({ withSpec, filters });
+    eng.startJob({ withSpec: true, filters });
     // stay open and show progress in place
-    paint({ active: true, paused: false, phase: "list", items: [], status: "시작…" });
+    paint({ active: true, paused: false, phase: "list", items: [], status: "Starting…" });
   });
 
   async function togglePause() {
@@ -360,19 +349,18 @@
     if (j && j.active && j.paused) eng.resumeJob(); else if (j && j.active) eng.pauseJob();
   }
   el("pr2").addEventListener("click", e => { e.stopPropagation(); togglePause(); });
-  // clear the filter inputs + persist the cleared state (shared by 필터 지우기 and 초기화)
+  // clear the filter inputs + persist the cleared state (shared by Clear filters & Reset)
   function clearFilters() {
-    el("fDomOnly").checked = false;
     el("fBrand").value = ""; el("fInclude").value = ""; el("fExclude").value = "";
-    setStore(OPTS, { withSpec: el("spec").checked, filters: {} });
+    setStore(OPTS, { withSpec: true, filters: {} });
     refreshFilterState();
   }
-  // 초기화 = discard the job AND clear the filters, so nothing carries into the next run
+  // Reset = discard the job AND clear the filters, so nothing carries into the next run
   function doReset() { const eng = engine(); if (eng) eng.resetJob(); clearFilters(); paint(null); }
   el("reset2").addEventListener("click", e => { e.stopPropagation(); doReset(); });
 
   // keep the filter badge in sync as the user edits, and let them clear in one tap
-  ["fDomOnly", "fBrand", "fInclude", "fExclude"].forEach(id => {
+  ["fBrand", "fInclude", "fExclude"].forEach(id => {
     el(id).addEventListener("input", refreshFilterState);
     el(id).addEventListener("change", refreshFilterState);
   });

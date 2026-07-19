@@ -18,27 +18,25 @@ summary{cursor:pointer;font-size:12px;font-weight:600;color:#333}
 .chk{display:flex;gap:6px;align-items:center;font-size:12px;margin:6px 0}
 </style></head><body>
 <h3>Category Collector</h3>
-<div class="row muted" id="ctx">페이지 감지 중…</div>
-<div class="row" id="specRow"><label><input type="checkbox" id="spec" checked> 상품 상세까지 수집 — 원단·색상·디자인 (느림)</label></div>
-<div id="genericNote">이 사이트는 전용 지원이 없어 기본 정보(썸네일·이름·가격·URL)만 수집됩니다. 색상/원단/디자인 칸은 "정보 확인"으로 남습니다.</div>
+<div class="row muted" id="ctx">Detecting page…</div>
+<div id="genericNote">No dedicated support for this site — only basic info (thumbnail, name, price, URL) is collected. Color / fabric / design stay as "정보 확인".</div>
 
 <details>
-  <summary>필터 (선택)</summary>
-  <div class="chk"><input type="checkbox" id="fDomOnly"><label style="margin:0">대표 브랜드만 남기기 <small style="color:#999">— 섞여 들어온 다른 브랜드 제외</small></label></div>
-  <div class="f"><label>브랜드</label>
-    <input type="text" id="fBrand" placeholder="예: No Boundaries, Time and Tru">
-    <small>이 브랜드만 남김 · 쉼표로 여러 개 · 비우면 전체</small></div>
-  <div class="f"><label>상품명 포함</label>
-    <input type="text" id="fInclude" placeholder="예: Women, Legging">
-    <small>이 단어가 있는 것만 · 쉼표 구분</small></div>
-  <div class="f"><label>상품명 제외</label>
-    <input type="text" id="fExclude" placeholder="예: Men's, Juniors">
-    <small>이 단어가 있으면 버림 · 쉼표 구분</small></div>
+  <summary>Filters (optional)</summary>
+  <div class="f"><label>Brand</label>
+    <input type="text" id="fBrand" placeholder="e.g. No Boundaries, Time and Tru">
+    <small>Keep only these brands · comma-separated · empty = all</small></div>
+  <div class="f"><label>Name includes</label>
+    <input type="text" id="fInclude" placeholder="e.g. Women, Legging">
+    <small>Keep only items containing these words · comma-separated</small></div>
+  <div class="f"><label>Name excludes</label>
+    <input type="text" id="fExclude" placeholder="e.g. Men's, Juniors">
+    <small>Drop items containing these words · comma-separated</small></div>
 </details>
 
-<div class="row"><button id="go">이 카테고리 전 페이지 수집 → 엑셀</button></div>
-<div class="row"><button class="sec" id="pauseresume" disabled>⏸ 일시정지</button></div>
-<div class="row"><button class="warn" id="reset">🗑 새 작업 (현재 작업 삭제)</button></div>
+<div class="row"><button id="go">Scan All Pages → Excel</button></div>
+<div class="row"><button class="sec" id="pauseresume" disabled>⏸ Pause</button></div>
+<div class="row"><button class="warn" id="reset">🗑 Reset (clear current job)</button></div>
 <div id="status"></div>
 <script src="popup.js"></script>
 </body></html>
