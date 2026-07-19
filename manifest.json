@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shop Category Collector",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "description": "Collect every product in a filtered category/search (every page) into a clean Excel with embedded thumbnails, one click. Full detail (fabric/colorway/design) on Walmart; basic fields (name/price/image/URL) on other allow-listed sites. Excludes recommended/related carousels.",
   "permissions": ["storage"],
   "host_permissions": [

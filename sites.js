@@ -204,18 +204,10 @@
       return im.thumbnailUrl || (im.allImages && im.allImages[0] && im.allImages[0].url) ||
         it.image || it.imageUrl || it.thumbnail || "";
     }
-    function brandOf(doc, it) {
-      const named = (it && (it.brand || (it.brandName))) || "";
-      if (named) return named;
-      const h = ((doc.querySelector && doc.querySelector("h1")) || {}).textContent || "";
-      const m = h.match(/(Time and Tru|Terra & Sky|No Boundaries|Wonder Nation|Weekend Academy|Free Assembly)/i);
-      if (m) return m[1];
-      const facet = (new URLSearchParams((doc.location || location).search).get("facet") || "");
-      return facet.replace(/.*brand:/i, "").split("||")[0] || "";
-    }
-    // The breadcrumb leaf is the real category name ("Clothing / Fashion Brands /
-    // Time and Tru / Time and Tru Tops & Tees" -> "Time and Tru Tops & Tees").
-    function breadcrumbLeaf(doc) {
+    // The breadcrumb trail ("Clothing / Fashion Brands / Time and Tru /
+    // Time and Tru Tops & Tees" -> ["Clothing","Fashion Brands","Time and Tru",
+    // "Time and Tru Tops & Tees"]), Home dropped.
+    function breadcrumbTrail(doc) {
       let trail = [];
       (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
         if (trail.length) return;
@@ -232,24 +224,44 @@
         if (nav) trail = [...nav.querySelectorAll("a,li,span")]
           .map(a => (a.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean);
       }
-      trail = trail.filter(t => t && !/^home$/i.test(t));
-      return trail.length ? trail[trail.length - 1] : "";
+      return trail.filter(t => t && !/^home$/i.test(t));
     }
-    // Category: prefer the breadcrumb leaf (the true category — the H1 on a
-    // filtered brand shelf is often just "115 results"). Fall back to the H1
-    // with the brand stripped, but never return a bare result-count.
+    function breadcrumbLeaf(doc) { const t = breadcrumbTrail(doc); return t.length ? t[t.length - 1] : ""; }
+
+    // Walmart's own apparel brands live under a "Fashion Brands" breadcrumb, not
+    // in the product's brand field. Read that crumb so Time and Tru / No
+    // Boundaries / etc. land in Brand instead of being left blank.
+    const WM_BRANDS = /\b(Time and Tru|Terra & Sky|No Boundaries|Wonder Nation|Weekend Academy|Free Assembly|Athletic Works|Sofia Jeans|Scoop|Joyspun|Avia|George|Reef|Onassis|Love & Sports|Madden NYC|EV1|Kendall \+ Kylie)\b/i;
+    function brandOf(doc, it) {
+      const named = (it && (it.brand || (it.brandName))) || "";
+      if (named) return named;
+      const trail = breadcrumbTrail(doc);
+      const bi = trail.findIndex(t => /^(?:fashion\s+)?brands?$/i.test(t));   // crumb after "Fashion Brands"
+      if (bi >= 0 && trail[bi + 1]) return trail[bi + 1].replace(/\s+(shop|store)$/i, "").trim();
+      for (const t of trail) { const m = t.match(WM_BRANDS); if (m) return m[1]; }   // known brand anywhere in trail
+      const h = ((doc.querySelector && doc.querySelector("h1")) || {}).textContent || "";
+      const m = h.match(WM_BRANDS);
+      if (m) return m[1];
+      const facet = (new URLSearchParams((doc.location || location).search).get("facet") || "");
+      return facet.replace(/.*brand:/i, "").split("||")[0] || "";
+    }
+    // Category: the breadcrumb leaf with any leading brand stripped
+    // ("Time and Tru Shorts" -> "Shorts"). Falls back to the H1, never a bare
+    // result-count. A brand-shop landing (leaf == brand) has no sub-category.
     function categoryOf(doc, brand) {
-      const leaf = breadcrumbLeaf(doc);
-      if (leaf) return leaf;
+      const b = String(brand || "").trim();
+      let leaf = breadcrumbLeaf(doc);
+      if (leaf) {
+        if (b && leaf.toLowerCase() === b.toLowerCase()) return "All";
+        if (b && leaf.toLowerCase().startsWith(b.toLowerCase() + " ")) leaf = leaf.slice(b.length).trim();
+        return leaf || "All";
+      }
       const h1 = (doc.querySelector && doc.querySelector("h1")) || {};
       let t = (h1.textContent || "").replace(/\(\d[\d,]*\).*/, "").trim();
       t = t.split("|")[0].trim();                                    // drop "... | Walmart" title tail
       t = t.replace(/\s+in\s+[A-Za-z][^,]*$/i, "").trim();          // drop "... in <brand/dept>"
       if (/^\d[\d,]*\s*(?:results?|items?|products?)$/i.test(t)) return "";   // "115 results" is not a category
-      const b = String(brand || "").trim();
-      if (b && t.toLowerCase().startsWith(b.toLowerCase() + " ")) { // drop leading brand
-        t = t.slice(b.length).trim();
-      }
+      if (b && t.toLowerCase().startsWith(b.toLowerCase() + " ")) t = t.slice(b.length).trim();
       return t;
     }
     // Best-effort colorways from the list JSON (variant swatches). Full color
@@ -539,6 +551,41 @@
       return colors;
     }
 
+    // Size options from a product page's size variant list (same shape as
+    // colours). Some products carry the size only here, not in the name.
+    function extractSizes(blobs) {
+      const sizes = [];
+      const add = s => { const v = String(s || "").replace(/\s+/g, " ").trim();
+        if (v && v.length <= 14 && !sizes.some(x => x.toLowerCase() === v.toLowerCase())) sizes.push(v); };
+      const walk = (o, d) => {
+        if (!o || d > 16 || typeof o !== "object") return;
+        if (Array.isArray(o)) { o.forEach(v => walk(v, d + 1)); return; }
+        const nm = (o.name || o.type || o.id || o.variantType || "") + "";
+        if (/\bsize\b|clothing[_\s-]?size|shoe[_\s-]?size/i.test(nm) && !/one\s*size/i.test(nm)) {
+          if (Array.isArray(o.variantList)) o.variantList.forEach(v => add(v && (v.name || v.value || v.swatchName)));
+          if (Array.isArray(o.values)) o.values.forEach(v => add(v && (v.name || v.value || v)));
+        }
+        for (const k in o) walk(o[k], d + 1);
+      };
+      blobs.forEach(b => walk(b, 0));
+      return sizes;
+    }
+    // Collapse a size list to a range when it's a recognizable run
+    // (["S","M","L","XL","XXL"] -> "S-XXL"; ["2","4",…,"20"] -> "2-20"),
+    // otherwise a "; "-joined list.
+    const SIZE_RANK = "XXXS,XXS,XS,S,M,L,XL,XXL,XXXL,XXXXL,1X,2X,3X,4X,5X,6X".split(",");
+    function sizeRange(list) {
+      if (!list || !list.length) return "";
+      const clean = [...new Set(list.map(s => String(s).trim().toUpperCase()))];
+      const ranked = clean.map(s => SIZE_RANK.indexOf(s));
+      if (clean.length >= 2 && ranked.every(i => i >= 0)) {
+        return SIZE_RANK[Math.min(...ranked)] + "-" + SIZE_RANK[Math.max(...ranked)];
+      }
+      const nums = clean.map(s => (/^\d{1,3}$/.test(s) ? parseInt(s) : NaN));
+      if (clean.length >= 2 && nums.every(n => !isNaN(n))) return Math.min(...nums) + "-" + Math.max(...nums);
+      return list.join("; ");
+    }
+
     function pickDesign(specs) {
       const parts = [], used = new Set();
       for (const label in specs) {
@@ -602,7 +649,8 @@
         const composition = pickComposition(specs, blobs);
         const design = pickDesign(specs);
         const colorways = extractColorways(blobs).join("; ");
-        return { composition, colorways, design, reason: composition ? "" : "not_found" };
+        const sizes = sizeRange(extractSizes(blobs));   // size from the PDP when the name has none
+        return { composition, colorways, design, sizes, reason: composition ? "" : "not_found" };
       } catch (e) { return empty("error"); }
     }
 
@@ -643,6 +691,7 @@
       _categoryOf: categoryOf, _context: context,
       _collectSpecsFromDom: collectSpecsFromDom, _pickComposition: pickComposition,
       _colorwaysOf: colorwaysOf, _designCat: designCat,
+      _brandOf: brandOf, _extractSizes: extractSizes, _sizeRange: sizeRange, _breadcrumbTrail: breadcrumbTrail,
     };
   })();
 
