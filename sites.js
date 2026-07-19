@@ -2072,6 +2072,206 @@
   })();
 
   // ---------------------------------------------------------------------------
+  // Inditex catalog-API detail source (Massimo Dutti; the same `itxrest` API
+  // family as Zara/Bershka/…). The grid HTML carries no fabric composition —
+  // Inditex ships it only through the JSON API `productsArray`, where every
+  // product object nests the real data under `bundleProductSummaries[].detail`
+  // (top-level `detail.colors`/`composition` are empty for these "bundle"
+  // products). This reads that structured JSON directly instead of scraping a
+  // JS-rendered PDP, so composition/colors/sizes/sale-price come back reliably.
+  // Field shape verified against a live productsArray response (diagnose-md-products.js):
+  //   product.id / .name / .familyName / .bundleColors[{id,name}]
+  //   bundleProductSummaries[0].detail.composition[0].composition[{name,percentage}]
+  //   …detail.colors[0].sizes[{name, price, oldPrice}]   (price = minor units, ÷100)
+  //   …detail.xmedia[0].xmediaItems[0].medias[0].url     (absolute CDN image)
+  // Per the charter this hardcodes NO CSS selectors — it targets the platform
+  // API, and the store/catalog ids are discovered from the page, not baked in.
+  // ---------------------------------------------------------------------------
+  const inditex = (function () {
+    const prettify = s => String(s == null ? "" : s)
+      .toLowerCase().replace(/\s+/g, " ").trim().replace(/\b\w/g, c => c.toUpperCase());
+
+    // grid links are ".../<slug>-l<ref>?pelement=<productId>" — the productId
+    // (pelement) is what productsArray keys on; the -l<ref> is only a reference.
+    function pelementOf(url) {
+      try { return new URL(url, "https://x/").searchParams.get("pelement") || ""; }
+      catch (e) { return ""; }
+    }
+
+    // Pure parser — a single productsArray product object -> detail fields.
+    // Kept side-effect-free so the Node suite can exercise it without a browser.
+    function parseProduct(product, opts) {
+      opts = opts || {};
+      const sym = opts.currency || "$";
+      const bps = (product && product.bundleProductSummaries) || [];
+
+      // composition: the first summary that carries one. Each fiber = "<pct>% <Fiber>";
+      // a multi-zone garment (shell/lining) yields several distinct parts joined "; ".
+      const parts = [];
+      for (const b of bps) {
+        const comp = b && b.detail && b.detail.composition;
+        if (Array.isArray(comp) && comp.length) {
+          for (const part of comp) {
+            const fibers = (part.composition || [])
+              .map(f => ((f && f.percentage != null && f.percentage !== "") ? f.percentage + "% " : "") + prettify(f && f.name))
+              .map(x => x.trim()).filter(Boolean);
+            if (fibers.length) parts.push(fibers.join(", "));
+          }
+          if (parts.length) break;
+        }
+      }
+      const composition = [...new Set(parts)].join("; ");
+
+      // colors: bundleColors is the authoritative per-product colour list.
+      const colorNames = ((product && product.bundleColors) || [])
+        .map(c => prettify(c && c.name)).filter(Boolean);
+
+      // sizes + price: walk every summary/colour/size. Current = cheapest live
+      // size; a size's oldPrice > price proves a markdown (Inditex only sets
+      // oldPrice when on sale).
+      const sizeSet = [], seenSz = Object.create(null);
+      let cur = Infinity, old = 0;
+      for (const b of bps) for (const c of ((b && b.detail && b.detail.colors) || [])) {
+        for (const z of ((c && c.sizes) || [])) {
+          const nm = String((z && z.name) || "").trim();
+          if (nm && !seenSz[nm.toLowerCase()]) { seenSz[nm.toLowerCase()] = 1; sizeSet.push(nm); }
+          const pc = parseInt(z && z.price, 10); if (pc > 0) cur = Math.min(cur, pc);
+          const po = parseInt(z && z.oldPrice, 10); if (po > 0) old = Math.max(old, po);
+        }
+      }
+      const money = n => sym + (n / 100).toFixed(2);
+      const onSale = old > 0 && cur !== Infinity && old > cur;
+      return {
+        composition,
+        colorways: colorNames.join("; "),
+        color_count: colorNames.length || "",
+        sizes: sizeSet.join("; "),
+        design: "",
+        // only assert a price pair when we can prove the sale — otherwise leave
+        // the listing tile's price untouched (content.js keeps it).
+        price: onSale ? money(cur) : "",
+        price_was: onSale ? money(old) : "",
+        brand: opts.brand || "",
+        reason: composition ? "" : "not_found",
+      };
+    }
+
+    // absolute product image from the xmedia block (first media of first item).
+    function imageOf(product) {
+      const bps = (product && product.bundleProductSummaries) || [];
+      for (const b of bps) {
+        const xm = (b && b.detail && b.detail.xmedia) || [];
+        for (const set of xm) for (const item of (set.xmediaItems || [])) {
+          for (const m of (item.medias || [])) {
+            const u = m && (m.url || (m.extraInfo && m.extraInfo.url) || m.deliveryUrl);
+            if (u && /^https?:\/\//.test(u)) return u;
+          }
+        }
+      }
+      return "";
+    }
+
+    // Build a store-bound fetchDetail. brandId selects the Inditex brand
+    // (Massimo Dutti = 3); store/catalog are discovered from the live page.
+    function makeDetailFetcher(opts) {
+      opts = opts || {};
+      const brandId = opts.brandId, brand = opts.brand || "";
+      let SC = null, CUR = null;
+
+      const scFrom = str => {
+        const m = String(str || "").match(/catalog\/store\/(\d+)\/(\d+)\//);
+        return m ? { store: m[1], catalog: m[2] } : null;
+      };
+      // sync discovery: an itxrest URL is almost always embedded in the page
+      // (inline config/scripts) or left in resource timing.
+      function scSync(doc) {
+        if (SC) return SC;
+        try {
+          const perf = (typeof performance !== "undefined" && performance.getEntriesByType)
+            ? performance.getEntriesByType("resource").map(e => e.name) : [];
+          for (const n of perf) { const sc = scFrom(n); if (sc) return (SC = sc); }
+        } catch (e) {}
+        try { const sc = scFrom(doc && doc.documentElement && doc.documentElement.innerHTML); if (sc) return (SC = sc); }
+        catch (e) {}
+        return SC;
+      }
+      // async fallback: the store-config endpoint carries store + catalog ids.
+      async function scAsync() {
+        if (SC) return SC;
+        for (const v of ["3", "2", "1"]) {
+          try {
+            const txt = await fetch(`/itxrest/${v}/catalog/store?languageId=-1&appId=1&brandId=${brandId}`,
+              { credentials: "include" }).then(r => r.ok ? r.text() : "");
+            const sc = scFrom(txt);
+            if (sc) return (SC = sc);
+            let cfg; try { cfg = JSON.parse(txt); } catch (e) {}
+            if (cfg) {
+              const store = String(cfg.id || cfg.storeId || "");
+              let catalog = "";
+              (function dig(o, d) {
+                if (!o || typeof o !== "object" || d > 5 || catalog) return;
+                for (const k in o) {
+                  if (/^catalog(Id)?$/i.test(k) && /^\d+$/.test(String(o[k]))) { catalog = String(o[k]); return; }
+                  if (typeof o[k] === "object") dig(o[k], d + 1);
+                }
+              })(cfg, 0);
+              if (/^\d{4,}$/.test(store) && catalog) return (SC = { store, catalog });
+            }
+          } catch (e) {}
+        }
+        return null;
+      }
+
+      async function fetchProducts(sc, id) {
+        const u = `/itxrest/3/catalog/store/${sc.store}/${sc.catalog}/productsArray?languageId=-1&appId=1&productIds=${id}`;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        try {
+          const r = await fetch(u, { credentials: "include", headers: { Accept: "application/json" }, signal: ctrl.signal });
+          if (!r.ok) return { err: r.status === 404 ? "not_found" : "blocked" };
+          const j = await r.json();
+          return { products: (j && j.products) || [] };
+        } catch (e) {
+          return { err: (e && e.name === "AbortError") ? "timeout" : "error" };
+        } finally { clearTimeout(timer); }
+      }
+
+      function currencyFromDoc(doc) {
+        try {
+          const t = ((doc && doc.body && doc.body.innerText) || "").slice(0, 30000);
+          const m = t.match(/[$€£]/);
+          if (m) return m[0];
+        } catch (e) {}
+        return "$";
+      }
+
+      return async function fetchDetail(url) {
+        const empty = r => ({ composition: "", colorways: "", design: "", brand, reason: r });
+        const id = pelementOf(url);
+        if (!id) return empty("not_found");
+        const doc = (typeof document !== "undefined") ? document : null;
+        if (CUR == null) CUR = currencyFromDoc(doc);
+
+        let sc = scSync(doc);
+        let res = sc ? await fetchProducts(sc, id) : { err: "error" };
+        if (!res.products || !res.products.length) {   // sync store/catalog wrong or missing
+          const sc2 = await scAsync();
+          if (sc2) res = await fetchProducts(sc2, id);
+        }
+        if (!res.products || !res.products.length) return empty(res.err || "not_found");
+
+        const product = res.products.find(p => String(p && p.id) === String(id)) || res.products[0];
+        if (!product) return empty("not_found");
+        const out = parseProduct(product, { currency: CUR || "$", brand });
+        out.image_url = imageOf(product);   // absolute CDN image (adapter may use it)
+        return out;
+      };
+    }
+
+    return { pelementOf, parseProduct, imageOf, makeDetailFetcher };
+  })();
+
+  // ---------------------------------------------------------------------------
   // House-brand SPA factory — single-brand fashion sites (COS, Massimo Dutti)
   // whose category is one continuous grid (infinite scroll / "load more") and
   // whose product page carries structured data (JSON-LD) + a fiber-%
@@ -2198,6 +2398,11 @@
       return { brand: "", category: listingCategory(doc, url), totalPages: null, page: 1 };
     }
 
+    // A site whose PDP HTML lacks the composition (e.g. Inditex serves it only
+    // via its catalog API) can supply an API-based detail fetcher; otherwise the
+    // default fetches and parses the product page.
+    const detailFn = cfg.fetchDetail || fetchDetail;
+
     return {
       id: cfg.id, label: cfg.label,
       lazyScroll: cfg.lazyScroll == null ? 60 : cfg.lazyScroll,  // one infinite-scroll grid
@@ -2208,7 +2413,7 @@
       nextPageUrl: () => null,
       firstPageUrl: url => url,
       isResultsPage: generic.isResultsPage,
-      fetchDetail, buildWorkbook: generic.buildWorkbook,
+      fetchDetail: detailFn, buildWorkbook: generic.buildWorkbook,
       templateUrl: null,
       _categoryFromUrl: categoryFromUrl, _listingCategory: listingCategory,
       _scrapeList: scrapeList, _parseDetailDoc: parseDetailDoc, _isProduct: isProduct,
@@ -2229,6 +2434,10 @@
     id: "massimodutti", label: "Massimo Dutti", brand: "Massimo Dutti",
     match: url => /(^|\.)massimodutti\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
     trailSkip: /^(home|massimo\s*dutti)$/i,
+    // Composition/colors/sizes/sale-price come from the Inditex catalog API
+    // (brandId 3), not the JS-rendered PDP. List scrape stays DOM-based; only
+    // the per-product detail switches to productsArray.
+    fetchDetail: inditex.makeDetailFetcher({ brandId: 3, brand: "Massimo Dutti" }),
   });
 
   // ---------------------------------------------------------------------------
@@ -2238,6 +2447,7 @@
 
   const SITES = {
     shared,
+    inditex,           // exposed for the Node suite (pure parseProduct/pelementOf)
     adapters: ADAPTERS,
     // doc is optional — adapters that detect by page content (e.g. shopify's
     // cdn markers) use it; URL-pattern adapters (walmart) ignore it.

@@ -20,9 +20,14 @@
     PDP 할인가(정가/세일가) 추출 → Current Price 반영
   - zara: 단일 브랜드 SPA (무한 스크롤 lazy-scroll 60라운드, -p코드.html 상품, JSON-LD 상세)
   - cos / massimodutti: **house-brand 팩토리**(`houseBrandAdapter`) — zara 모델 일반화.
-    단일 브랜드 + 무한 스크롤 그리드, 카테고리=URL 슬러그(JSON-LD 브레드크럼 우선),
-    상세=JSON-LD + 섬유% 텍스트. 사이트별 CSS 셀렉터 하드코딩 없음.
-    이미지 CDN/상품 URL 패턴은 사용자 진단(diagnose-generic.js) 출력으로 보정
+    단일 브랜드 + 무한 스크롤 그리드, 카테고리=URL 슬러그(JSON-LD 브레드크럼 우선).
+    사이트별 CSS 셀렉터 하드코딩 없음. 이미지 CDN/상품 URL 패턴은 사용자 진단
+    (diagnose-generic.js) 출력으로 보정
+    - cos 상세=JSON-LD + 섬유% 텍스트(기본 PDP fetch)
+    - massimodutti 상세=**Inditex 카탈로그 API**(`itxrest/…/productsArray`, brandId 3).
+      PDP HTML엔 조성이 없음 — API의 `bundleProductSummaries[].detail`에서 조성·색상·
+      사이즈·세일가를 구조화 JSON으로 직접 수집. store/catalog는 페이지에서 발견
+      (하드코딩 아님). list 스크랩은 DOM 그대로, 상세만 API로 교체. `inditex` 헬퍼
   - generic: DOM 휴리스틱 + JSON-LD 병합 폴백
 - 상세 수집(옵션): 원단 조성(섬유 검증), 색상 전체 목록, 사이즈, 브랜드, 정가
 - 출력: 12컬럼 xlsx (썸네일 이미지 임베드, 정가/현재가 세일 빨강, Color Count,
