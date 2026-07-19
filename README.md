@@ -6,10 +6,16 @@
 전부 브라우저 안에서 동작 — 서버·유료 서비스 없음.
 
 **지원 단계**
-- **Walmart** — 전용 어댑터. 원단 조성·색상·디자인 디테일까지 정밀 추출.
+- **Walmart / Target** — 전용 어댑터(멀티 브랜드 리테일러). 원단 조성·색상·디자인
+  디테일까지 정밀 추출. Retailer(Walmart/Target)와 그 아래 Brand를 구분해 기록.
 - **Cotton On** — 전용 어댑터 (Salesforce Commerce Cloud). 상품명은 URL 슬러그에서,
   카테고리는 cgid에서 즉시 채워지고, 상세 수집 시 **브랜드(JSON-LD) · 색상 전체
   목록 · 사이즈 목록(variationAttributes) · 원단 조성(COMPOSITION, 섬유 검증)**까지.
+  상품 페이지의 **할인가(정가/세일가)**를 읽어 Current Price에 반영.
+- **Zara / COS / Massimo Dutti** — 단일 브랜드 SPA(무한 스크롤 그리드). 화면을 끝까지
+  스크롤해 전 상품을 렌더한 뒤, JSON-LD·섬유% 텍스트로 브랜드·색상·사이즈·원단 조성을
+  수집. "100% Organic cotton"·"80% Recycled polyester" 같은 표기도 인식.
+  ※ 영어(US) 지역 페이지 기준으로 사용하세요.
 - **Shopify 스토어 (Edikted 등)** — 자동 감지. 목록은 화면(필터 반영)에서,
   상세는 Shopify 공개 상품 JSON에서: **색상 전체 목록 · 원단 조성(설명문에서
   섬유 검증) · 브랜드(vendor) · 정가(compare_at_price)**까지. Shopify 기반이면

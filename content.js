@@ -213,7 +213,11 @@ async function runStep(j) {
             // SFCC size lists)
             if (d.brand && !it.brand) it.brand = d.brand;
             if (d.category && !it.category) it.category = d.category;
-            if (d.price_was && !it.price_was) it.price_was = d.price_was;
+            // a PDP markdown (both current + original present) is authoritative
+            // for this product — the listing tile often shows only the regular
+            // price, so reflect the on-page sale in Current Price.
+            if (d.price_was && d.price) { it.price = d.price; it.price_was = d.price_was; }
+            else if (d.price_was && !it.price_was) it.price_was = d.price_was;
             if (d.sizes && !it.size_range) it.size_range = d.sizes;
             it._compReason = d.reason || "";
           } else { it.fabric_composition = d || ""; }

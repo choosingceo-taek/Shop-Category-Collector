@@ -12,12 +12,17 @@
 
 - 수집: 현재 카테고리/검색의 **전 페이지 자동 순회** (모르면 다음 페이지를 직접
   열어 확인하는 probe 방식 — 감지 실패로 페이지가 누락되지 않음)
-- 엔진 라우팅: `sites.js`의 어댑터 레지스트리 `[walmart, target, cottonon, zara, shopify, generic]`
+- 엔진 라우팅: `sites.js`의 어댑터 레지스트리 `[walmart, target, cottonon, zara, cos, massimodutti, shopify, generic]`
   - walmart: 커스텀 SPA 엔진 (embedded JSON 컨테이너 스코핑 + 상세 fetch)
   - target: 커스텀 SPA (?Nao=24 오프셋 페이지네이션, JSON-LD·불릿 상세, multiBrand)
   - shopify: **플랫폼 감지형** (페이지 내 CDN 마커) — Edikted 등 모든 Shopify 몰
-  - cottonon: SFCC(Demandware) — URL 슬러그/cgid + PDP variationAttributes
+  - cottonon: SFCC(Demandware) — URL 슬러그/cgid + PDP variationAttributes.
+    PDP 할인가(정가/세일가) 추출 → Current Price 반영
   - zara: 단일 브랜드 SPA (무한 스크롤 lazy-scroll 60라운드, -p코드.html 상품, JSON-LD 상세)
+  - cos / massimodutti: **house-brand 팩토리**(`houseBrandAdapter`) — zara 모델 일반화.
+    단일 브랜드 + 무한 스크롤 그리드, 카테고리=URL 슬러그(JSON-LD 브레드크럼 우선),
+    상세=JSON-LD + 섬유% 텍스트. 사이트별 CSS 셀렉터 하드코딩 없음.
+    이미지 CDN/상품 URL 패턴은 사용자 진단(diagnose-generic.js) 출력으로 보정
   - generic: DOM 휴리스틱 + JSON-LD 병합 폴백
 - 상세 수집(옵션): 원단 조성(섬유 검증), 색상 전체 목록, 사이즈, 브랜드, 정가
 - 출력: 12컬럼 xlsx (썸네일 이미지 임베드, 정가/현재가 세일 빨강, Color Count,

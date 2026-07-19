@@ -5,10 +5,14 @@
 
 ## 현재까지 된 것 (요약)
 
-- 어댑터 레지스트리 `[walmart, target, cottonon, zara, shopify, generic]`, 플랫폼 감지형(shopify)
+- 어댑터 레지스트리 `[walmart, target, cottonon, zara, cos, massimodutti, shopify, generic]`, 플랫폼 감지형(shopify)
+- cos/massimodutti는 `houseBrandAdapter` 팩토리(zara 모델 일반화)로 추가 — 단일 브랜드
+  + 무한 스크롤 그리드. 사이트별 CSS 하드코딩 없이 generic 스크레이프 + JSON-LD 상세
 - 전 페이지 자동 순회(probe 방식), 상세 수집(원단·색상·사이즈·브랜드·정가)
+- 원단 조성 파서: 섬유 앵커 방식으로 "100% Organic cotton"/"80% Recycled polyester"
+  같은 수식어-접두 표기까지 인식(할인 문구 "50% off"는 배제)
 - 12컬럼 xlsx(썸네일 임베드 + 출처 규칙), post-scan 필터, FAB + 팝업 UI
-- Node+jsdom 9개 스위트 139+ 케이스
+- Node+jsdom 12개 스위트 338+ 케이스
 
 ## Phase 1 — 플랫폼 엔진 일반화 (다음 우선순위)
 

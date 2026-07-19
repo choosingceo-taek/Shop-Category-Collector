@@ -165,7 +165,21 @@
     // bare percentage runs — scan ALL of them and take the first that NAMES a
     // fiber, so promo text like "20% off" earlier on the page can't shadow the
     // real "95% Cotton 5% Elastane" later on
-    const FIBER_WORD = /\b(cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide)\b/i;
+    const FIBERS = "cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide";
+    const FIBER_WORD = new RegExp("\\b(" + FIBERS + ")\\b", "i");
+    // fiber-anchored pass (preferred): each "<pct> [adjective] <fiber>" segment
+    // NAMES a real fiber, allowing ONE qualifier adjective ("100% Organic
+    // cotton", "80% Recycled polyester" — common on COS / Massimo Dutti) and
+    // chaining more segments. Every segment anchors on a fiber, so trailing
+    // noise ("40% Polyester blend") can't attach. Line-scoped and
+    // discount-guarded so "50% off … Cotton" can't masquerade as fabric.
+    const SEG = "\\d{1,3}\\s?%\\s?(?:(?!off|sale|discount|extra|savings?)[A-Za-z]+[ \\t]+)?(?:" + FIBERS + ")\\b";
+    const QUAL = new RegExp(SEG + "(?:[ ,/&+]+" + SEG + ")*", "i");
+    for (const line of t.split(/\n/)) {
+      const m = line.match(QUAL);
+      if (m) return m[0].trim();
+    }
+    // last resort — any %-run that happens to contain a fiber word somewhere
     const runs = t.match(/\d{1,3}\s?%\s?[A-Za-z]+(?:[ ,/&+]+\d{1,3}\s?%\s?[A-Za-z]+)*/g) || [];
     const hit = runs.find(r => FIBER_WORD.test(r));
     return hit ? hit.trim() : "";
@@ -1449,6 +1463,58 @@
       return categoryFromUrl(url);
     }
 
+    // PDP sale price: the Cotton On product page shows a markdown the LISTING
+    // tile often hides — e.g. "$49.99  $35.00  (-30%)" (struck original, sale,
+    // percent off). Layered read: JSON-LD offers first, then a strikethrough
+    // element, then the "orig sale (-N%)" text pattern. Returns { price,
+    // price_was } where price is the current (lower) amount; price_was is the
+    // original only when a genuine markdown is found ("" otherwise).
+    const CO_PRICE = /(?:[$₩€£¥]\s?\d[\d,]*(?:\.\d{1,2})?|\d[\d,]*(?:\.\d{1,2})?\s?(?:USD|AUD|NZD|GBP|EUR))/;
+    const CO_PRICE_G = new RegExp(CO_PRICE.source, "g");
+    const coNum = s => parseFloat(String(s == null ? "" : s).replace(/[^0-9.]/g, ""));
+    function priceFromDoc(doc, rawHtml) {
+      let price = "", price_was = "";
+      // 1) JSON-LD offers — current price
+      (doc && doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
+          [].concat(n.offers || []).forEach(o => {
+            if (!o) return;
+            const cur = o.price || (o.priceSpecification && o.priceSpecification.price);
+            if (cur && !price) price = String(cur);
+          });
+        });
+      });
+      // 2) DOM strikethrough = original; a sale/now element = current
+      if (doc && doc.querySelector) {
+        const strike = doc.querySelector('del, s, strike, [class*="strike" i], [class*="was" i], [class*="original" i], [class*="regular" i]');
+        const wasTxt = strike && (strike.textContent || "").match(CO_PRICE);
+        if (wasTxt) {
+          const saleEl = doc.querySelector('[class*="sale" i], [class*="now" i], [class*="reduced" i], [class*="special" i]');
+          const saleTxt = saleEl && (saleEl.textContent || "").match(CO_PRICE);
+          const w = wasTxt[0];
+          const p = (saleTxt && saleTxt[0]) || price;
+          if (p && coNum(w) > coNum(p)) { price = p; price_was = w; }
+        }
+      }
+      // 3) text pattern "$49.99 $35.00 (-30%)": two prices immediately before a
+      // percent-off — higher = original, lower = current. Robust to markup.
+      if (!price_was) {
+        const body = (doc && doc.body && doc.body.textContent) || rawHtml || "";
+        const m = body.match(new RegExp(CO_PRICE.source + "\\s*" + CO_PRICE.source + "\\s*\\(?\\s*-?\\s*\\d{1,3}\\s*%", "i"));
+        if (m) {
+          const two = (m[0].match(CO_PRICE_G) || []);
+          if (two.length >= 2 && coNum(two[0]) !== coNum(two[1])) {
+            const hi = coNum(two[0]) > coNum(two[1]) ? two[0] : two[1];
+            const lo = coNum(two[0]) > coNum(two[1]) ? two[1] : two[0];
+            price = lo; price_was = hi;
+          }
+        }
+      }
+      return { price: price || "", price_was: price_was || "" };
+    }
+
     function parseDetailDoc(doc, rawHtml, url) {
       let brand = "", name = "";
       const colors = [], sizes = [];
@@ -1520,9 +1586,11 @@
       const productName = name || nameFromUrl(url || "");
       const design = featuresFromDoc(doc).slice(0, 3).join("\n");   // first 3 Features bullets, one per line
       const category = breadcrumbCategory(doc, productName);
+      const pp = priceFromDoc(doc, rawHtml);
       return {
         composition, colorways: colors.join("; "), color_count: colorCount || "",
         design, category, brand, sizes: sizes.join("; "),
+        price: pp.price, price_was: pp.price_was,
         reason: composition ? "" : "not_found",
       };
     }
@@ -1610,6 +1678,7 @@
       templateUrl: null,
       _nameFromUrl: nameFromUrl, _categoryFromUrl: categoryFromUrl,
       _variationValues: variationValues, _parseDetailDoc: parseDetailDoc,
+      _priceFromDoc: priceFromDoc,
       _colourFromText: colourFromText,
       _nextPageUrl: nextPageUrl, _firstPageUrl: firstPageUrl, _gridPage: gridPage,
       _colorSwatches: colorSwatches, _cleanColourName: cleanColourName,
@@ -2003,9 +2072,169 @@
   })();
 
   // ---------------------------------------------------------------------------
+  // House-brand SPA factory — single-brand fashion sites (COS, Massimo Dutti)
+  // whose category is one continuous grid (infinite scroll / "load more") and
+  // whose product page carries structured data (JSON-LD) + a fiber-%
+  // composition. This is the Zara model generalized. Per the project charter it
+  // hardcodes NO site CSS selectors: the list + reco-exclusion come from the
+  // generic engine, the category from the URL slug (with a JSON-LD breadcrumb
+  // preferred), composition from JSON-LD / fiber-% text. A per-site diagnostic
+  // (diagnose-generic.js) can later tune specifics if a field is missed.
+  // ---------------------------------------------------------------------------
+  function houseBrandAdapter(cfg) {
+    const compositionFromText = shared.compositionFromText;
+    const titleCase = s => String(s || "")
+      .replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim()
+      .replace(/\b\w/g, c => c.toUpperCase());
+
+    // last path segment, minus any Inditex/CMS id suffix (-n123 / -l123 / -c123)
+    // and .html — pure URL parsing, no DOM guessing.
+    function categoryFromUrl(url) {
+      try {
+        const last = (new URL(url).pathname.split("/").filter(Boolean).pop() || "")
+          .replace(/\.html?$/i, "")
+          .replace(/-[nlc]\d+$/i, "");
+        return titleCase(last);
+      } catch (e) { return ""; }
+    }
+
+    function listingCategory(doc, url) {
+      // JSON-LD breadcrumb leaf -> H1 -> URL slug (on-site name first)
+      let trail = [];
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        if (trail.length) return;
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (n && /BreadcrumbList/i.test([].concat(n["@type"] || []).join(","))) {
+            trail = [].concat(n.itemListElement || [])
+              .map(e => (e && (e.name || (e.item && e.item.name))) || "").filter(Boolean);
+          }
+        });
+      });
+      trail = trail.filter(t => t && !cfg.trailSkip.test(t));
+      if (trail.length) return trail[trail.length - 1];
+      const h1 = doc.querySelector && doc.querySelector("h1");
+      if (h1) {
+        const t = (h1.textContent || "").replace(/\s*\(\d[\d,]*\)\s*$/, "").replace(/\s+/g, " ").trim();
+        if (t && t.length <= 60 && !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
+      }
+      return categoryFromUrl(url);
+    }
+
+    // product identity: a verified code pattern when the site has one, else the
+    // URL path (query stripped) so each product is one row and dupes collapse.
+    function productKey(u) {
+      if (cfg.codeOf) return cfg.codeOf(u) || null;
+      try { const x = new URL(u); return x.origin + x.pathname; } catch (e) { return u || null; }
+    }
+    const isProduct = u => cfg.isProduct ? cfg.isProduct(u) : !!productKey(u);
+
+    function scrapeList(doc, url) {
+      const raw = generic.scrapeList(doc, url).filter(r => isProduct(r.product_url));
+      const pageCat = listingCategory(doc, url);
+      const seen = new Set(); const out = [];
+      for (const r of raw) {
+        const id = productKey(r.product_url);
+        if (id && seen.has(id)) continue; if (id) seen.add(id);
+        r.category = pageCat || r.category || "";
+        r.brand = cfg.brand;                  // single-house-brand site — factual
+        out.push(r);
+      }
+      return out;
+    }
+
+    function parseDetailDoc(doc, rawHtml, url) {
+      let brand = "", name = "";
+      const colors = [], sizes = [];
+      const addTo = (arr, v) => {
+        const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+        if (s && s.length <= 40 && !arr.some(x => x.toLowerCase() === s.toLowerCase())) arr.push(s);
+      };
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
+          if (!name && n.name) name = String(n.name);
+          if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+          [].concat(n.color || []).forEach(c => addTo(colors, c));
+          [].concat(n.size || []).forEach(z => addTo(sizes, z));
+          [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
+        });
+      });
+      // composition: fiber-% — li boundaries first, then body/raw HTML
+      const liText = doc.querySelectorAll
+        ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
+      const composition = compositionFromText(liText)
+        || compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
+      return {
+        composition, colorways: colors.join("; "), color_count: colors.length || "",
+        design: "", brand: brand || cfg.brand, sizes: sizes.join("; "),
+        reason: composition ? "" : "not_found",
+      };
+    }
+
+    async function fetchDetail(url) {
+      const empty = r => ({ composition: "", colorways: "", design: "", brand: cfg.brand, reason: r });
+      let html;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        try {
+          const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
+          if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
+          html = await res.text();
+        } finally { clearTimeout(timer); }
+      } catch (e) {
+        return empty((e && e.name === "AbortError") ? "timeout" : "error");
+      }
+      try {
+        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html, url);
+      } catch (e) { return empty("error"); }
+    }
+
+    function context(doc) {
+      doc = doc || document;
+      const url = (doc.location && doc.location.href) || (typeof location !== "undefined" ? location.href : "");
+      return { brand: "", category: listingCategory(doc, url), totalPages: null, page: 1 };
+    }
+
+    return {
+      id: cfg.id, label: cfg.label,
+      lazyScroll: cfg.lazyScroll == null ? 60 : cfg.lazyScroll,  // one infinite-scroll grid
+      match: cfg.match,
+      context, scrapeList,
+      totalPages: () => 1,                    // no page param — everything scrolls onto one page
+      resultCount: generic.resultCount,
+      nextPageUrl: () => null,
+      firstPageUrl: url => url,
+      isResultsPage: generic.isResultsPage,
+      fetchDetail, buildWorkbook: generic.buildWorkbook,
+      templateUrl: null,
+      _categoryFromUrl: categoryFromUrl, _listingCategory: listingCategory,
+      _scrapeList: scrapeList, _parseDetailDoc: parseDetailDoc, _isProduct: isProduct,
+      _productKey: productKey,
+    };
+  }
+
+  // COS (H&M group) — cos.com/<locale>/<gender>/<category>. One continuous grid.
+  const cos = houseBrandAdapter({
+    id: "cos", label: "COS", brand: "COS",
+    match: url => /(^|\.)cos\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
+    trailSkip: /^(home|cos)$/i,
+  });
+
+  // Massimo Dutti (Inditex, same platform family as Zara) —
+  // massimodutti.com/<locale>/<gender>/<category>-n<id>. One continuous grid.
+  const massimodutti = houseBrandAdapter({
+    id: "massimodutti", label: "Massimo Dutti", brand: "Massimo Dutti",
+    match: url => /(^|\.)massimodutti\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
+    trailSkip: /^(home|massimo\s*dutti)$/i,
+  });
+
+  // ---------------------------------------------------------------------------
   // Registry — order matters: more specific adapters must come before generic.
   // ---------------------------------------------------------------------------
-  const ADAPTERS = [walmart, target, cottonon, zara, shopify, generic];
+  const ADAPTERS = [walmart, target, cottonon, zara, cos, massimodutti, shopify, generic];
 
   const SITES = {
     shared,
