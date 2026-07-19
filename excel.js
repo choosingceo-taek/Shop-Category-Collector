@@ -76,16 +76,31 @@
   function fieldCategory(rec) { return rec.category ? real(String(rec.category)) : check(); }
 
   // Split the size range out of a product name:
-  //   "Capri Leggings, XS-XXXL"           -> name "Capri Leggings",     size "XS-XXXL"
-  //   "Denim Jegging, Sizes XS-XXXL"      -> name "Denim Jegging",      size "XS-XXXL"
-  //   "Knit Leggings, 27\" Inseam, S-XXL" -> inseam stays in the name,  size "S-XXL"
+  //   "Capri Leggings, XS-XXXL"                 -> "Capri Leggings"                    | "XS-XXXL"
+  //   "Denim Jegging, Sizes XS-XXXL"            -> "Denim Jegging"                     | "XS-XXXL"
+  //   "Knit Leggings, 27\" Inseam, XS-XXXL"     -> "Knit Leggings, 27\" Inseam"        | "XS-XXXL"
+  //   "Boxy Zip Up Hoodie, Women's XXS-XXL"     -> "Boxy Zip Up Hoodie"                | "XXS-XXL"
+  //   "Cami, Women's and Women's Plus XXS-3X"   -> "Cami"                              | "XXS-3X"
+  // A size token is XXS/XS/S/M/L/XL/XXL/XXXL or 2X/3X/4X; a range is TOKEN-TOKEN.
+  const SIZE_TOK = "(?:[0-9]{1,2}X|[0-9X]{0,3}[SML])";
+  const SIZE_RANGE_RE = new RegExp("\\b(" + SIZE_TOK + "\\s*[-–]\\s*" + SIZE_TOK + ")\\b", "gi");
+  const GENDER_TAIL_RE = /[\s,]*(?:(?:women'?s?|men'?s?|juniors?'?|girls?'?|boys?'?|kids?'?|unisex|and|plus|&)[\s,]*)+$/i;
   function splitSize(name) {
     const n = String(name || "").trim();
     if (!n) return { name: n, size: "" };
+    // explicit "... Sizes X-Y" at the end
     let m = n.match(/,?\s*\bSizes?\s+([^,]+?)\s*$/i);
     if (m) return { name: n.slice(0, m.index).replace(/,\s*$/, "").trim(), size: m[1].trim() };
-    m = n.match(/,\s*((?:\d{1,2}X|\d{1,2}|[XSML]{1,5})\s*[-–]\s*(?:\d{1,2}X|\d{1,2}|[XSML]{1,5}))\s*$/i);
-    if (m) return { name: n.slice(0, m.index).trim(), size: m[1].trim() };
+    // a size range anywhere (usually at the end), possibly behind a gender/plus
+    // phrase ("Women's XXS-XXL", "Women's and Women's Plus XXS-3X")
+    const all = [...n.matchAll(SIZE_RANGE_RE)];
+    if (all.length) {
+      const hit = all[all.length - 1];
+      const size = hit[1].replace(/\s+/g, "");
+      const base = (n.slice(0, hit.index) + n.slice(hit.index + hit[0].length))
+        .replace(GENDER_TAIL_RE, "").replace(/[\s,]+$/, "").trim();
+      return { name: base || n, size };
+    }
     return { name: n, size: "" };
   }
   function fieldName(rec) {

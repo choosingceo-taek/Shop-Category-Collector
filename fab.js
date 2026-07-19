@@ -188,17 +188,17 @@
       </label>
       <div id="note">이 사이트는 전용 지원이 없어 기본 정보(썸네일·이름·가격·URL)만 수집됩니다. 색상/원단/디자인 칸은 "정보 확인"으로 남습니다.</div>
       <details id="filters">
-        <summary><span id="fsum">필터 (선택) — 엑셀에 담기 전에 정제</span><span class="chev">▾</span></summary>
-        <div class="chk"><input type="checkbox" id="fDomOnly"><label style="margin:0;color:#cdcdd4">주 브랜드만 (제3자 셀러 자동 제외)</label></div>
-        <div class="f"><label>브랜드만 남기기</label>
+        <summary><span id="fsum">필터 (선택)</span><span class="chev">▾</span></summary>
+        <div class="chk"><input type="checkbox" id="fDomOnly"><label style="margin:0;color:#cdcdd4">대표 브랜드만 남기기 <small style="color:#77777f">— 섞여 들어온 다른 브랜드 제외</small></label></div>
+        <div class="f"><label>브랜드</label>
           <input type="text" id="fBrand" placeholder="예: No Boundaries, Time and Tru">
-          <small>쉼표로 여러 개 · 비우면 전체</small></div>
-        <div class="f"><label>상품명 포함 (이 단어가 있는 것만)</label>
+          <small>이 브랜드만 남김 · 쉼표로 여러 개 · 비우면 전체</small></div>
+        <div class="f"><label>상품명 포함</label>
           <input type="text" id="fInclude" placeholder="예: Women, Legging">
-          <small>쉼표 구분 · 비우면 전체</small></div>
-        <div class="f"><label>상품명 제외 (이 단어가 있으면 버림)</label>
+          <small>이 단어가 있는 것만 · 쉼표 구분</small></div>
+        <div class="f"><label>상품명 제외</label>
           <input type="text" id="fExclude" placeholder="예: Men's, Juniors">
-          <small>쉼표 구분</small></div>
+          <small>이 단어가 있으면 버림 · 쉼표 구분</small></div>
         <button id="fclear">✕ 필터 모두 지우기</button>
       </details>
       <button id="run" class="act">전 페이지 수집 → 엑셀</button>
@@ -299,8 +299,8 @@
       el("fInclude").value.trim() || el("fExclude").value.trim();
     el("filters").setAttribute("data-active", active ? "1" : "0");
     el("fsum").innerHTML = active
-      ? '필터 <span class="badge">● 적용 중 — 일부 상품이 제외됩니다</span>'
-      : "필터 (선택) — 엑셀에 담기 전에 정제";
+      ? '필터 <span class="badge">● 적용 중 — 일부 상품 제외됨</span>'
+      : "필터 (선택)";
     if (active) el("filters").open = true;
   }
   function prefill() {

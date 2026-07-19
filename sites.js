@@ -556,7 +556,11 @@
     return {
       id: "walmart",
       label: "Walmart",
-      match: url => /^https?:\/\/(www\.)?walmart\.com\/(browse|search|shop|cp|c\/)/i.test(url || ""),
+      // Any walmart.com page routes to the full Walmart engine (detail collection).
+      // The content script only injects on listing paths (manifest), so this can't
+      // fire on product/cart pages; being permissive means a listing on a path the
+      // old narrow regex missed (e.g. brand shelves) no longer falls to "generic".
+      match: url => /^https?:\/\/(www\.)?walmart\.com\//i.test(url || ""),
       context, scrapeList, totalPages, resultCount, nextPageUrl, fetchDetail, buildWorkbook, isResultsPage,
       templateUrl: null,   // ExcelJS builds a fresh styled workbook; no template needed
       // internal, exposed for tests
