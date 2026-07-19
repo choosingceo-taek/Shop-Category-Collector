@@ -64,7 +64,7 @@
     // drop any token that is a substring of another matched token (crop vs cropped)
     hits = hits.filter(t => !hits.some(o => o !== t && o.includes(t)));
     const uniq = [...new Set(hits)];
-    return uniq.length ? uniq.map(cap).join("; ") : "";
+    return uniq.length ? uniq.map(cap).join("\n") : "";   // one descriptor per line
   }
 
   // Each field -> { text, kind } where kind ∈ 'real' | 'reverify' | 'check'

@@ -597,7 +597,7 @@
         used.add(cat.toLowerCase());
         parts.push(`${cat}: ${v}`);
       }
-      return parts.join("; ").slice(0, 400);
+      return parts.join("\n").slice(0, 400);   // one detail per line in the cell
     }
     function pickComposition(specs, blobs) {
       // any spec whose LABEL names a composition field (Material / Fabric /
@@ -879,15 +879,45 @@
       });
 
       // 2) climb to the tile (has image + link), dedupe by node
-      const tiles = new Map();   // node -> priceText
+      const tiles = new Map();   // node -> price leaf
       for (const leaf of priceLeaves) {
         const tile = tileAncestor(leaf, 6);
-        if (tile && !tiles.has(tile)) tiles.set(tile, firstPrice(textOf(leaf)));
+        if (tile && !tiles.has(tile)) tiles.set(tile, leaf);
+      }
+
+      // Sale pairs: listings render "was $69.99  now $30.00" side by side. Read
+      // every price in the leaf's price ROW (its parent) — exactly two distinct
+      // values means a markdown: lower = current, higher = original. A semantic
+      // strike-through (<del>/<s>/<strike>) in the tile is used the same way.
+      // Anything else keeps the old single-price behavior.
+      const PRICE_ALL = new RegExp(PRICE_RE.source, "g");
+      const priceNum = s => parseFloat(String(s).replace(/[^0-9.]/g, ""));
+      function pricePairFrom(leaf, tile) {
+        const rowText = textOf(leaf.parentElement || leaf);
+        const toks = [...new Set((rowText.match(PRICE_ALL) || []).map(t => t.trim()))];
+        if (toks.length === 2 && priceNum(toks[0]) !== priceNum(toks[1])) {
+          const [a, b] = toks;
+          return priceNum(a) < priceNum(b) ? { price: a, price_was: b } : { price: b, price_was: a };
+        }
+        const price = firstPrice(textOf(leaf));
+        const del = tile && tile.querySelector && tile.querySelector("del, s, strike");
+        if (del) {
+          const was = firstPrice(textOf(del));
+          if (was && price && priceNum(was) > priceNum(price)) return { price, price_was: was };
+          // the found leaf may itself be the struck-out original — pick the
+          // other price in the tile as current
+          if (was && was === price) {
+            const all = [...new Set((textOf(tile).match(PRICE_ALL) || []).map(t => t.trim()))]
+              .filter(t => t !== was);
+            if (all.length === 1 && priceNum(all[0]) < priceNum(was)) return { price: all[0], price_was: was };
+          }
+        }
+        return { price, price_was: "" };
       }
 
       // 3) require repetition — reject signatures with < 3 members (promo one-offs)
       const bySig = new Map();
-      tiles.forEach((price, tile) => {
+      tiles.forEach((leaf, tile) => {
         const sig = signature(tile);
         (bySig.get(sig) || bySig.set(sig, []).get(sig)).push(tile);
       });
@@ -897,18 +927,20 @@
       // 4) extract, dedupe by URL
       const seen = new Set();
       const out = [];
-      for (const [tile, price] of tiles) {
+      for (const [tile, leaf] of tiles) {
         if (!validTiles.has(tile) || out.length >= MAX_TILES) continue;
         if (inRecommendation(tile)) continue;   // drop recommendation/cross-sell carousels
         const product_url = bestUrl(tile, base);
         if (!product_url || seen.has(product_url)) continue;
         seen.add(product_url);
+        const pp = pricePairFrom(leaf, tile);
         // keep the tile even if the name is weak/empty (generic alt) — JSON-LD
         // below may supply the real name for this URL; unnamed rows are dropped
         // at the end.
         out.push({
           brand: "", category: "", department: "",
-          name: bestName(tile, price) || "", price, product_url,
+          name: bestName(tile, pp.price) || "", price: pp.price, price_was: pp.price_was,
+          product_url,
           image_url: bestImage(tile),
           id: product_url,
         });
@@ -1486,7 +1518,7 @@
       } else if (!brand) { brand = "Cotton On"; }
       const composition = compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
       const productName = name || nameFromUrl(url || "");
-      const design = featuresFromDoc(doc).slice(0, 3).join("; ");   // first 3 Features bullets
+      const design = featuresFromDoc(doc).slice(0, 3).join("\n");   // first 3 Features bullets, one per line
       const category = breadcrumbCategory(doc, productName);
       return {
         composition, colorways: colors.join("; "), color_count: colorCount || "",
@@ -1760,7 +1792,7 @@
         parts.push(`${cat}: ${v}`);
       }
       return {
-        composition, colorways: colors.join("; "), design: parts.join("; ").slice(0, 400),
+        composition, colorways: colors.join("; "), design: parts.join("\n").slice(0, 400),
         brand, sizes: sizes.join("; "),
         reason: composition ? "" : "not_found",
       };
