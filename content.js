@@ -313,7 +313,16 @@ async function runStep(j) {
     } catch (e) {
       await report("Excel build failed: " + (e && e.message || e));
     }
-    const done = await g(); if (done) { done.active = false; await s(done); }
+    const done = await g();
+    if (done) {
+      done.active = false; await s(done);
+      // bring the tab back to where the scan was started — pagination usually
+      // left it on a "no more pages" 404. The job is now inactive, so this load
+      // won't restart a scan; a short delay lets the "Done" status show first.
+      if (done.startUrl && done.startUrl !== location.href) {
+        setTimeout(() => { try { location.href = done.startUrl; } catch (e) {} }, 1500);
+      }
+    }
   }
 }
 
@@ -322,9 +331,12 @@ async function startJob(opts) {
   opts = opts || {};
   // bind the job to THIS tab so browsing in other tabs can't stop or divert it
   const tabId = await myTabId();
-  // always a FRESH job tagged with this page's collection signature
+  // always a FRESH job tagged with this page's collection signature. startUrl is
+  // where the user launched the scan, so we can bring the tab back here when the
+  // run finishes (pagination usually leaves it on a "no more pages" 404).
   await s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
       totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false, tabId,
+      startUrl: location.href,
       filters: opts.filters || {}, sig: collectionSig(location.href), status: "Starting…" });
   // collection always begins at the first page, wherever the user started from.
   // Adapters whose pagination isn't ?page=N (e.g. SFCC's ?start=N&sz=M) provide
@@ -387,6 +399,11 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
 function ownsAndMatches(job, myTab, sig) {
   if (!job || !job.active || job.paused) return false;
   if (job.tabId != null && myTab != null && job.tabId !== myTab) return false; // another tab — hands off
+  // The list phase scrapes THIS page, so it must be the same collection. Later
+  // phases (detail/build) work from already-collected data via fetch/export, so
+  // a refresh resumes them in the owning tab no matter which page it landed on
+  // (e.g. the end-of-pagination 404) — refreshing never loses progress.
+  if (job.phase && job.phase !== "list") return true;
   return !!job.sig && job.sig === sig;                                          // same collection only
 }
 (async () => {
