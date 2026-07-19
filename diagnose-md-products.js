@@ -93,6 +93,37 @@
   log("--- bps[0].detail.composition:", j(bd.composition, 500));
   if (colors[0]) log("--- color[0].composition:", j(colors[0].composition, 500));
 
+  // IMAGE URL structure — the last unknown. image.url is just "/712" (a color
+  // code), so the absolute CDN URL is built from xmedia / xmediaDefaultSet.
+  log("");
+  log("--- IMAGE STRUCTURE ---");
+  log("    bps[0].detail.defaultImageType:", j(bd.defaultImageType));
+  log("    bps[0].detail.xmediaDefaultSet:", j(bd.xmediaDefaultSet, 500));
+  log("    bps[0].detail.xmedia:", j(bd.xmedia, 1200));
+  if (colors[0]) log("    color[0].image (full):", j(colors[0].image, 600));
+  // grab any absolute http image URL anywhere under the product (proves the CDN base)
+  const imgs = new Set();
+  (function walkImg(o, depth) {
+    if (!o || typeof o !== "object" || depth > 8 || imgs.size >= 4) return;
+    for (const k in o) {
+      const v = o[k];
+      if (typeof v === "string" && /^https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)/i.test(v)) imgs.add(v);
+      else if (typeof v === "object") walkImg(v, depth + 1);
+    }
+  })(p, 0);
+  log("    absolute image URLs found in product JSON:", imgs.size ? [...imgs].join("  |  ") : "(none — must build from xmedia path + CDN base)");
+
+  // ENUMERATION — can the adapter re-collect every loaded batch? List all
+  // productsArray requests the page already made (after a full scroll).
+  const paUrls = (performance.getEntriesByType("resource") || [])
+    .map(e => e.name).filter(n => /productsArray/i.test(n));
+  const idCount = paUrls.reduce((n, u) => n + ((u.match(/productIds=([^&]+)/) || [,""])[1].split(",").filter(Boolean).length), 0);
+  log("");
+  log("--- ENUMERATION: productsArray requests in perf timing:", paUrls.length, "| total productIds across them:", idCount);
+  // also: does a grid product link carry the id? (fallback path for detail fetch)
+  const a = document.querySelector('a[href*="' + String(p.id) + '"], a[href*="' + String(p.productUrlParam) + '"]');
+  log("--- sample grid product link:", a ? j(a.getAttribute("href"), 200) : "(no <a> href contains the product id)");
+
   // hunt any price-ish key anywhere under bps[0] so we don't miss the real one
   const seen = new Set();
   (function walk(o, path, depth) {
