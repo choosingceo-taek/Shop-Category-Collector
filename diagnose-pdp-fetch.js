@@ -86,6 +86,25 @@
   const comp = bodyText.match(/(?:composition|material|fabric|main)[^.\n]{0,80}\d{1,3}\s?%[^.\n]{0,60}/i);
   log("\n[composition text in raw HTML]:", comp ? cap(comp[0], 100) : "(not found)");
 
+  // 7) FEATURES (Key Design Details) — the bullet list under a "Features" heading
+  let fAnchor = null;
+  [...doc.querySelectorAll("h1,h2,h3,h4,h5,h6,strong,b,p,div,span,dt")].some(el => {
+    if (/^\s*features\s*:?\s*$/i.test(el.textContent || "")) { fAnchor = el; return true; }
+  });
+  let fUl = null;
+  if (fAnchor) {
+    let sib = fAnchor.nextElementSibling;
+    for (let i = 0; i < 5 && sib && !fUl; i++) { fUl = (sib.matches && sib.matches("ul,ol")) ? sib : (sib.querySelector && sib.querySelector("ul,ol")); sib = sib.nextElementSibling; }
+    if (!fUl && fAnchor.parentElement) fUl = fAnchor.parentElement.querySelector("ul,ol");
+  }
+  const feats = fUl ? [...fUl.querySelectorAll("li")].map(li => cap(li.textContent, 60)) : [];
+  log("\n[Features bullets in raw HTML]:", feats.length, JSON.stringify(feats.slice(0, 6)));
+
+  // 8) BREADCRUMB (category when cgid is empty)
+  const bc = [...doc.querySelectorAll('nav[aria-label*="readcrumb" i] a, [class*="readcrumb" i] a, [class*="readcrumb" i] li')]
+    .map(a => cap(a.textContent, 30)).filter(Boolean).slice(0, 8);
+  log("[breadcrumb DOM trail]:", JSON.stringify(bc));
+
   log("\n=== END (copy everything above) ===");
   const text = R.join("\n");
   console.log(text);

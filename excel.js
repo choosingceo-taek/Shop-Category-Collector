@@ -126,12 +126,25 @@
     const s = (rec.colorways && String(rec.colorways).trim());
     return s ? real(s) : check();
   }
-  function fieldColorCount(rec) {
-    // prefer an explicit count from the adapter (e.g. Cotton On swatch count),
-    // which is authoritative even when the individual colour names aren't known;
-    // otherwise derive it from the colorways list.
-    const n = (parseInt(rec.color_count) || 0) || colorList(rec).length;
+  function fieldColorCount(rec, familyCount) {
+    // Prefer an explicit count from the adapter (e.g. a PDP swatch count), then
+    // the "product family" count — on sites like Cotton On each colour is its
+    // own listing row sharing the product slug, so counting the rows that share
+    // a slug gives the true number of colours; otherwise the colorways list.
+    const n = (parseInt(rec.color_count) || 0) || (familyCount > 1 ? familyCount : 0) || colorList(rec).length;
     return n ? real(String(n)) : check();   // unknown colorways -> unknown count (red)
+  }
+  // group key: same site + same product slug (the segment before <pid>.html, or
+  // the last path segment). Colour variants of one product share this; unrelated
+  // products don't, so grouping can only ever unite genuine colour siblings.
+  function familyKey(rec) {
+    try {
+      const u = new URL(rec.product_url || "");
+      const segs = u.pathname.split("/").filter(Boolean);
+      const i = segs.findIndex(s => /\.html$/i.test(s));
+      const slug = i > 0 ? segs[i - 1] : segs.slice(-2, -1)[0];
+      return slug ? (u.host + "/" + slug.toLowerCase()) : "";
+    } catch (e) { return ""; }
   }
   function fieldComposition(rec) {
     if (rec.fabric_composition && String(rec.fabric_composition).trim())
@@ -218,6 +231,10 @@
 
     const { kept, dropped } = filterKept(items, ctx.filters);
 
+    // colour-variant families: how many kept rows share each product slug
+    const family = new Map();
+    for (const rec of kept) { const k = familyKey(rec); if (k) family.set(k, (family.get(k) || 0) + 1); }
+
     const wb = new ExcelJS.Workbook();
     wb.creator = "Fabric-Scanner";
     const ws = wb.addWorksheet("Products", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -251,7 +268,7 @@
         prices.cur,              // 7 Current Price (red pair when discounted)
         fieldSize(rec),          // 8
         fieldColorways(rec),     // 9
-        fieldColorCount(rec),    // 10 Color Count
+        fieldColorCount(rec, family.get(familyKey(rec))),   // 10 Color Count
         fieldComposition(rec),   // 11
         fieldDesign(rec),        // 12
       ];

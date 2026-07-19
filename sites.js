@@ -1088,6 +1088,59 @@
       return out;
     }
 
+    // Key design details: the PDP's "Features" bullet list (server-rendered in
+    // the same Description block as Composition, which already extracts fine).
+    // Take the first three bullets, per the user's spec.
+    function featuresFromDoc(doc) {
+      if (!doc.querySelectorAll) return [];
+      let anchor = null;
+      const cand = doc.querySelectorAll("h1,h2,h3,h4,h5,h6,strong,b,p,div,span,dt");
+      for (let i = 0; i < cand.length; i++) {
+        if (/^\s*features\s*:?\s*$/i.test(cand[i].textContent || "")) { anchor = cand[i]; break; }
+      }
+      let ul = null;
+      if (anchor) {
+        let sib = anchor.nextElementSibling;
+        for (let i = 0; i < 5 && sib && !ul; i++) {
+          if (sib.matches && sib.matches("ul,ol")) ul = sib;
+          else if (sib.querySelector) ul = sib.querySelector("ul,ol");
+          sib = sib.nextElementSibling;
+        }
+        if (!ul && anchor.parentElement) ul = anchor.parentElement.querySelector("ul,ol");
+      }
+      const lis = ul ? [...ul.querySelectorAll("li")] : [];
+      return lis.map(li => (li.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(s => s && s.length <= 200);
+    }
+
+    // Category from the breadcrumb when the URL has no cgid (Cotton On's BODY /
+    // Typo / etc. sub-brand pages use path-based categories, cgid= is empty).
+    function breadcrumbCategory(doc, productName) {
+      let trail = [];
+      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+        if (trail.length) return;
+        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+          if (n && /BreadcrumbList/i.test([].concat(n["@type"] || []).join(","))) {
+            trail = [].concat(n.itemListElement || [])
+              .map(e => (e && (e.name || (e.item && e.item.name))) || "").filter(Boolean);
+          }
+        });
+      });
+      if (!trail.length && doc.querySelector) {
+        const nav = doc.querySelector('nav[aria-label*="readcrumb" i], [class*="readcrumb" i]');
+        if (nav) trail = [...nav.querySelectorAll("a,li,span")]
+          .map(a => (a.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+      }
+      const uniq = [];
+      trail.forEach(t => {
+        if (/^home$/i.test(t)) return;
+        if (productName && t.toLowerCase() === String(productName).toLowerCase()) return;  // drop the product crumb
+        if (!uniq.some(x => x.toLowerCase() === t.toLowerCase())) uniq.push(t);
+      });
+      return uniq.slice(0, 3).join(" / ");
+    }
+
     function parseDetailDoc(doc, rawHtml, url) {
       let brand = "", name = "";
       const colors = [], sizes = [];
@@ -1151,9 +1204,12 @@
         brand = (og && og.getAttribute("content")) || "Cotton On";
       } else if (!brand) { brand = "Cotton On"; }
       const composition = compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
+      const productName = name || nameFromUrl(url || "");
+      const design = featuresFromDoc(doc).slice(0, 3).join("; ");   // first 3 Features bullets
+      const category = breadcrumbCategory(doc, productName);
       return {
         composition, colorways: colors.join("; "), color_count: colorCount || "",
-        design: "", brand, sizes: sizes.join("; "),
+        design, category, brand, sizes: sizes.join("; "),
         reason: composition ? "" : "not_found",
       };
     }
@@ -1244,6 +1300,7 @@
       _colourFromText: colourFromText,
       _nextPageUrl: nextPageUrl, _firstPageUrl: firstPageUrl, _gridPage: gridPage,
       _colorSwatches: colorSwatches, _cleanColourName: cleanColourName,
+      _featuresFromDoc: featuresFromDoc, _breadcrumbCategory: breadcrumbCategory,
     };
   })();
 
