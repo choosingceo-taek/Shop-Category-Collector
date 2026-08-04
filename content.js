@@ -352,6 +352,15 @@ async function runStep(j) {
             design: it.design || "", product_url: it.product_url || "", image_url: it.image_url || "",
           })),
         };
+        // Accumulate into the catalog (IndexedDB, service-worker side). The
+        // xlsx stays the immediate deliverable; the catalog is what makes the
+        // data reusable later without re-scanning the site.
+        try {
+          chrome.runtime.sendMessage({ type: "catalogPut", scan }, r => {
+            void chrome.runtime.lastError;
+            if (r && r.ok) report(`카탈로그에 저장됨 — 새 상품 ${r.added}, 갱신 ${r.updated}`);
+          });
+        } catch (e) {}
         const jsonName = filename.replace(/\.xlsx$/i, "") + ".json";
         const jb64 = btoa(unescape(encodeURIComponent(JSON.stringify(scan))));
         const jsonSaved = await new Promise(res => {

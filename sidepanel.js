@@ -250,6 +250,9 @@
   }
 
   // ---- wiring --------------------------------------------------------------
+  $("#catalog").addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") });
+  });
   $("#export").addEventListener("click", exportJson);
   $("#clear").addEventListener("click", () => {
     const n = store.items.filter(i => i.collectionId === store.activeId).length;

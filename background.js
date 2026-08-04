@@ -83,7 +83,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   } catch (e) { /* restricted page (chrome://, web store) — nothing to clip */ }
 });
 
+// The catalog lives in IndexedDB in the extension origin. The content script
+// can't reach it (it runs in the page's origin), so it posts finished scans
+// here and the worker upserts them — which is also what lets the catalog tab
+// and the side panel read the same data with no file passing.
+try { importScripts("store.js"); } catch (e) {}
+
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
+  // A finished scan -> accumulate into the catalog.
+  if (msg && msg.type === "catalogPut" && msg.scan) {
+    (async () => {
+      try {
+        const r = await self.CatalogStore.putScan(msg.scan);
+        send({ ok: true, ...r });
+      } catch (e) { send({ ok: false, error: String((e && e.message) || e) }); }
+    })();
+    return true;
+  }
   // Tell a content script which tab it runs in. A scan job is stored globally
   // (chrome.storage.local is shared by every tab), so the job records its
   // owning tab id and only that tab drives it — other tabs (e.g. the user

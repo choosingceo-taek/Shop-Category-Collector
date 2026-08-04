@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>상품 카탈로그</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg:#f9f9f7; --card:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --line:rgba(11,11,11,.11); --accent:#2a78d6; --accent-ink:#fff; --wash:rgba(42,120,214,.08);
+    --sale:#d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d0d0d; --card:#1a1a19; --ink:#fff; --ink2:#c3c2b7; --muted:#898781;
+      --line:rgba(255,255,255,.12); --accent:#3987e5; --wash:rgba(57,135,229,.14); --sale:#e66767; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  button, select, input { font:inherit; border-radius:9px; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); padding:8px 11px; }
+  button { cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--muted); }
+  button:disabled { opacity:.45; cursor:default; }
+  .primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+
+  header { position:sticky; top:0; z-index:5; background:var(--card);
+    border-bottom:1px solid var(--line); padding:14px 20px; }
+  .top { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  h1 { font-size:17px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  .stats { color:var(--muted); font-size:12.5px; }
+  .filters { display:flex; gap:8px; margin-top:11px; flex-wrap:wrap; align-items:center; }
+  .filters input[type=search] { min-width:230px; flex:1; }
+  .selbar { display:none; align-items:center; gap:10px; margin-top:10px; padding:9px 12px;
+    background:var(--wash); border-radius:9px; font-size:13px; }
+  .selbar.on { display:flex; }
+
+  main { padding:16px 20px 60px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:13px; }
+  .c { border:1px solid var(--line); border-radius:11px; background:var(--card); overflow:hidden;
+    display:flex; flex-direction:column; position:relative; }
+  .c.sel { border-color:var(--accent); box-shadow:0 0 0 2px var(--wash); }
+  .c .thumb { aspect-ratio:3/4; background:var(--line); display:block; width:100%; object-fit:cover; }
+  .c .body { padding:9px 10px 11px; display:flex; flex-direction:column; gap:3px; }
+  .c .bd { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+  .c .nm { font-size:12.5px; line-height:1.35; overflow:hidden; display:-webkit-box;
+    -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .c .pr { font-size:12.5px; font-weight:600; }
+  .c .pr s { color:var(--muted); font-weight:400; margin-left:5px; }
+  .c .pr.sale { color:var(--sale); }
+  .c .fb { font-size:11px; color:var(--ink2); }
+  .c a { color:inherit; text-decoration:none; }
+  .c .pick { position:absolute; top:8px; left:8px; width:20px; height:20px; cursor:pointer; }
+  .empty { text-align:center; color:var(--muted); padding:70px 20px; line-height:1.8; }
+  .empty b { color:var(--ink); }
+</style>
+</head>
+<body>
+  <header>
+    <div class="top">
+      <h1>상품 카탈로그</h1>
+      <span class="stats" id="stats">불러오는 중…</span>
+    </div>
+    <div class="filters">
+      <input type="search" id="q" placeholder="상품명·원단·색상 검색">
+      <select id="brand"><option value="">모든 브랜드</option></select>
+      <select id="cat"><option value="">모든 카테고리</option></select>
+      <select id="src"><option value="">모든 사이트</option></select>
+      <select id="sort">
+        <option value="new">최근 수집순</option>
+        <option value="priceUp">가격 낮은순</option>
+        <option value="priceDown">가격 높은순</option>
+        <option value="name">이름순</option>
+      </select>
+      <button id="reset">필터 해제</button>
+    </div>
+    <div class="selbar" id="selbar">
+      <b id="selcount">0개 선택</b>
+      <select id="proj"></select>
+      <button class="primary" id="addproj">프로젝트에 담기</button>
+      <button id="newproj">＋ 새 프로젝트</button>
+      <button id="selnone">선택 해제</button>
+    </div>
+  </header>
+  <main><div class="grid" id="grid"></div></main>
+  <script src="store.js"></script>
+  <script src="catalog.js"></script>
+</body>
+</html>
