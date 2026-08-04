@@ -44,21 +44,53 @@
     fill($("#src"), new Set(items.map(i => i.site || i.source).filter(Boolean)), "모든 사이트");
   }
   function fillProjects() {
-    const sel = $("#proj");
-    const cur = sel.value;
+    const sel = $("#proj"), cur = sel.value;
     sel.innerHTML = projects.length
       ? projects.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (${(p.keys || []).length})</option>`).join("")
       : `<option value="">프로젝트 없음</option>`;
     if (cur) sel.value = cur;
+    // the same list also filters the catalog down to one project's contents
+    const f = $("#projf"), curF = f.value;
+    f.innerHTML = `<option value="">모든 상품</option>` +
+      projects.map(p => `<option value="${esc(p.id)}">📁 ${esc(p.name)} (${(p.keys || []).length})</option>`).join("");
+    f.value = curF;
+  }
+
+  // Window for the period filter, on addedAt — the moment a product FIRST
+  // entered the catalog. That is what "이번 주 신규" means to a designer: newly
+  // seen this week, not merely re-scanned. Weeks start Monday.
+  function periodRange(v) {
+    if (!v) return null;
+    const now = new Date();
+    if (/^\d+$/.test(v)) return { from: Date.now() - parseInt(v, 10) * 864e5, to: Infinity };
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dow = (d.getDay() + 6) % 7;                 // Mon=0
+    const monday = new Date(d); monday.setDate(d.getDate() - dow);
+    if (v === "thisweek") return { from: monday.getTime(), to: Infinity };
+    if (v === "lastweek") {
+      const prev = new Date(monday); prev.setDate(monday.getDate() - 7);
+      return { from: prev.getTime(), to: monday.getTime() };
+    }
+    return null;
   }
 
   function visible() {
     const q = $("#q").value.trim().toLowerCase();
     const b = $("#brand").value, c = $("#cat").value, s = $("#src").value;
+    const range = periodRange($("#period").value);
+    const projId = $("#projf").value;
+    const projKeys = projId
+      ? new Set((projects.find(p => p.id === projId) || {}).keys || [])
+      : null;
     let out = items.filter(i => {
       if (b && i.brand !== b) return false;
       if (c && i.category !== c) return false;
       if (s && (i.site || i.source) !== s) return false;
+      if (projKeys && !projKeys.has(i.key)) return false;
+      if (range) {
+        const t = i.addedAt || 0;
+        if (!(t >= range.from && t < range.to)) return false;
+      }
       if (q) {
         const hay = [i.name, i.fabric_composition, i.colorways, i.brand, i.design].join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
@@ -206,11 +238,16 @@
     btn.textContent = "리포트 만드는 중…";
     const b = $("#brand").value, c = $("#cat").value, s = $("#src").value;
     const scope = [b, c, s].filter(Boolean).join(" · ");
+    // say plainly which slice this is, so the file still explains itself later
+    const periodLabel = ({ "7": "최근 7일 수집", "14": "최근 14일 수집", "30": "최근 30일 수집",
+      thisweek: "이번 주 신규", lastweek: "지난 주 신규" })[$("#period").value] || "";
+    const proj = projects.find(p => p.id === $("#projf").value);
     const today = new Date().toISOString().slice(0, 10);
     const html = window.ReportGen.build(rows, images, {
-      title: scope ? `${scope} 마켓 리서치` : "마켓 리서치 리포트",
-      subtitle: scope ? "" : "카탈로그 전체",
-      scope, generatedAt: today,
+      title: proj ? proj.name : (scope ? `${scope} 마켓 리서치` : "마켓 리서치 리포트"),
+      subtitle: [periodLabel, proj ? scope : ""].filter(Boolean).join(" · ") || (scope ? "" : "카탈로그 전체"),
+      scope, period: periodLabel, generatedAt: today,
+      template: $("#tmpl").value,
       source: [...new Set(rows.map(r => r.site || r.source).filter(Boolean))].join(", "),
     });
 
@@ -229,10 +266,10 @@
   }
   $("#report").addEventListener("click", makeReport);
 
-  ["q", "brand", "cat", "src", "sort"].forEach(id =>
+  ["q", "brand", "cat", "src", "sort", "period", "projf"].forEach(id =>
     $("#" + id).addEventListener("input", render));
   $("#reset").addEventListener("click", () => {
-    $("#q").value = ""; $("#brand").value = ""; $("#cat").value = ""; $("#src").value = "";
+    ["q", "brand", "cat", "src", "period", "projf"].forEach(id => { $("#" + id).value = ""; });
     $("#sort").value = "new"; render();
   });
 

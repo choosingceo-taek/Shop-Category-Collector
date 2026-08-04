@@ -66,6 +66,17 @@
       <select id="brand"><option value="">모든 브랜드</option></select>
       <select id="cat"><option value="">모든 카테고리</option></select>
       <select id="src"><option value="">모든 사이트</option></select>
+      <select id="period" title="처음 수집된 시점 기준">
+        <option value="">전체 기간</option>
+        <option value="7">최근 7일 수집</option>
+        <option value="14">최근 14일 수집</option>
+        <option value="30">최근 30일 수집</option>
+        <option value="thisweek">이번 주 신규</option>
+        <option value="lastweek">지난 주 신규</option>
+      </select>
+      <select id="projf" title="프로젝트 폴더">
+        <option value="">모든 상품</option>
+      </select>
       <select id="sort">
         <option value="new">최근 수집순</option>
         <option value="priceUp">가격 낮은순</option>
@@ -73,6 +84,11 @@
         <option value="name">이름순</option>
       </select>
       <button id="reset">필터 해제</button>
+      <select id="tmpl" title="리포트 템플릿">
+        <option value="standard">기본 리포트</option>
+        <option value="lookbook">비주얼 룩북</option>
+        <option value="data">데이터 시트</option>
+      </select>
       <button id="report" class="primary" title="지금 보이는 상품으로 리포트 HTML을 만듭니다">📄 리포트 만들기</button>
     </div>
     <div class="selbar" id="selbar">

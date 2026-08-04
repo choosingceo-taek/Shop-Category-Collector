@@ -118,8 +118,7 @@
     }));
 
     const cards = norm.map(p => {
-      const raw = (items || []).find(x => (x.product_url || "") === p.product_url) || {};
-      const img = images[p.product_url] || raw.image_url_embedded || "";
+      const img = images[p.product_url] || "";
       const sale = p.onSale;
       return `<figure class="p">
         ${img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`}
@@ -132,10 +131,78 @@
         </figcaption></figure>`;
     }).join("");
 
+    // Data-sheet table: every collected field, compact, for close analysis.
+    const table = `<table class="tb"><thead><tr>
+        <th></th><th>브랜드</th><th>상품명</th><th>카테고리</th><th>현재가</th><th>정가</th>
+        <th>원단</th><th>색상</th><th>사이즈</th></tr></thead><tbody>` +
+      norm.map(p => {
+        const img = images[p.product_url] || "";
+        const raw = (items || []).find(x => (x.product_url || "") === p.product_url) || {};
+        return `<tr>
+          <td>${img ? `<img class="tt" src="${img}" alt="">` : ""}</td>
+          <td>${esc(p.brand)}</td>
+          <td class="tn">${esc(p.name)}</td>
+          <td>${esc(p.category)}</td>
+          <td class="num${p.onSale ? " sale" : ""}">${p.price != null ? money(p.price) : "—"}</td>
+          <td class="num">${p.priceWas != null ? money(p.priceWas) : "—"}</td>
+          <td>${esc(p.fibers.map(f => (f.pct != null ? f.pct + "% " : "") + f.fiber).join(", "))}</td>
+          <td>${esc(p.colors.join(", "))}</td>
+          <td>${esc(raw.size_range || "")}</td></tr>`;
+      }).join("") + `</tbody></table>`;
+
+    // Lookbook: images lead, numbers recede — the visual read a design team wants.
+    const plates = norm.map(p => {
+      const img = images[p.product_url] || "";
+      return `<figure class="lb">
+        ${img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`}
+        <figcaption>
+          <b>${esc(p.name || "")}</b>
+          <span>${esc([p.brand, p.price != null ? money(p.price) : ""].filter(Boolean).join(" · "))}</span>
+          ${p.fibers.length ? `<span class="lf">${esc(p.fibers.map(f => (f.pct != null ? f.pct + "% " : "") + f.fiber).join(", "))}</span>` : ""}
+        </figcaption></figure>`;
+    }).join("");
+
     const scopeBits = [];
+    if (meta.period) scopeBits.push(meta.period);
     if (meta.scope) scopeBits.push(meta.scope);
     if (agg.brandShare.length) scopeBits.push(`브랜드 ${agg.brandShare.length}`);
     if (agg.categoryShare.length) scopeBits.push(`카테고리 ${agg.categoryShare.length}`);
+
+    // Templates change PRESENTATION only — the figures above are identical in
+    // all three, so two teams reading different layouts never see different
+    // numbers. standard = stats+charts+grid, lookbook = images lead,
+    // data = full table for close analysis.
+    const tmpl = meta.template || "standard";
+    const summary = `<h2>요약</h2>
+<div class="tiles">
+  ${statTile("수집 상품", agg.count.toLocaleString() + "개")}
+  ${statTile("평균가", money(agg.avgPrice), agg.medianPrice != null ? "중앙값 " + money(agg.medianPrice) : "")}
+  ${statTile("가격대", agg.minPrice != null ? money(agg.minPrice) + " – " + money(agg.maxPrice) : "—")}
+  ${statTile("세일 중", agg.onSalePct + "%", agg.avgDiscountPct != null ? "평균 " + Math.round(agg.avgDiscountPct) + "% 인하" : "")}
+  ${statTile("원단 확인", agg.compositionKnownPct + "%", "조성 수집된 비율")}
+  ${statTile("색상 종류", agg.distinctColors + "종")}
+</div>`;
+    const charts = `<h2>가격 분포</h2>
+${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다.</p>`}
+<div class="two">
+  <div><h2>원단 (상품 중 사용 비율)</h2>
+    ${fibers.length ? barsH(fibers, { alt: "원단별 사용 비율", labelW: 140 }) : `<p class="sub">조성 정보가 없습니다.</p>`}</div>
+  <div><h2>색상 빈도</h2>
+    ${colors.length ? barsH(colors, { alt: "색상 빈도", labelW: 140 }) : `<p class="sub">색상 정보가 없습니다.</p>`}</div>
+</div>
+<div class="two">
+  <div><h2>브랜드</h2>${brands.length ? barsH(brands, { alt: "브랜드별 상품 수", labelW: 140 }) : ""}</div>
+  <div><h2>카테고리</h2>${cats.length ? barsH(cats, { alt: "카테고리별 상품 수", labelW: 140 }) : ""}</div>
+</div>`;
+
+    const bodyByTemplate = {
+      standard: summary + charts + `<h2>상품 (${agg.count.toLocaleString()})</h2><div class="grid">${cards}</div>`,
+      lookbook: `<div class="lbgrid">${plates}</div>` + summary +
+        `<div class="two"><div><h2>원단</h2>${fibers.length ? barsH(fibers, { labelW: 140 }) : ""}</div>` +
+        `<div><h2>색상</h2>${colors.length ? barsH(colors, { labelW: 140 }) : ""}</div></div>`,
+      data: summary + `<h2>상품 상세 (${agg.count.toLocaleString()})</h2>${table}` + charts,
+    };
+    const body = bodyByTemplate[tmpl] || bodyByTemplate.standard;
 
     return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
@@ -174,7 +241,27 @@
   .pf { font-size:10.5px; color:${INK2}; }
   footer { margin-top:40px; padding-top:14px; border-top:1px solid ${GRID};
     color:${MUTED}; font-size:11.5px; }
-  @media print { body { background:#fff; } .sheet { box-shadow:none; max-width:none; } }
+  /* lookbook — images lead, text recedes */
+  .lbgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:20px; margin-bottom:8px; }
+  .lb { margin:0; }
+  .lb img, .lb .ph { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:3px;
+    background:${GRID}; display:block; }
+  .lb figcaption { display:flex; flex-direction:column; gap:2px; margin-top:9px; }
+  .lb figcaption b { font-size:12.5px; font-weight:600; line-height:1.35; }
+  .lb figcaption span { font-size:11.5px; color:${INK2}; }
+  .lb .lf { font-size:11px; color:${MUTED}; }
+  /* data sheet — everything collected, compact */
+  .tb { width:100%; border-collapse:collapse; font-size:11.5px; }
+  .tb th { text-align:left; font-weight:600; color:${INK2}; border-bottom:1.5px solid ${INK};
+    padding:7px 8px; white-space:nowrap; }
+  .tb td { border-bottom:1px solid ${GRID}; padding:7px 8px; vertical-align:top; }
+  .tb tr:nth-child(even) td { background:#faf9f6; }
+  .tb .tn { min-width:180px; }
+  .tb .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tb .num.sale { color:#d03b3b; font-weight:600; }
+  .tb img.tt { width:40px; height:53px; object-fit:cover; border-radius:4px; display:block; }
+  @media print { body { background:#fff; } .sheet { box-shadow:none; max-width:none; }
+    .p, .lb, .tb tr { break-inside:avoid; } }
 </style></head>
 <body><div class="sheet">
 <header>
@@ -184,33 +271,7 @@
     scopeBits.length ? " · " + esc(scopeBits.join(" · ")) : ""}</div>
 </header>
 
-<h2>요약</h2>
-<div class="tiles">
-  ${statTile("수집 상품", agg.count.toLocaleString() + "개")}
-  ${statTile("평균가", money(agg.avgPrice), agg.medianPrice != null ? "중앙값 " + money(agg.medianPrice) : "")}
-  ${statTile("가격대", agg.minPrice != null ? money(agg.minPrice) + " – " + money(agg.maxPrice) : "—")}
-  ${statTile("세일 중", agg.onSalePct + "%", agg.avgDiscountPct != null ? "평균 " + Math.round(agg.avgDiscountPct) + "% 인하" : "")}
-  ${statTile("원단 확인", agg.compositionKnownPct + "%", "조성 수집된 비율")}
-  ${statTile("색상 종류", agg.distinctColors + "종")}
-</div>
-
-<h2>가격 분포</h2>
-${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다.</p>`}
-
-<div class="two">
-  <div><h2>원단 (상품 중 사용 비율)</h2>
-    ${fibers.length ? barsH(fibers, { alt: "원단별 사용 비율", labelW: 140 }) : `<p class="sub">조성 정보가 없습니다.</p>`}</div>
-  <div><h2>색상 빈도</h2>
-    ${colors.length ? barsH(colors, { alt: "색상 빈도", labelW: 140 }) : `<p class="sub">색상 정보가 없습니다.</p>`}</div>
-</div>
-
-<div class="two">
-  <div><h2>브랜드</h2>${brands.length ? barsH(brands, { alt: "브랜드별 상품 수", labelW: 140 }) : ""}</div>
-  <div><h2>카테고리</h2>${cats.length ? barsH(cats, { alt: "카테고리별 상품 수", labelW: 140 }) : ""}</div>
-</div>
-
-<h2>상품 (${agg.count.toLocaleString()})</h2>
-<div class="grid">${cards}</div>
+${body}
 
 <footer>
   이 파일은 생성 시점의 정보를 그대로 담고 있습니다. 이미지와 수치가 파일 안에 저장되어
