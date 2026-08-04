@@ -47,6 +47,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     } catch (e) { send({ ok: false, error: String((e && e.message) || e) }); }
     return true;
   }
+  // Generic base64 download (e.g. the companion scan JSON for the Report app).
+  if (msg && msg.type === "downloadFile" && msg.b64 && msg.filename) {
+    try {
+      chrome.downloads.download({
+        url: "data:" + (msg.mime || "application/octet-stream") + ";base64," + msg.b64,
+        filename: String(msg.filename).replace(/[^\w.-]+/g, "_"),
+        saveAs: false,
+      }, id => {
+        const err = chrome.runtime.lastError;
+        send({ ok: !err && id != null, error: err && err.message });
+      });
+    } catch (e) { send({ ok: false, error: String((e && e.message) || e) }); }
+    return true;
+  }
   if (msg && msg.type === "fetchImage" && msg.url) {
     (async () => {
       try {

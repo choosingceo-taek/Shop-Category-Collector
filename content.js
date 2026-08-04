@@ -329,6 +329,46 @@ async function runStep(j) {
         document.body.appendChild(el); el.click(); el.remove();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       }
+      // Companion JSON — the same kept rows as clean data, for the Report app
+      // (market-research dashboards). Same base name, ".json". No new permissions:
+      // it's just a second download, exactly like the xlsx.
+      try {
+        const keptItems = [].concat.apply([], Object.values(kept || {}));
+        const scan = {
+          meta: {
+            schema: "shop-scan/1",
+            source: a.id, site: a.label,
+            brand: (j.items[0] && j.items[0].brand) || "",
+            category: (j.items[0] && j.items[0].category) || "",
+            url: j.startUrl || location.href,
+            scannedAt: new Date().toISOString(),
+            count: total,
+          },
+          items: keptItems.map(it => ({
+            brand: it.brand || "", name: it.name || "", category: it.category || "",
+            price: it.price || "", price_was: it.price_was || "",
+            colorways: it.colorways || "", color_count: it.color_count || "",
+            size_range: it.size_range || "", fabric_composition: it.fabric_composition || "",
+            design: it.design || "", product_url: it.product_url || "", image_url: it.image_url || "",
+          })),
+        };
+        const jsonName = filename.replace(/\.xlsx$/i, "") + ".json";
+        const jb64 = btoa(unescape(encodeURIComponent(JSON.stringify(scan))));
+        const jsonSaved = await new Promise(res => {
+          try {
+            chrome.runtime.sendMessage({ type: "downloadFile", filename: jsonName, b64: jb64, mime: "application/json" },
+              r => res(!chrome.runtime.lastError && !!(r && r.ok)));
+          } catch (e) { res(false); }
+        });
+        if (!jsonSaved) {
+          const jblob = new Blob([JSON.stringify(scan)], { type: "application/json" });
+          const jurl = URL.createObjectURL(jblob);
+          const je = document.createElement("a");
+          je.href = jurl; je.download = jsonName;
+          document.body.appendChild(je); je.click(); je.remove();
+          setTimeout(() => URL.revokeObjectURL(jurl), 5000);
+        }
+      } catch (e) { /* JSON is a bonus — never fail the run over it */ }
       await report(`Done: ${total} rows${dropSummary ? " · excluded (" + dropSummary + ")" : ""} · ${j.items.length} collected`);
     } catch (e) {
       await report("Excel build failed: " + (e && e.message || e));

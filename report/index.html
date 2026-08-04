@@ -1,0 +1,689 @@
+<title>Market Research Board — 주차별 트렌드</title>
+<style>
+  .app {
+    color-scheme: light;
+    --surface-1: #fcfcfb; --plane: #f9f9f7;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --good: #0ca30c; --crit: #d03b3b;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .app {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --plane: #0d0d0d;
+      --text-primary: #fff; --text-secondary: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    }
+  }
+  :root[data-theme="dark"] .app {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --plane: #0d0d0d;
+    --text-primary: #fff; --text-secondary: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  }
+  * { box-sizing: border-box; }
+  .app {
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--plane); color: var(--text-primary);
+    padding: 24px 20px 64px; min-height: 100vh;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--text-secondary); margin: 0 0 20px; font-size: 14px; }
+  h2 { font-size: 16px; margin: 28px 0 12px; letter-spacing: -.005em; }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+  }
+  /* drop zone */
+  #drop {
+    border: 1.5px dashed var(--axis); border-radius: var(--radius);
+    padding: 26px; text-align: center; color: var(--text-secondary);
+    background: var(--surface-1); cursor: pointer; transition: .15s;
+  }
+  #drop.over { border-color: var(--s1); background: color-mix(in oklab, var(--s1) 7%, var(--surface-1)); }
+  #drop b { color: var(--text-primary); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 14px 0; }
+  button, select {
+    font: inherit; padding: 7px 13px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer;
+  }
+  button.primary { background: var(--s1); color: #fff; border-color: transparent; }
+  button:disabled { opacity: .45; cursor: default; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 20px 0 4px; flex-wrap: wrap; }
+  .tab { padding: 9px 15px; border: 0; background: none; color: var(--text-secondary); border-bottom: 2px solid transparent; border-radius: 0; }
+  .tab[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--s1); font-weight: 600; }
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .tile .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .tile .v { font-size: 26px; font-weight: 650; margin-top: 3px; letter-spacing: -.02em; }
+  .tile .d { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .up { color: var(--good); } .down { color: var(--crit); }
+  /* bars */
+  .bars { display: grid; gap: 7px; }
+  .bar { display: grid; grid-template-columns: 130px 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+  .bar .lab { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar .track { background: color-mix(in oklab, var(--axis) 30%, transparent); border-radius: 4px; height: 16px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 4px; }
+  .bar .val { color: var(--text-primary); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; vertical-align: -1px; margin-right: 6px; border: 1px solid var(--border); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--grid); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; }
+  /* inspo board */
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .shot { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .shot img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; background: var(--grid); }
+  .shot .m { padding: 8px 9px; font-size: 12px; }
+  .shot .n { color: var(--text-primary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .shot .p { color: var(--text-secondary); margin-top: 2px; }
+  .empty { color: var(--muted); padding: 26px; text-align: center; }
+  /* ---- MI board: image-led, chips and tags rather than KPI tiles ---- */
+  .wk { margin: 0 0 34px; }
+  .wk-head { display: flex; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--text-primary); margin-bottom: 16px; flex-wrap: wrap; }
+  .wk-no { font-size: 21px; font-weight: 680; letter-spacing: -.02em; }
+  .wk-meta { color: var(--text-secondary); font-size: 13px; }
+  .wk-meta b { color: var(--text-primary); font-weight: 600; }
+  .mi-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 22px; }
+  @media (max-width: 860px) { .mi-grid { grid-template-columns: 1fr; } }
+  .strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 9px; }
+  .strip .shot img { aspect-ratio: 3/4; }
+  .strip .m { padding: 6px 7px; }
+  .strip .n { font-size: 11.5px; line-height: 1.35; }
+  .strip .p { font-size: 11px; }
+  .blk { margin-bottom: 18px; }
+  .blk-t { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+  /* colour chips — the palette IS the visual, names sit under each chip */
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip { width: 62px; }
+  .chip .sw { width: 62px; height: 62px; border-radius: 8px; border: 1px solid var(--border); }
+  .chip .cn { font-size: 11px; margin-top: 5px; color: var(--text-primary); line-height: 1.25; }
+  .chip .cp { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* fabric mix as one proportional band */
+  .band { display: flex; height: 26px; border-radius: 6px; overflow: hidden; gap: 2px; }
+  .band > div { min-width: 3px; }
+  .bandkey { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+  .bandkey span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  /* detail + keyword tags */
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-size: 12px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
+  .tag i { font-style: normal; color: var(--muted); }
+  .tag.up { border-color: color-mix(in oklab, var(--s3) 55%, var(--border)); }
+  .tag.new { border-color: color-mix(in oklab, var(--s2) 55%, var(--border)); }
+  .facet { margin-bottom: 10px; }
+  .facet-l { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+  .pricebar { display: flex; align-items: baseline; gap: 14px; font-size: 13px; color: var(--text-secondary); flex-wrap: wrap; }
+  .pricebar b { font-size: 19px; color: var(--text-primary); font-weight: 650; letter-spacing: -.01em; }
+  .movers { display: grid; gap: 5px; font-size: 12.5px; }
+  .mv { display: flex; justify-content: space-between; gap: 10px; }
+  .mv .d { font-variant-numeric: tabular-nums; }
+  .scanlist { display: grid; gap: 6px; font-size: 13px; }
+  .scanrow { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); }
+  .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px 6px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+</style>
+
+<div class="app">
+<div class="wrap">
+  <h1>Weekly Market Intelligence</h1>
+  <p class="sub">스캔한 <b>.json</b>을 올리면 주차별 MI 보드 — 키 아이템 · 컬러 · 원단 · 디테일 — 가 자동으로 만들어집니다. 데이터는 이 브라우저에만 저장됩니다(서버 전송 없음).</p>
+
+  <div id="drop">
+    <b>스캔 JSON을 여기로 끌어다 놓기</b><br>
+    <span style="font-size:13px">또는 클릭해서 선택 · 여러 개 한 번에 가능</span>
+    <input type="file" id="file" accept=".json,application/json" multiple hidden>
+  </div>
+
+  <div class="row">
+    <span id="count" style="color:var(--text-secondary);font-size:13px"></span>
+    <span style="flex:1"></span>
+    <button id="demo">샘플 데이터로 보기</button>
+    <button id="clear">전체 삭제</button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-t="board" aria-selected="true">주차별 MI 보드</button>
+    <button class="tab" role="tab" data-t="inspo" aria-selected="false">Inspo 보드</button>
+    <button class="tab" role="tab" data-t="compare" aria-selected="false">주차 비교</button>
+    <button class="tab" role="tab" data-t="overview" aria-selected="false">수치 보기</button>
+    <button class="tab" role="tab" data-t="data" aria-selected="false">스캔 목록</button>
+  </div>
+
+  <div id="view"></div>
+</div>
+</div>
+
+<script src="report.js"></script>
+<script>
+(function () {
+  "use strict";
+  const R = window.ReportCalc;
+  const $ = s => document.querySelector(s);
+  const el = (t, a, kids) => {
+    const n = document.createElement(t);
+    if (a) for (const k in a) {
+      if (k === "class") n.className = a[k];
+      else if (k === "html") n.innerHTML = a[k];
+      else if (k === "text") n.textContent = a[k];
+      else n.setAttribute(k, a[k]);
+    }
+    [].concat(kids || []).forEach(c => c && n.appendChild(typeof c === "string" ? document.createTextNode(c) : c));
+    return n;
+  };
+  const money = n => n == null ? "—" : "$" + n.toFixed(n % 1 ? 2 : 0);
+  const pct = n => n == null ? "—" : Math.round(n) + "%";
+  const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
+
+  // ---- storage: IndexedDB-free, localStorage is plenty for scan JSON ------
+  const KEY = "mrb_scans_v1";
+  let scans = [];
+  function load() { try { scans = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { scans = []; } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(scans)); } catch (e) { alert("저장 공간이 부족합니다. 오래된 스캔을 지워주세요."); } }
+
+  // ---- ingest ------------------------------------------------------------
+  function addScan(obj, filename) {
+    if (!obj || !Array.isArray(obj.items)) return false;
+    obj.meta = obj.meta || {};
+    if (!obj.meta.scannedAt) obj.meta.scannedAt = new Date().toISOString();
+    obj.meta.file = filename || obj.meta.file || "";
+    obj.id = obj.meta.scannedAt + "|" + (obj.meta.file || Math.random());
+    if (scans.some(s => s.id === obj.id)) return false;   // same file twice
+    scans.push(obj);
+    return true;
+  }
+  function readFiles(files) {
+    let done = 0, added = 0;
+    [...files].forEach(f => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        try { if (addScan(JSON.parse(fr.result), f.name)) added++; } catch (e) {}
+        if (++done === files.length) { save(); render(); }
+      };
+      fr.onerror = () => { if (++done === files.length) { save(); render(); } };
+      fr.readAsText(f);
+    });
+  }
+
+  // ---- chart primitives (SVG-free bars keep it dependency-light) ---------
+  function barList(rows, opts) {
+    opts = opts || {};
+    const max = Math.max(1, ...rows.map(r => r.value));
+    const box = el("div", { class: "bars" });
+    rows.slice(0, opts.limit || 10).forEach((r, i) => {
+      const w = Math.max(2, Math.round(r.value / max * 100));
+      const color = opts.colorFor ? opts.colorFor(r, i) : SERIES[0];
+      box.appendChild(el("div", { class: "bar" }, [
+        el("div", { class: "lab", title: r.key }, [
+          opts.swatch ? el("span", { class: "swatch", style: "background:" + swatchColor(r.key) }) : null, r.key]),
+        el("div", { class: "track" }, [el("div", { class: "fill", style: `width:${w}%;background:${color}` })]),
+        el("div", { class: "val", text: opts.fmt ? opts.fmt(r) : String(r.value) }),
+      ]));
+    });
+    return box;
+  }
+  // map a colour NAME to an approximate swatch (visual aid only; the label is authoritative)
+  function swatchColor(name) {
+    const n = String(name).toLowerCase();
+    const map = { black:"#111", white:"#fff", cream:"#f3ead6", ecru:"#efe6d2", navy:"#1b2a52", blue:"#2a78d6",
+      red:"#d03b3b", pink:"#e87ba4", green:"#0ca30c", brown:"#6b4a32", beige:"#e0d3bb", grey:"#9a9a95", gray:"#9a9a95",
+      yellow:"#eda100", orange:"#eb6834", purple:"#6b4aa7", burgundy:"#6d2233", khaki:"#8f8760", silver:"#c9c9c4", gold:"#c9a227" };
+    for (const k in map) if (n.includes(k)) return map[k];
+    return "var(--axis)";
+  }
+  function histogram(h) {
+    if (!h.buckets.length) return el("div", { class: "empty", text: "가격 정보 없음" });
+    const max = Math.max(...h.buckets.map(b => b.count));
+    const wrap = el("div", { style: "display:flex;align-items:flex-end;gap:3px;height:130px;padding-top:6px" });
+    h.buckets.forEach(b => {
+      const hgt = Math.max(2, Math.round(b.count / max * 108));
+      wrap.appendChild(el("div", { style: "flex:1;display:flex;flex-direction:column;align-items:center;gap:3px" }, [
+        el("div", { style: "font-size:11px;color:var(--text-secondary);font-variant-numeric:tabular-nums", text: b.count || "" }),
+        el("div", { title: `$${Math.round(b.lo)}–$${Math.round(b.hi)}: ${b.count}개`,
+          style: `width:100%;height:${hgt}px;background:var(--s1);border-radius:4px 4px 0 0` }),
+        el("div", { style: "font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums", text: "$" + Math.round(b.lo) }),
+      ]));
+    });
+    return wrap;
+  }
+  // multi-week line chart (one measure), direct-labelled ends
+  function lineChart(points, opts) {
+    opts = opts || {};
+    const vals = points.map(p => p.v).filter(v => v != null);
+    if (vals.length < 2) return el("div", { class: "empty", text: "주차가 2개 이상이면 추이가 표시됩니다" });
+    const W = 640, H = 170, P = { l: 44, r: 46, t: 14, b: 26 };
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const span = (max - min) || 1;
+    const x = i => P.l + i * (W - P.l - P.r) / Math.max(1, points.length - 1);
+    const y = v => P.t + (1 - (v - min) / span) * (H - P.t - P.b);
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", "100%"); svg.setAttribute("role", "img");
+    const mk = (t, a) => { const n = document.createElementNS("http://www.w3.org/2000/svg", t); for (const k in a) n.setAttribute(k, a[k]); return n; };
+    // baseline + gridline
+    svg.appendChild(mk("line", { x1: P.l, y1: H - P.b, x2: W - P.r, y2: H - P.b, stroke: "var(--axis)", "stroke-width": 1 }));
+    const d = points.map((p, i) => (p.v == null ? null : `${i ? "L" : "M"}${x(i)},${y(p.v)}`)).filter(Boolean).join(" ");
+    svg.appendChild(mk("path", { d, fill: "none", stroke: opts.color || "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    points.forEach((p, i) => {
+      if (p.v == null) return;
+      svg.appendChild(mk("circle", { cx: x(i), cy: y(p.v), r: 4, fill: opts.color || "var(--s1)", stroke: "var(--surface-1)", "stroke-width": 2 }));
+      const lab = mk("text", { x: x(i), y: H - 9, "text-anchor": "middle", fill: "var(--muted)", "font-size": 10 });
+      lab.textContent = p.k.replace(/^\d{4}-/, "");
+      svg.appendChild(lab);
+    });
+    // direct-label the last point (relief for the contrast WARN)
+    const last = points.filter(p => p.v != null).pop();
+    if (last) {
+      const li = points.indexOf(last);
+      const tx = mk("text", { x: x(li) + 8, y: y(last.v) + 4, fill: "var(--text-primary)", "font-size": 12, "font-weight": 600 });
+      tx.textContent = opts.fmt ? opts.fmt(last.v) : last.v;
+      svg.appendChild(tx);
+    }
+    return svg;
+  }
+  function tile(k, v, d, cls) {
+    return el("div", { class: "tile" }, [
+      el("div", { class: "k", text: k }),
+      el("div", { class: "v", text: v }),
+      d ? el("div", { class: "d " + (cls || ""), text: d }) : null,
+    ]);
+  }
+  function section(title, node) { return el("div", {}, [el("h2", { text: title }), node]); }
+  function card(node) { return el("div", { class: "card" }, [node]); }
+
+  // ---- views -------------------------------------------------------------
+  let tab = "board";
+  const allItems = () => [].concat(...scans.map(s => s.items || []));
+
+  function viewOverview() {
+    const agg = R.aggregate({ items: allItems() });
+    const v = el("div");
+    v.appendChild(el("div", { class: "tiles" }, [
+      tile("상품 수", String(agg.count)),
+      tile("평균가", money(agg.avgPrice), `중앙값 ${money(agg.medianPrice)}`),
+      tile("가격대", agg.minPrice == null ? "—" : `${money(agg.minPrice)}–${money(agg.maxPrice)}`),
+      tile("세일 비율", pct(agg.onSalePct), agg.avgDiscountPct ? `평균 ${pct(agg.avgDiscountPct)} 인하` : ""),
+      tile("원단 확인", pct(agg.compositionKnownPct), `색상 ${agg.distinctColors}종 · 원단 ${agg.distinctFibers}종`),
+      tile("디테일 확인", pct(agg.designKnownPct), `속성 ${agg.designFacets.length}종`),
+    ]));
+    v.appendChild(section("가격 분포", card(histogram(agg.priceHistogram))));
+    v.appendChild(el("div", { class: "grid2", style: "margin-top:16px" }, [
+      section("원단 (상품 중 사용 비율)", card(agg.fiberPresence.length
+        ? barList(agg.fiberPresence, { limit: 10, colorFor: () => "var(--s3)", fmt: r => r.pct + "%  (" + r.value + ")" })
+        : el("div", { class: "empty", text: "원단 정보 없음" }))),
+      section("색상 빈도", card(agg.colorFreq.length
+        ? barList(agg.colorFreq, { limit: 10, swatch: true, colorFor: () => "var(--s1)", fmt: r => String(r.value) })
+        : el("div", { class: "empty", text: "색상 정보 없음" }))),
+      section("브랜드 점유", card(agg.brandShare.length
+        ? barList(agg.brandShare, { limit: 10, colorFor: () => "var(--s2)", fmt: r => r.value + " (" + Math.round(r.value / agg.count * 100) + "%)" })
+        : el("div", { class: "empty", text: "브랜드 정보 없음" }))),
+      section("카테고리", card(agg.categoryShare.length
+        ? barList(agg.categoryShare, { limit: 10, colorFor: () => "var(--s4)", fmt: r => String(r.value) })
+        : el("div", { class: "empty", text: "카테고리 정보 없음" }))),
+    ]));
+    v.appendChild(section("디자인 디테일 (속성별)", card(designFacetView(agg))));
+    v.appendChild(section("상품명 키워드", card(agg.keywords.length
+      ? barList(agg.keywords, { limit: 14, colorFor: () => "var(--s1)", fmt: r => r.pct + "%  (" + r.value + ")" })
+      : el("div", { class: "empty", text: "키워드 없음" }))));
+    return v;
+  }
+
+  // Design details grouped by attribute: "Neckline → Crewneck 12 / V-Neck 5".
+  function designFacetView(agg) {
+    if (!agg.designFacets.length) {
+      return el("div", { class: "empty", text: "디테일 정보 없음 (상세 수집을 켜고 스캔하면 채워집니다)" });
+    }
+    const wrap = el("div", { class: "grid2", style: "gap:14px" });
+    agg.designFacets.slice(0, 8).forEach(f => {
+      wrap.appendChild(el("div", {}, [
+        el("div", { style: "font-size:13px;font-weight:600;margin-bottom:6px", text: f.label }),
+        barList(f.values, { limit: 6, colorFor: () => "var(--s3)",
+          fmt: r => r.value + " (" + Math.round(r.value / agg.count * 100) + "%)" }),
+      ]));
+    });
+    return wrap;
+  }
+
+  // ---- the MI board: what a designer actually reads, week by week ----------
+  // Image strip first, colour as chips, fabric as one proportional band,
+  // silhouette/detail and name keywords as tags, with the week-over-week movers
+  // called out. Numbers support the visuals rather than leading.
+  function viewBoard() {
+    const weeks = R.weekly(scans);
+    if (!weeks.length) return el("div", { class: "empty", text: "스캔을 올리면 주차별 보드가 만들어집니다." });
+    const v = el("div");
+    const byWeekScans = new Map();
+    scans.forEach(s => {
+      const w = R.isoWeek((s.meta && s.meta.scannedAt) || s.savedAt || Date.now());
+      if (!byWeekScans.has(w)) byWeekScans.set(w, []);
+      byWeekScans.get(w).push(s);
+    });
+    // newest week first — this week's board is the deliverable
+    weeks.slice().reverse().forEach((w, idx) => {
+      const prev = weeks[weeks.length - 2 - idx];       // the week before this one
+      const cmp = prev ? R.compare(prev.agg, w.agg) : null;
+      const a = w.agg;
+      const wk = el("div", { class: "wk" });
+
+      const sources = [...new Set((byWeekScans.get(w.week) || [])
+        .map(s => (s.meta && (s.meta.brand || s.meta.site)) || "").filter(Boolean))];
+      wk.appendChild(el("div", { class: "wk-head" }, [
+        el("div", { class: "wk-no", text: w.week.replace("-W", " · W") }),
+        el("div", { class: "wk-meta", html: `<b>${a.count}</b>개 아이템 · <b>${w.scans}</b>회 스캔` +
+          (sources.length ? " · " + sources.slice(0, 4).join(", ") : "") }),
+      ]));
+
+      const shots = R.inspoImages(byWeekScans.get(w.week) || [], 12);
+      const left = el("div");
+      left.appendChild(el("div", { class: "blk" }, [
+        el("div", { class: "blk-t", text: "Key items" }),
+        shots.length ? boardStrip(shots)
+          : el("div", { class: "empty", style: "padding:14px;text-align:left", text: "이미지 없음 — 이름·원단·디테일만 수집된 스캔입니다." }),
+      ]));
+      // price positioning reads as a sentence, not a KPI grid
+      left.appendChild(el("div", { class: "blk" }, [
+        el("div", { class: "blk-t", text: "Price positioning" }),
+        el("div", { class: "pricebar" }, [
+          el("b", { text: money(a.avgPrice) }), el("span", { text: "평균" }),
+          el("span", { text: `범위 ${money(a.minPrice)}–${money(a.maxPrice)}` }),
+          el("span", { text: `세일 ${pct(a.onSalePct)}${a.avgDiscountPct ? " (평균 " + pct(a.avgDiscountPct) + " 인하)" : ""}` }),
+          cmp && cmp.avgPrice.delta != null
+            ? el("span", { class: cmp.avgPrice.delta >= 0 ? "up" : "down",
+                text: `전주 대비 ${cmp.avgPrice.delta >= 0 ? "▲" : "▼"} ${money(Math.abs(cmp.avgPrice.delta))}` })
+            : null,
+        ]),
+      ]));
+
+      const right = el("div");
+      right.appendChild(el("div", { class: "blk" }, [
+        el("div", { class: "blk-t", text: "Colour direction" }),
+        a.colorFreq.length ? colorChips(a.colorFreq, a.count) : el("div", { class: "empty", style: "padding:10px", text: "색상 정보 없음" }),
+      ]));
+      right.appendChild(el("div", { class: "blk" }, [
+        el("div", { class: "blk-t", text: "Fabric mix" }),
+        a.fiberPresence.length ? fabricBand(a.fiberPresence) : el("div", { class: "empty", style: "padding:10px", text: "원단 정보 없음" }),
+      ]));
+      right.appendChild(el("div", { class: "blk" }, [
+        el("div", { class: "blk-t", text: "Details & silhouette" }),
+        a.designFacets.length ? facetTags(a.designFacets, a.count) : el("div", { class: "empty", style: "padding:10px", text: "디테일 정보 없음" }),
+      ]));
+      if (a.keywords.length) {
+        right.appendChild(el("div", { class: "blk" }, [
+          el("div", { class: "blk-t", text: "Product language" }),
+          el("div", { class: "tags" }, a.keywords.slice(0, 12).map(k =>
+            el("span", { class: "tag" }, [k.key, el("i", { text: " " + k.pct + "%" })]))),
+        ]));
+      }
+      if (cmp) right.appendChild(el("div", { class: "blk" }, [
+        el("div", { class: "blk-t", text: "전주 대비 변화" }), movers(cmp),
+      ]));
+
+      wk.appendChild(el("div", { class: "mi-grid" }, [left, right]));
+      v.appendChild(wk);
+    });
+    return v;
+  }
+  function boardStrip(shots) {
+    const g = el("div", { class: "strip" });
+    shots.forEach(it => {
+      const a = el("a", { class: "shot", href: it.product_url || "#", target: "_blank", rel: "noopener", style: "text-decoration:none" });
+      a.appendChild(el("img", { src: it.image_url, alt: it.name || "product", loading: "lazy" }));
+      a.appendChild(el("div", { class: "m" }, [
+        el("div", { class: "n", text: it.name || "—" }),
+        el("div", { class: "p", text: [it.price, it.fabric.split(";")[0]].filter(Boolean).join(" · ") }),
+      ]));
+      g.appendChild(a);
+    });
+    return g;
+  }
+  function colorChips(freq, total) {
+    const box = el("div", { class: "chips" });
+    freq.slice(0, 10).forEach(c => box.appendChild(el("div", { class: "chip" }, [
+      el("div", { class: "sw", style: "background:" + swatchColor(c.key) }),
+      el("div", { class: "cn", text: c.key }),
+      el("div", { class: "cp", text: Math.round(c.value / total * 100) + "% · " + c.value }),
+    ])));
+    return box;
+  }
+  function fabricBand(fibers) {
+    const top = fibers.slice(0, 6);
+    const sum = top.reduce((s, f) => s + f.value, 0) || 1;
+    const cols = ["var(--s1)", "var(--s3)", "var(--s2)", "var(--s4)", "color-mix(in oklab,var(--s1) 55%,var(--surface-1))", "color-mix(in oklab,var(--s3) 55%,var(--surface-1))"];
+    const band = el("div", { class: "band" });
+    top.forEach((f, i) => band.appendChild(el("div", {
+      style: `flex:${f.value};background:${cols[i % cols.length]}`, title: `${f.key} ${f.pct}%` })));
+    const key = el("div", { class: "bandkey" });
+    top.forEach((f, i) => key.appendChild(el("span", {}, [
+      el("i", { class: "dot", style: "background:" + cols[i % cols.length] }), `${f.key} ${f.pct}%`])));
+    return el("div", {}, [band, key]);
+  }
+  function facetTags(facets, total) {
+    const box = el("div");
+    facets.slice(0, 5).forEach(f => {
+      box.appendChild(el("div", { class: "facet" }, [
+        el("div", { class: "facet-l", text: f.label }),
+        el("div", { class: "tags" }, f.values.slice(0, 5).map(v =>
+          el("span", { class: "tag" }, [v.key, el("i", { text: " " + Math.round(v.value / total * 100) + "%" })]))),
+      ]));
+    });
+    return box;
+  }
+  function movers(cmp) {
+    const pick = (arr, n) => arr.filter(r => r.delta !== 0).slice(0, n);
+    const box = el("div", { class: "movers" });
+    const line = (label, rows) => rows.forEach(r => box.appendChild(el("div", { class: "mv" }, [
+      el("span", { text: `${label} · ${r.key}` }),
+      el("span", { class: "d " + (r.delta > 0 ? "up" : "down"), text: (r.delta > 0 ? "+" : "") + r.delta + "%p" }),
+    ])));
+    line("원단", pick(cmp.fibers, 3));
+    line("색상", pick(cmp.colors, 3));
+    line("디테일", pick(cmp.designs, 3));
+    if (!box.children.length) box.appendChild(el("div", { style: "color:var(--muted)", text: "뚜렷한 변화 없음" }));
+    return box;
+  }
+
+  function viewWeekly() {
+    const weeks = R.weekly(scans);
+    const v = el("div");
+    if (!weeks.length) return el("div", { class: "empty", text: "스캔을 올리면 주차별로 묶입니다." });
+    const trend = R.weeklyTrend(weeks);
+    v.appendChild(el("div", { class: "tiles" }, [
+      tile("주차 수", String(weeks.length)),
+      tile("최근 주차", weeks[weeks.length - 1].week),
+      tile("최근 주 상품", String(weeks[weeks.length - 1].agg.count)),
+    ]));
+    v.appendChild(section("주차별 상품 수", card(lineChart(trend.map(t => ({ k: t.week, v: t.count })), { color: "var(--s1)" }))));
+    v.appendChild(section("주차별 평균가", card(lineChart(trend.map(t => ({ k: t.week, v: t.avgPrice })), { color: "var(--s2)", fmt: money }))));
+    v.appendChild(section("주차별 세일 비율", card(lineChart(trend.map(t => ({ k: t.week, v: t.onSalePct })), { color: "var(--s4)", fmt: n => Math.round(n) + "%" }))));
+    // weekly table (the accessible view of the same numbers)
+    const tb = el("table", {}, [el("thead", {}, el("tr", {}, [
+      el("th", { text: "주차" }), el("th", { class: "num", text: "스캔" }), el("th", { class: "num", text: "상품" }),
+      el("th", { class: "num", text: "평균가" }), el("th", { class: "num", text: "세일%" }), el("th", { text: "상위 원단" }),
+      el("th", { text: "상위 색상" }), el("th", { text: "상위 디테일" }), el("th", { text: "상위 키워드" })]))]);
+    const tbody = el("tbody");
+    weeks.forEach(w => tbody.appendChild(el("tr", {}, [
+      el("td", { text: w.week }), el("td", { class: "num", text: String(w.scans) }), el("td", { class: "num", text: String(w.agg.count) }),
+      el("td", { class: "num", text: money(w.agg.avgPrice) }), el("td", { class: "num", text: pct(w.agg.onSalePct) }),
+      el("td", { text: w.agg.fiberPresence.slice(0, 3).map(f => `${f.key} ${f.pct}%`).join(", ") || "—" }),
+      el("td", { text: w.agg.colorFreq.slice(0, 3).map(c => c.key).join(", ") || "—" }),
+      el("td", { text: w.agg.designHighlights.slice(0, 3).map(d => d.key).join(", ") || "—" }),
+      el("td", { text: w.agg.keywords.slice(0, 4).map(k => k.key).join(", ") || "—" }),
+    ])));
+    tb.appendChild(tbody);
+    v.appendChild(section("주차별 요약", card(el("div", { class: "scroll" }, [tb]))));
+    return v;
+  }
+
+  function viewCompare() {
+    const weeks = R.weekly(scans);
+    if (weeks.length < 2) return el("div", { class: "empty", text: "서로 다른 주차의 스캔이 2개 이상이면 비교할 수 있습니다." });
+    const v = el("div");
+    const mkSel = (id, def) => {
+      const s = el("select", { id });
+      weeks.forEach(w => s.appendChild(el("option", { value: w.week, text: `${w.week} (${w.agg.count}개)` })));
+      s.value = def; return s;
+    };
+    const a0 = weeks[weeks.length - 2].week, b0 = weeks[weeks.length - 1].week;
+    const selA = mkSel("selA", a0), selB = mkSel("selB", b0);
+    const out = el("div");
+    const draw = () => {
+      const A = weeks.find(w => w.week === selA.value).agg, B = weeks.find(w => w.week === selB.value).agg;
+      const c = R.compare(A, B);
+      const dTile = (k, o, fmt, goodUp) => {
+        const d = o.delta;
+        const arrow = d == null || d === 0 ? "" : (d > 0 ? "▲" : "▼");
+        const cls = d == null || d === 0 ? "" : ((d > 0) === !!goodUp ? "up" : "down");
+        return tile(k, fmt(o.b), `${fmt(o.a)} → ${fmt(o.b)}  ${arrow} ${d == null ? "" : fmt(Math.abs(d))}`, cls);
+      };
+      out.textContent = "";
+      out.appendChild(el("div", { class: "tiles" }, [
+        dTile("상품 수", c.count, n => String(Math.round(n)), true),
+        dTile("평균가", c.avgPrice, money, false),
+        dTile("세일 비율", c.onSalePct, n => Math.round(n) + "%", false),
+        dTile("평균 인하율", c.avgDiscountPct, n => n == null ? "—" : Math.round(n) + "%", false),
+      ]));
+      const deltaBars = rows => {
+        const box = el("div", { class: "bars" });
+        const max = Math.max(1, ...rows.map(r => Math.abs(r.delta)));
+        rows.slice(0, 10).forEach(r => {
+          const w = Math.max(2, Math.round(Math.abs(r.delta) / max * 100));
+          box.appendChild(el("div", { class: "bar" }, [
+            el("div", { class: "lab", title: r.key, text: r.key }),
+            el("div", { class: "track" }, [el("div", { class: "fill", style: `width:${w}%;background:${r.delta >= 0 ? "var(--s3)" : "var(--s2)"}` })]),
+            el("div", { class: "val", text: (r.delta > 0 ? "+" : "") + r.delta + "%p" }),
+          ]));
+        });
+        return box;
+      };
+      out.appendChild(el("div", { class: "grid2", style: "margin-top:16px" }, [
+        section("원단 변화 (사용 비율 %p)", card(c.fibers.length ? deltaBars(c.fibers) : el("div", { class: "empty", text: "원단 정보 없음" }))),
+        section("색상 변화 (비중 %p)", card(c.colors.length ? deltaBars(c.colors) : el("div", { class: "empty", text: "색상 정보 없음" }))),
+        section("디자인 디테일 변화 (%p)", card(c.designs.length ? deltaBars(c.designs) : el("div", { class: "empty", text: "디테일 정보 없음" }))),
+        section("상품명 키워드 변화 (%p)", card(c.keywords.length ? deltaBars(c.keywords) : el("div", { class: "empty", text: "키워드 없음" }))),
+      ]));
+    };
+    selA.addEventListener("change", draw); selB.addEventListener("change", draw);
+    v.appendChild(el("div", { class: "row" }, [el("span", { text: "기준" }), selA, el("span", { text: "→ 비교" }), selB]));
+    v.appendChild(out); draw();
+    return v;
+  }
+
+  function viewInspo() {
+    const imgs = R.inspoImages(scans, 120);
+    if (!imgs.length) return el("div", { class: "empty", text: "이미지가 있는 스캔을 올리면 보드가 만들어집니다." });
+    const board = el("div", { class: "board" });
+    imgs.forEach(it => {
+      const a = el("a", { class: "shot", href: it.product_url || "#", target: "_blank", rel: "noopener", style: "text-decoration:none" });
+      a.appendChild(el("img", { src: it.image_url, alt: it.name || "product", loading: "lazy" }));
+      a.appendChild(el("div", { class: "m" }, [
+        el("div", { class: "n", text: it.name || "—" }),
+        el("div", { class: "p", text: [it.brand, it.price].filter(Boolean).join(" · ") }),
+        it.fabric ? el("div", { class: "p", text: it.fabric }) : null,
+      ]));
+      board.appendChild(a);
+    });
+    return el("div", {}, [el("p", { class: "sub", text: `${imgs.length}개 이미지 · 클릭하면 상품 페이지로` }), board]);
+  }
+
+  function viewData() {
+    if (!scans.length) return el("div", { class: "empty", text: "올린 스캔이 없습니다." });
+    const list = el("div", { class: "scanlist" });
+    scans.slice().reverse().forEach(s => {
+      const m = s.meta || {};
+      const when = (m.scannedAt || "").slice(0, 16).replace("T", " ");
+      const row = el("div", { class: "scanrow" }, [
+        el("div", {}, [
+          el("div", { text: `${m.site || m.source || "scan"} · ${m.brand || ""} ${m.category || ""}`.trim() }),
+          el("div", { style: "color:var(--muted);font-size:12px", text: `${when} · ${R.isoWeek(m.scannedAt)} · ${(s.items || []).length}개 · ${m.file || ""}` }),
+        ]),
+        el("button", { class: "x", title: "삭제", text: "✕" }),
+      ]);
+      row.querySelector(".x").addEventListener("click", () => {
+        scans = scans.filter(x => x.id !== s.id); save(); render();
+      });
+      list.appendChild(row);
+    });
+    return list;
+  }
+
+  function render() {
+    $("#count").textContent = scans.length
+      ? `${scans.length}개 스캔 · ${allItems().length}개 상품 · ${R.weekly(scans).length}개 주차`
+      : "아직 데이터가 없습니다";
+    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.t === tab)));
+    const v = $("#view"); v.textContent = "";
+    if (!scans.length && tab !== "data") {
+      v.appendChild(el("div", { class: "empty", text: "스캔 JSON을 올리거나 '샘플 데이터로 보기'를 눌러보세요." }));
+      return;
+    }
+    v.appendChild(tab === "board" ? viewBoard()
+      : tab === "overview" ? viewOverview()
+      : tab === "weekly" ? viewWeekly()
+      : tab === "compare" ? viewCompare()
+      : tab === "inspo" ? viewInspo() : viewData());
+  }
+
+  // ---- wiring ------------------------------------------------------------
+  const drop = $("#drop"), file = $("#file");
+  drop.addEventListener("click", () => file.click());
+  file.addEventListener("change", e => { readFiles(e.target.files); file.value = ""; });
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => { if (e.dataTransfer && e.dataTransfer.files.length) readFiles(e.dataTransfer.files); });
+  document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => { tab = b.dataset.t; render(); }));
+  $("#clear").addEventListener("click", () => { if (confirm("모든 스캔을 삭제할까요?")) { scans = []; save(); render(); } });
+  $("#demo").addEventListener("click", () => { demo(); save(); render(); });
+
+  // sample data so the board can be explored before a real scan exists
+  function demo() {
+    const fibers = ["100% Cotton", "69% Cotton, 31% Cupro", "100% Linen", "55% Cotton/45% Polyester", "100% Viscose", "80% Wool, 20% Polyamide"];
+    const colors = ["Black", "White", "Cream", "Navy", "Brown", "Sage", "Red"];
+    const brands = ["Massimo Dutti", "COS", "Zara"];
+    const cats = ["T-Shirts", "Shirts", "Knitwear", "Dresses"];
+    const necklines = ["Crewneck", "V-Neck", "Boat Neck", "Straight Neckline"];
+    const fits = ["Regular", "Relaxed", "Slim"];
+    const sleeves = ["Sleeveless", "Short Sleeves", "Long Sleeves", "Raglan Sleeves"];
+    const mkWeek = (daysAgo, n, seed) => {
+      const items = [];
+      for (let i = 0; i < n; i++) {
+        const p = 30 + ((i * 7 + seed * 13) % 120);
+        const sale = (i + seed) % 4 === 0;
+        items.push({
+          brand: brands[(i + seed) % brands.length],
+          name: `${cats[(i + seed) % cats.length]} style ${i + 1}`,
+          category: cats[(i + seed) % cats.length],
+          price: "$" + (sale ? Math.round(p * 0.7) : p) + ".00",
+          price_was: sale ? "$" + p + ".00" : "",
+          colorways: [colors[(i + seed) % colors.length], colors[(i + seed * 3 + 2) % colors.length]].join("; "),
+          fabric_composition: fibers[(i + seed) % fibers.length],
+          size_range: "XS-XL",
+          design: [`Fit: ${fits[(i + seed) % fits.length]}`,
+            `Neckline: ${necklines[(i + seed * 2) % necklines.length]}`,
+            `Sleeves: ${sleeves[(i + seed) % sleeves.length]}`].join("\n"),
+          product_url: "",
+          // demo thumbnails are inline SVG (no network) so the board renders offline
+          image_url: "data:image/svg+xml;utf8," + encodeURIComponent(
+            `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="240"><rect width="180" height="240" fill="${
+              ["#e9e4da","#dfe3e6","#e6e0e6","#e3e6df","#efe7dc"][(i + seed) % 5]
+            }"/><rect x="46" y="52" width="88" height="140" rx="10" fill="${
+              swatchColor(colors[(i + seed) % colors.length])
+            }" opacity=".85"/></svg>`),
+        });
+      }
+      const d = new Date(Date.now() - daysAgo * 86400000);
+      return { meta: { schema: "shop-scan/1", source: "demo", site: "샘플", brand: brands[seed % brands.length],
+        category: "샘플 카테고리", scannedAt: d.toISOString(), file: `demo-w${seed}.json` }, items };
+    };
+    [[21, 18, 1], [14, 22, 2], [7, 26, 3], [1, 24, 4]].forEach(([d, n, s]) => addScan(mkWeek(d, n, s), `demo-${s}.json`));
+  }
+
+  load(); render();
+})();
+</script>
