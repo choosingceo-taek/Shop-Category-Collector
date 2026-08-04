@@ -1,9 +1,19 @@
 {
   "manifest_version": 3,
   "name": "Shop Category Collector",
-  "version": "1.17.0",
-  "description": "Collect every product in a filtered category/search (every page) into a clean Excel with embedded thumbnails, one click. Full detail (fabric/colorway/design) on Walmart; basic fields (name/price/image/URL) on other allow-listed sites. Excludes recommended/related carousels.",
-  "permissions": ["storage", "downloads"],
+  "version": "1.18.0",
+  "description": "쇼핑몰 카테고리를 통째로 수집해 원단·색상·가격이 담긴 Excel로 만들고, 브라우징 중 발견한 상품·이미지를 사이드 패널 컬렉션에 모으는 리서치 도구.",
+  "permissions": [
+    "storage",
+    "downloads",
+    "sidePanel",
+    "contextMenus",
+    "scripting",
+    "activeTab"
+  ],
+  "optional_host_permissions": [
+    "*://*/*"
+  ],
   "host_permissions": [
     "https://www.walmart.com/*",
     "https://*.walmartimages.com/*",
@@ -31,10 +41,14 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "background": { "service_worker": "background.js" },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Shop Category Collector",
+    "default_title": "리서치 컴패니언 열기",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -66,7 +80,13 @@
         "https://www.cottonon.com/*",
         "https://*.cottonon.com/*"
       ],
-      "js": ["exceljs.min.js", "excel.js", "sites.js", "content.js", "fab.js"],
+      "js": [
+        "exceljs.min.js",
+        "excel.js",
+        "sites.js",
+        "content.js",
+        "fab.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -74,7 +94,9 @@
         "https://www.massimodutti.com/*",
         "https://massimodutti.com/*"
       ],
-      "js": ["md-capture.js"],
+      "js": [
+        "md-capture.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     }

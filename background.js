@@ -22,6 +22,67 @@ function toBase64(bytes) {
   return btoa(bin);
 }
 
+// ---- side panel + right-click clipping -------------------------------------
+// The toolbar icon opens the research companion panel. Unlike the old popup it
+// stays open while the user browses, which is what makes it read as a working
+// assistant rather than a dialog.
+chrome.runtime.onInstalled.addListener(() => {
+  try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); } catch (e) {}
+  try {
+    chrome.contextMenus.removeAll(() => {
+      chrome.contextMenus.create({ id: "rc_image", title: "이미지를 컬렉션에 담기", contexts: ["image"] });
+      chrome.contextMenus.create({ id: "rc_page", title: "이 상품을 컬렉션에 담기", contexts: ["page", "link", "selection"] });
+    });
+  } catch (e) {}
+});
+try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); } catch (e) {}
+
+const RC_KEY = "rc_store_v1";
+function rcAdd(data) {
+  return new Promise(res => {
+    chrome.storage.local.get(RC_KEY, o => {
+      const store = o[RC_KEY] || { collections: [], items: [], activeId: "" };
+      if (!store.collections.length) {
+        const id = "c" + Date.now();
+        store.collections.push({ id, name: "리서치 " + new Date().toISOString().slice(0, 10), createdAt: Date.now() });
+        store.activeId = id;
+      }
+      if (!store.collections.some(c => c.id === store.activeId)) store.activeId = store.collections[0].id;
+      const dupe = store.items.some(i => i.collectionId === store.activeId &&
+        i.product_url && i.product_url === data.product_url && i.type === data.type);
+      if (!dupe) {
+        store.items.push(Object.assign({
+          id: "i" + Date.now() + Math.random().toString(36).slice(2, 6),
+          collectionId: store.activeId, addedAt: Date.now(),
+        }, data));
+      }
+      chrome.storage.local.set({ [RC_KEY]: store }, () => res(!dupe));
+    });
+  });
+}
+const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
+
+// A context-menu click grants activeTab for that tab, so clipping works on ANY
+// site with no standing host permission — the zero-permission path.
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab || !tab.id) return;
+  try {
+    if (info.menuItemId === "rc_image") {
+      await rcAdd({
+        type: "image", name: (tab.title || "").slice(0, 200), brand: "", price: "",
+        image_url: info.srcUrl || "", product_url: info.linkUrl || info.pageUrl || tab.url || "",
+        fabric_composition: "", colorways: "", size_range: "", category: "", design: "",
+        source: hostOf(tab.url || info.pageUrl),
+      });
+    } else if (info.menuItemId === "rc_page") {
+      const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["clip.js"] });
+      const data = res && res.result;
+      if (data && data.name) await rcAdd(data);
+    }
+    try { await chrome.sidePanel.open({ tabId: tab.id }); } catch (e) {}
+  } catch (e) { /* restricted page (chrome://, web store) — nothing to clip */ }
+});
+
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   // Tell a content script which tab it runs in. A scan job is stored globally
   // (chrome.storage.local is shared by every tab), so the job records its
