@@ -73,6 +73,7 @@
         <option value="name">이름순</option>
       </select>
       <button id="reset">필터 해제</button>
+      <button id="report" class="primary" title="지금 보이는 상품으로 리포트 HTML을 만듭니다">📄 리포트 만들기</button>
     </div>
     <div class="selbar" id="selbar">
       <b id="selcount">0개 선택</b>
@@ -84,6 +85,8 @@
   </header>
   <main><div class="grid" id="grid"></div></main>
   <script src="store.js"></script>
+  <script src="report/report.js"></script>
+  <script src="report/reportgen.js"></script>
   <script src="catalog.js"></script>
 </body>
 </html>

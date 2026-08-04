@@ -148,6 +148,87 @@
     picked.clear(); render();
   });
 
+  // ---- report: one self-contained HTML file --------------------------------
+  // Images are fetched through the service worker (it has the host access a
+  // page fetch would be blocked by CORS for), downscaled to ~240px and embedded
+  // as data URIs. That is what makes the file still work in a year: shops
+  // delete products and rotate CDN paths, so a report that merely linked to
+  // their images would quietly lose every picture.
+  const THUMB_W = 240, THUMB_Q = 0.72;
+
+  function fetchImage(url) {
+    return new Promise(res => {
+      if (!url) return res(null);
+      try {
+        chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
+          void chrome.runtime.lastError;
+          res(r && r.ok ? r : null);
+        });
+      } catch (e) { res(null); }
+    });
+  }
+  function downscale(dataUrl) {
+    return new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, THUMB_W / img.width);
+          const c = document.createElement("canvas");
+          c.width = Math.round(img.width * scale);
+          c.height = Math.round(img.height * scale);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          res(c.toDataURL("image/jpeg", THUMB_Q));
+        } catch (e) { res(null); }
+      };
+      img.onerror = () => res(null);
+      img.src = dataUrl;
+    });
+  }
+
+  async function makeReport() {
+    const rows = visible();
+    if (!rows.length) return alert("리포트에 담을 상품이 없습니다.");
+    const btn = $("#report");
+    const label = btn.textContent;
+    btn.disabled = true;
+
+    const images = {};
+    let done = 0, ok = 0;
+    for (const r of rows) {
+      btn.textContent = `이미지 담는 중… ${++done}/${rows.length}`;
+      if (!r.image_url || !r.product_url) continue;
+      const got = await fetchImage(r.image_url);
+      if (!got) continue;
+      const small = await downscale("data:image/" + (got.ext || "jpeg") + ";base64," + got.base64);
+      if (small) { images[r.product_url] = small; ok++; }
+    }
+
+    btn.textContent = "리포트 만드는 중…";
+    const b = $("#brand").value, c = $("#cat").value, s = $("#src").value;
+    const scope = [b, c, s].filter(Boolean).join(" · ");
+    const today = new Date().toISOString().slice(0, 10);
+    const html = window.ReportGen.build(rows, images, {
+      title: scope ? `${scope} 마켓 리서치` : "마켓 리서치 리포트",
+      subtitle: scope ? "" : "카탈로그 전체",
+      scope, generatedAt: today,
+      source: [...new Set(rows.map(r => r.site || r.source).filter(Boolean))].join(", "),
+    });
+
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `리서치_${scope ? scope.replace(/[^\w가-힣]+/g, "_") + "_" : ""}${today}.html`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+
+    btn.disabled = false; btn.textContent = label;
+    const mb = (blob.size / 1048576).toFixed(1);
+    alert(`리포트를 저장했습니다.\n상품 ${rows.length}개 · 이미지 ${ok}개 내장 · ${mb} MB\n\n` +
+      `이미지와 수치가 파일 안에 들어 있어 인터넷 없이도, 원본 쇼핑몰이 사라져도 그대로 열립니다.`);
+  }
+  $("#report").addEventListener("click", makeReport);
+
   ["q", "brand", "cat", "src", "sort"].forEach(id =>
     $("#" + id).addEventListener("input", render));
   $("#reset").addEventListener("click", () => {
