@@ -2506,9 +2506,24 @@
       templateUrl: null,
       _categoryFromUrl: categoryFromUrl, _listingCategory: listingCategory,
       _scrapeList: scrapeList, _parseDetailDoc: parseDetailDoc, _isProduct: isProduct,
-      _productKey: productKey,
+      _productKey: productKey, _codeOf: cfg.codeOf || null,
     };
   }
+
+  // Aritzia — aritzia.com/intl/en/clothing/<category>, /intl/en/new. Single
+  // house brand (its in-house labels: Wilfred, Babaton, TNA… all sold as
+  // Aritzia), one continuous grid. Starts on the same house-brand factory as
+  // COS: generic tile scrape + JSON-LD breadcrumb category + fiber-% detail.
+  // Product pages are ".../product/<slug>/<id>.html"; anything without that
+  // shape is navigation, not a product, so it never becomes a row.
+  const aritzia = houseBrandAdapter({
+    id: "aritzia", label: "Aritzia", brand: "Aritzia",
+    match: url => /(^|\.)aritzia\.com\//i.test(String(url || "").replace(/^https?:\/\//i, "")),
+    trailSkip: /^(home|aritzia)$/i,
+    // "/intl/en/product/sculpt-knit-tank/119480.html" -> "119480"
+    codeOf: u => { try { return (new URL(u).pathname.match(/\/product\/[^/]+\/(\d{3,})/i) || [])[1] || ""; } catch (e) { return ""; } },
+    isProduct: u => /\/product\//i.test(String(u || "")),
+  });
 
   // COS (H&M group) — cos.com/<locale>/<gender>/<category>. One continuous grid.
   const cos = houseBrandAdapter({
@@ -2551,7 +2566,7 @@
   // ---------------------------------------------------------------------------
   // Registry — order matters: more specific adapters must come before generic.
   // ---------------------------------------------------------------------------
-  const ADAPTERS = [walmart, target, cottonon, zara, cos, massimodutti, shopify, generic];
+  const ADAPTERS = [walmart, target, cottonon, zara, aritzia, cos, massimodutti, shopify, generic];
 
   const SITES = {
     shared,
