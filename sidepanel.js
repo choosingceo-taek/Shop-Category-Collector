@@ -103,11 +103,15 @@
     if (read.kind === "shop") {
       const a = read.adapter;
       const where = [a.site, a.category].filter(Boolean).join(" · ");
+      // Scanning is the FAB's job (bottom-left of the page) — say so rather than
+      // offering a second button that does the same thing from a different place.
       obs.innerHTML = `<b>${esc(where || read.host)}</b> 카테고리를 보고 있습니다.` +
-        `<span class='sub'>전체 스캔하면 모든 페이지를 돌며 원단·색상·사이즈·가격까지 수집해 Excel로 저장합니다.</span>`;
-      cta.textContent = "이 카테고리 전체 스캔";
-      cta.onclick = startScan;
-      alt.hidden = false; alt.textContent = "＋ 이 상품만 담기"; alt.onclick = clipHere;
+        `<span class='sub'>전체 스캔은 페이지 <b>좌측 하단의 동그란 아이콘</b>을 눌러 시작하세요. ` +
+        `모든 페이지를 돌며 원단·색상·사이즈·가격까지 수집합니다.</span>`;
+      cta.textContent = "＋ 이 상품만 담기";
+      cta.onclick = clipHere;
+      alt.hidden = false; alt.textContent = "📁 카탈로그 열기";
+      alt.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") });
       return;
     }
 
@@ -155,14 +159,6 @@
     if (!data) return toast("상품 정보를 찾지 못했습니다");
     if (!data.name) data.name = (tab.title || "(제목 없음)").slice(0, 200);
     addItem(data);
-  }
-
-  function startScan() {
-    if (!tab) return;
-    chrome.tabs.sendMessage(tab.id, { type: "start", withSpec: true, filters: {} }, () => {
-      void chrome.runtime.lastError;
-      toast("스캔을 시작했습니다");
-    });
   }
 
   function addItem(data) {
