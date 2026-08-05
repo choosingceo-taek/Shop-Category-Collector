@@ -94,4 +94,8 @@
   출력으로 확인해서 어댑터를 맞춘다 — 추측으로 셀렉터를 고치지 않는다.
 - 사용자가 코드 업데이트를 받는 절차: ZIP 덮어쓰기 → 확장 ↻ 리로드 → 대상 탭 F5.
   이 순서를 어기면 "Extension context invalidated"가 난다. 안내 시 항상 명시.
+- **커밋·푸시할 때마다 ZIP 다운로드 링크를 함께 안내한다** (사용자 요청).
+  `https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip`
+  압축을 풀면 폴더가 한 겹 더 생기므로 `manifest.json`이 직접 든 안쪽 폴더를 로드해야 한다.
+  버전 번호도 같이 알려 리로드 반영 여부를 사용자가 확인할 수 있게 한다.
 - 배포 방향: 팀 배포는 Chrome 웹스토어 Unlisted 게시(개인 크롬 환경).
