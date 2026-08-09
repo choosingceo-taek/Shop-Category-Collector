@@ -76,6 +76,42 @@
     } catch (e) { return null; }
   }
 
+  /* Do we hold host access for this URL? This is what separates "the page
+     hasn't answered yet" from "nothing can ever run here".
+
+     A freshly reloaded extension has no content script in already-open tabs
+     until they refresh, so askAdapter() comes back null on sites we fully
+     support. Treating that null as "not scannable" is what stamped Gap,
+     Lululemon and Edikted as Ref and made Run all walk 7 of 10 entries. */
+  function hasHostAccess(url) {
+    return new Promise(res => {
+      let done = false;
+      const finish = v => { if (!done) { done = true; res(v); } };
+      setTimeout(() => finish(false), 600);
+      try {
+        const o = new URL(url).origin + "/*";
+        chrome.permissions.contains({ origins: [o] }, ok => {
+          void chrome.runtime.lastError; finish(!!ok);
+        });
+      } catch (e) { finish(false); }
+    });
+  }
+
+  /* Fallback brand when the page doesn't name itself: the domain, cleaned up.
+     "shop.lululemon.com" -> "Lululemon". The entry's brand now fills blank
+     product brands during a run, so a raw hostname would end up in the
+     spreadsheet — and it is the grouping key in Excel and LAB. Editable by
+     the user either way (✎). */
+  const SUFFIX = new Set(["com", "net", "org", "co", "uk", "us", "au", "kr", "jp", "cn",
+    "de", "fr", "es", "it", "nl", "se", "dk", "no", "fi", "pl", "ca", "nz", "in", "io", "eu"]);
+  function brandFromHost(host) {
+    const parts = String(host || "").toLowerCase().replace(/^www\./, "").split(".");
+    while (parts.length > 1 && SUFFIX.has(parts[parts.length - 1])) parts.pop();
+    const name = parts[parts.length - 1] || String(host || "");
+    return name.split(/[-_]/).filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || String(host || "");
+  }
+
   // ---- current page ---------------------------------------------------------
   function askAdapter(tabId) {
     return new Promise(res => {
@@ -99,7 +135,8 @@
     read = internal ? { kind: "internal" }
       : { kind: "page", host: hostOf(url), url,
           ctx: await askAdapter(tab.id).catch(() => null),
-          adapter: adapterFor(url) };
+          adapter: adapterFor(url),
+          access: await hasHostAccess(url).catch(() => false) };
     paintNow();
   }
 
@@ -118,8 +155,12 @@
     const already = urlInList(read.url);
     const scannable = !!(read.ctx || read.adapter);
     const where = read.ctx ? [read.ctx.site, read.ctx.category].filter(Boolean).join(" · ") : "";
-    now.innerHTML = `<span class="host">${esc(where || read.host)}</span>` +
-      (scannable ? `<span class="badge ok">Scannable</span>` : `<span class="badge">Reference</span>`) +
+    // three states, never two: confirmed / we have access but the page hasn't
+    // answered yet (refresh the tab) / no access at all
+    const badge = scannable ? `<span class="badge ok">Scannable</span>`
+      : read.access ? `<span class="badge" title="Supported site — refresh the tab to read it">Scannable?</span>`
+      : `<span class="badge">Reference</span>`;
+    now.innerHTML = `<span class="host">${esc(where || read.host)}</span>` + badge +
       (already ? `<span class="badge ok">In list</span>` : "");
     add.textContent = already ? "✓ Already in list" : "＋ Add this page";
     add.disabled = already;
@@ -133,6 +174,28 @@
       await L.save(lists);
     }
     curList = lists.find(x => curList && x.id === curList.id) || lists[0];
+    return await repairScannable();
+  }
+
+  /* One-time repair of Ref entries written by the old rule.
+
+     Until now "Add this page" wrote scannable:false whenever the page hadn't
+     answered — which happens on every supported site whose tab was open when
+     the extension reloaded. Those entries are permanently skipped by Run all,
+     which is why a 10-site list ran 7. Re-decide each false against what we can
+     actually check: a URL-identifiable adapter, or host access we hold. Only
+     entries we truly cannot reach stay Ref. Never demotes anything. */
+  async function repairScannable() {
+    const stale = [];
+    lists.forEach(l => (l.entries || []).forEach(e => { if (e.scannable === false) stale.push(e); }));
+    if (!stale.length) return 0;
+    let fixed = 0;
+    for (const e of stale) {
+      if (adapterFor(e.url)) { e.scannable = true; fixed++; continue; }
+      if (await hasHostAccess(e.url).catch(() => false)) { delete e.scannable; fixed++; }
+    }
+    if (fixed) await L.save(lists);
+    return fixed;
   }
   function urlInList(url) {
     if (!url || !curList) return false;
@@ -144,11 +207,15 @@
     if (!tab || !tab.url || !read || read.kind === "internal") return;
     const a = read.ctx, ad = read.adapter;
     const entry = {
-      brand: (a && a.site) || (ad && ad.label) || read.host,
+      brand: (a && a.site) || (ad && ad.label) || brandFromHost(read.host),
       label: (a && a.category) || (tab.title || "").replace(/\s*[|·—-]\s*[^|·—-]*$/, "").trim().slice(0, 60) || read.host,
       url: tab.url,
-      scannable: !!(a || ad),
     };
+    // Only ever write a definite answer. Unknown stays unwritten (Scan?) so the
+    // run includes it — a page that simply hadn't answered yet must not be
+    // demoted to Ref and silently skipped for good.
+    if (a || ad) entry.scannable = true;
+    else if (!read.access) entry.scannable = false;
     const m = L.mergeEntries(curList.entries || [], [entry]);
     if (!m.added) return toast("Already in this list");
     curList.entries = m.list;
@@ -661,8 +728,11 @@
   (async () => {
     job = await load(JOB);
     queue = await load(QUEUE);
-    await loadLists();
+    const repaired = await loadLists();
     fillListSelect(); renderList(); paintLive(); paintQueue(); paintNow();
+    // say it out loud — a count that changes on its own is exactly what makes
+    // someone stop trusting the number
+    if (repaired) toast(`${repaired} site${repaired > 1 ? "s" : ""} restored to the run`);
     refreshProducts();
     observe();
     // update notice: the worker checks GitHub (≤ once/6h); we just display it
