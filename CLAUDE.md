@@ -135,11 +135,18 @@
   합친다. 브랜드나 이름이 비면 합치지 않고, 살아남은 행이 **가장 이른 addedAt**을 갖는다
   (첫 관측이 트렌드 기준). 합친 수는 헤더에 "중복 N개 합침"으로 항상 표시 — 조용히
   줄어드는 숫자가 신뢰를 깬다.
-- **`scannable`은 3상태다**: true(확인됨) / false(참고용) / **undefined(모름)**.
-  URL만 보고는 플랫폼 감지형(Shopify)을 알 수 없으므로, 패널의 `adapterFor` 실패는
-  "모름"이지 "불가"가 아니다. import/붙여넣기에서 `scannable:false`를 쓰면 Run all이
-  Shopify 몰을 통째로 건너뛴다(Edikted 원인 ②). Run all은 `!== false`를 실행하고,
-  목록 태그는 Scan / Scan? / Ref 세 가지로 보여 준다.
+- **웹 주소에 Ref는 없다**(v1.57). 사용자가 담는 이유는 스캔하려는 것이므로
+  http(s) URL에는 `scannable:false`를 절대 쓰지 않는다. 근거는 라벨이 아니라 능력이다 —
+  서비스워커가 **권한을 가진 페이지에 엔진을 주입**(`ensureEngine`: ping →
+  `permissions.contains` → `scripting.executeScript` 5개 파일, 이미 있으면 재주입 금지)
+  하므로 매니페스트에 없는 몰도 스캔된다. 실행 중 큐의 탭은 `tabs.onUpdated`로
+  자동 재주입 — 정적 스크립트가 없는 사이트에서도 리스트가 끊기지 않는다.
+  권한은 **클릭 안에서** 요청한다(Chrome 제스처 요건): Add this page는 그 오리진,
+  Scan all은 리스트 전체를 한 프롬프트로. 거절해도 Scan?(실행 포함)이지 Ref가 아니다.
+  `scannable`은 여전히 3상태 — true(어댑터를 알거나 오리진 보유) / undefined(모름,
+  Run all은 `!== false`라 실행함) / false는 **file://·chrome:// 같은 비웹 주소 전용**.
+  목록 태그 Scan / Scan? / Ref도 같은 의미다. (`scannable:false`를 웹 URL에 쓰면
+  Run all이 그 몰을 통째로 건너뛴다 — Edikted 원인 ②, "10개인데 SCAN ALL (7)" 원인.)
 - 목록 내보내기/가져오기: 리스트를 **.txt / .xlsx**로 빼서 편집하고 다시 Import하면
   갱신된다. 형식은 `lists.js`의 `toText`/`toGrid`가 만들고 `parseList`/`parseGrid`가
   그대로 읽는다(round-trip 테스트로 고정). URL이 신원이라 같은 URL이면 추가가 아니라
