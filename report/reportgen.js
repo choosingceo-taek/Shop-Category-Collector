@@ -303,12 +303,27 @@
         if (!byBrand.has(b)) byBrand.set(b, []);
         byBrand.get(b).push(i);
       });
+      // data-brand lets the chip row filter without re-rendering anything
       const groups = [...byBrand.entries()].sort((a, b) => b[1].length - a[1].length)
-        .map(([brand, ii]) => `<div class="bsub">${esc(brand)} <span>${ii.length}</span></div>
-          <div class="grid">${ii.map(i => cardArr[i]).join("")}</div>`).join("");
+        .map(([brand, ii]) => `<div class="bgrp" data-brand="${esc(brand)}">
+          <div class="bsub">${esc(brand)} <span>${ii.length}</span></div>
+          <div class="grid">${ii.map(i => cardArr[i]).join("")}</div></div>`).join("");
       return `<div class="day"><div class="dh"><b>${k ? esc(dayLabel(k)) : "수집일 미상"}</b>
-        <span>${idxs.length}개</span></div>${groups}</div>`;
+        <span class="dcount" data-all="${idxs.length}">${idxs.length}개</span></div>${groups}</div>`;
     }).join("");
+
+    // brand chips over the whole feed — counts included so no chip can lead to
+    // an empty screen, and the filter narrows the view only
+    const feedBrands = (() => {
+      const m = new Map();
+      raws.forEach(r => { const b = (r && r.brand) || "기타"; m.set(b, (m.get(b) || 0) + 1); });
+      return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    })();
+    const feedChips = feedBrands.length > 1
+      ? `<div class="fchips"><button class="fch on" data-b="">전체 <span>${raws.length}</span></button>` +
+        feedBrands.map(([b, n]) => `<button class="fch" data-b="${esc(b)}">${esc(b)} <span>${n}</span></button>`).join("") +
+        `</div>`
+      : "";
 
     // BY BRAND: brand (biggest first) → category → cards, with anchor chips.
     const byBrandAll = new Map();
@@ -353,6 +368,7 @@
   <div class="content">
     <section data-sec="new">
       ${secHead(`${agg.count.toLocaleString()} new arrivals · 처음 수집된 날짜 기준`, "New In")}
+      ${feedChips}
       ${newIn || `<p class="sub">상품이 없습니다.</p>`}
     </section>
     <section data-sec="brand">
@@ -380,6 +396,27 @@
     for (var j = 0; j < secs.length; j++) secs[j].style.display = secs[j].dataset.sec === id ? "" : "none";
   }
   for (var i = 0; i < nav.length; i++) nav[i].addEventListener("click", function () { show(this.dataset.s); });
+
+  // brand filter for New In: hide the groups of other brands, and hide a day
+  // once nothing is left in it, so the date headers never lie about the count
+  var chips = document.querySelectorAll(".fch");
+  function filterBrand(b) {
+    for (var i = 0; i < chips.length; i++) chips[i].classList.toggle("on", chips[i].dataset.b === b);
+    var days = document.querySelectorAll("[data-sec='new'] .day");
+    for (var d = 0; d < days.length; d++) {
+      var grps = days[d].querySelectorAll(".bgrp"), shown = 0, n = 0;
+      for (var g = 0; g < grps.length; g++) {
+        var keep = !b || grps[g].dataset.brand === b;
+        grps[g].style.display = keep ? "" : "none";
+        if (keep) { shown++; n += grps[g].querySelectorAll(".p").length; }
+      }
+      days[d].style.display = shown ? "" : "none";
+      var c = days[d].querySelector(".dcount");
+      if (c) c.textContent = (b ? n : c.dataset.all) + "개";
+    }
+  }
+  for (var k = 0; k < chips.length; k++)
+    chips[k].addEventListener("click", function () { filterBrand(this.dataset.b); });
   // brand anchor chips need the brand section visible first
   document.addEventListener("click", function (e) {
     var a = e.target.closest && e.target.closest(".bchip");
@@ -505,6 +542,12 @@
   .bsub { display:flex; align-items:baseline; gap:7px; margin:16px 0 9px;
     font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
   .bsub span { color:${MUTED}; font-weight:400; }
+  .fchips { display:flex; flex-wrap:wrap; gap:7px; margin:2px 0 4px; }
+  .fch { border:1px solid ${GRID}; background:#fff; border-radius:999px; padding:6px 13px;
+    font-size:12px; color:${INK}; cursor:pointer; }
+  .fch span { color:${MUTED}; margin-left:3px; }
+  .fch.on { background:${INK}; color:#fff; border-color:${INK}; }
+  .fch.on span { color:rgba(255,255,255,.7); }
   .bchips { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:8px; }
   .bchip { border:1px solid ${GRID}; border-radius:999px; padding:5px 12px; font-size:12px;
     color:${INK}; text-decoration:none; background:#fff; }

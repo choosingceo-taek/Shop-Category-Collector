@@ -34,6 +34,8 @@
   - walmart: 커스텀 SPA 엔진 (embedded JSON 컨테이너 스코핑 + 상세 fetch)
   - target: 커스텀 SPA (?Nao=24 오프셋 페이지네이션, JSON-LD·불릿 상세, multiBrand)
   - shopify: **플랫폼 감지형** (페이지 내 CDN 마커) — Edikted 등 모든 Shopify 몰.
+    **`lazyScroll` 필수**: 요즘 테마는 스크롤해야 타일이 렌더되어, 없으면 첫 화면
+    8개만 긁고 끝난다(Edikted가 안 긁히던 원인 ①).
     상세는 **컬렉션 벌크 JSON**(`/collections/<handle>/products.json?limit=250`)
     한 번으로 전부 채우고, 거기 없는 것만 PDP `.js`로 폴백. 키 불필요.
     vendor·product_type·전체 옵션값(색상)·compare_at_price·published_at 제공.
@@ -120,6 +122,11 @@
   합친다. 브랜드나 이름이 비면 합치지 않고, 살아남은 행이 **가장 이른 addedAt**을 갖는다
   (첫 관측이 트렌드 기준). 합친 수는 헤더에 "중복 N개 합침"으로 항상 표시 — 조용히
   줄어드는 숫자가 신뢰를 깬다.
+- **`scannable`은 3상태다**: true(확인됨) / false(참고용) / **undefined(모름)**.
+  URL만 보고는 플랫폼 감지형(Shopify)을 알 수 없으므로, 패널의 `adapterFor` 실패는
+  "모름"이지 "불가"가 아니다. import/붙여넣기에서 `scannable:false`를 쓰면 Run all이
+  Shopify 몰을 통째로 건너뛴다(Edikted 원인 ②). Run all은 `!== false`를 실행하고,
+  목록 태그는 Scan / Scan? / Ref 세 가지로 보여 준다.
 - 목록 내보내기/가져오기: 리스트를 **.txt / .xlsx**로 빼서 편집하고 다시 Import하면
   갱신된다. 형식은 `lists.js`의 `toText`/`toGrid`가 만들고 `parseList`/`parseGrid`가
   그대로 읽는다(round-trip 테스트로 고정). URL이 신원이라 같은 URL이면 추가가 아니라
@@ -140,10 +147,14 @@
 - 리포트(HTML, `report/reportgen.js`): 기본 템플릿은 **대시보드 레이아웃** — 연한 민트
   사이드레일 + 3개 섹션(01 New In: 일자별→브랜드별 / 02 By Brand: 브랜드별→카테고리별,
   앵커 칩 / 03 LAB: **파스텔 KPI 카드 4장(숫자 + 같은 지표의 미니 차트)** → 라운드 카드
-  안의 차트들). 탭 전환은 10줄 인라인 스크립트뿐이고 스크립트가 없으면(인쇄 등) 전
+  안의 차트들). New In 상단에 **브랜드 칩 필터**(개수 표시 · 비는 날짜 자동 숨김 ·
+  날짜 카운트 재계산). 탭 전환은 10줄 인라인 스크립트뿐이고 스크립트가 없으면(인쇄 등) 전
   섹션이 쌓여 보인다 — 아카이브 성질(외부 참조 0, 이미지 data URI)은 그대로.
   lookbook/data 템플릿은 기존 문서형 유지, 세 템플릿의 수치는 동일해야 한다.
 - post-scan 필터: 브랜드/주브랜드만/이름 포함·제외 (내보내기 시점 적용)
+- 아이콘은 **렌즈**(웜 액센트 그라디언트). 라이트/다크 툴바 양쪽에서 보여야 하므로
+  근검정·근백색을 쓰지 않고, 16px에서 뭉개지지 않게 획 두께를 크기별로 다르게 렌더한다
+  (`scratchpad/mkicon.js`가 하나의 SVG에서 4개 크기를 뽑는다).
 - 테스트: `scratchpad`의 Node 스위트 + Playwright로 실제 Chrome에 확장을 로드해
   패널·카탈로그·스캔 흐름을 검증(xvfb 필요, headless는 확장 로드 불가)
 

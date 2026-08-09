@@ -1392,6 +1392,12 @@
     return {
       id: "shopify",
       label: "Shopify 스토어",
+      /* Modern Shopify themes (Edikted's among them) render the grid as you
+         scroll: at load only the first viewport of tiles exists in the DOM, so
+         scraping straight away collected a handful of products or none at all.
+         Every other infinite-grid adapter already scrolls first; shopify was
+         the one that didn't. */
+      lazyScroll: true,
       match, context, scrapeList,
       totalPages: generic.totalPages,
       resultCount: generic.resultCount,

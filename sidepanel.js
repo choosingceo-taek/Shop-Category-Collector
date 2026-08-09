@@ -61,9 +61,14 @@
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 1800);
   }
 
-  // Can we actually scan this URL, or is it reference-only? SITES.active falls
-  // back to the generic adapter for anything unknown, so "generic" means we have
-  // no real support for it — keep the URL, but don't promise a scan.
+  /* Can we scan this URL? SITES.active falls back to the generic adapter for
+     anything unknown, so "generic" means we have no dedicated support.
+
+     Crucially this is a URL-ONLY check, and some adapters cannot answer from a
+     URL at all: Shopify is detected from markers inside the page, so every
+     Shopify shop (Edikted included) looks unsupported here. Callers must treat
+     a null as UNKNOWN, never as "not scannable" — writing scannable:false from
+     this is what silently made Run all skip Edikted entirely. */
   function adapterFor(url) {
     try {
       const a = window.SITES && window.SITES.active(url);
@@ -184,7 +189,9 @@
             <div class="lb">${esc(e.label || e.url)}</div>
             <span class="u">${esc(e.url)}</span>
           </div>
-          ${e.scannable === false ? '<span class="tag">Ref</span>' : '<span class="tag">Scan</span>'}
+          ${e.scannable === false ? '<span class="tag">Ref</span>'
+            : e.scannable ? '<span class="tag">Scan</span>'
+            : '<span class="tag" title="열어 봐야 알 수 있는 사이트 — 실행에는 포함됩니다">Scan?</span>'}
           <button class="act go" title="열기">↗</button>
           <button class="act ren" title="이름 변경">✎</button>
           <button class="act del" title="빼기">✕</button>
@@ -402,7 +409,9 @@
   });
   $("#addbulk").addEventListener("click", async () => {
     const parsed = L.parseList($("#bulk").value)
-      .map(e => Object.assign(e, { scannable: !!adapterFor(e.url) }));
+      // adapterFor can't see platform-detected shops from a URL, so a miss is
+      // "unknown" (undefined) rather than false — the page itself decides later
+      .map(e => Object.assign(e, adapterFor(e.url) ? { scannable: true } : {}));
     if (!parsed.length) return toast("URL을 찾지 못했습니다");
     const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
@@ -507,7 +516,7 @@
     try { parsed = await gridFromFile(file); }
     catch (err) { return toast("파일을 읽지 못했습니다"); }
     if (!parsed || !parsed.length) return toast("URL을 찾지 못했습니다");
-    parsed = parsed.map(en => Object.assign(en, { scannable: !!adapterFor(en.url) }));
+    parsed = parsed.map(en => Object.assign(en, adapterFor(en.url) ? { scannable: true } : {}));
     const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
     await L.save(lists);
