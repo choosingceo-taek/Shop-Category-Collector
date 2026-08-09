@@ -80,7 +80,20 @@ function collectionSig(url) {
     const q = (p.get("q") || "").trim().toLowerCase();
     const facet = (p.get("facet") || "").trim().toLowerCase();
     const cat = (p.get("cat_id") || p.get("catId") || p.get("cat_ids") || "").trim();
-    return u.pathname + "|" + q + "|" + facet + "|" + cat;
+    // Gap-family SPAs put the real category filters in the FRAGMENT
+    // (#pageId=0&style=…&neckline=…) — hoodies and zip-ups share the exact
+    // same path and query. Fold key=value fragments into the signature (minus
+    // the page number and tracking) so they count as different collections;
+    // a plain #anchor has no "=" and changes nothing.
+    const h = (u.hash || "").replace(/^#/, "");
+    let frag = "";
+    if (h.includes("=")) {
+      const fp = new URLSearchParams(h);
+      ["pageId", "page", "mlink"].forEach(k => fp.delete(k));
+      fp.sort();
+      frag = fp.toString().toLowerCase();
+    }
+    return u.pathname + "|" + q + "|" + facet + "|" + cat + "|" + frag;
   } catch (e) { return url; }
 }
 
@@ -254,7 +267,14 @@ async function queueAdvance() {
   await setQueue(q);
   await closeJob();
   const next = q.list[q.idx];
-  setTimeout(() => { try { location.href = next.url; } catch (e) {} }, 1500);
+  setTimeout(() => { try {
+    // A fragment-only step (Gap: next category differs only after the #) never
+    // fires a page load on href assignment, so nothing would restart the scan
+    // and the queue would stall here — force the reload.
+    const here = location.href.split("#")[0];
+    location.href = next.url;
+    if (String(next.url).split("#")[0] === here) location.reload();
+  } catch (e) {} }, 1500);
   return true;
 }
 
@@ -518,7 +538,16 @@ async function runStep(j) {
       const queue = await getQueue();
       const inList = !!(queue && queue.active && j.queued);
       if (inList) {
+        // The engine reads brand/category off the page; when the page states
+        // neither, the list entry that sent us here carries the user's own
+        // naming — fill only the blanks from it, so Excel and LAB never have
+        // to group rows under an empty brand.
+        const ent = queue.list[queue.idx] || {};
         const keptRows = [].concat.apply([], Object.values(kept || {}));
+        keptRows.forEach(r => {
+          if (!r.brand && ent.brand) r.brand = ent.brand;
+          if (!r.category && ent.label) r.category = ent.label;
+        });
         queue.rows = (queue.rows || []).concat(keptRows);
         await setQueue(queue);
         await catalogSave(j, a, kept, total, queue);
@@ -655,7 +684,14 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
         maxItems: m.maxItems == null ? DEFAULT_MAX_ITEMS : m.maxItems,
         withSpec: m.withSpec !== false, filters: m.filters || {}, startedAt: Date.now() });
       send({ ok: true, count: m.list.length });
-      setTimeout(() => { location.href = m.list[0].url; }, 60);
+      setTimeout(() => { try {
+        // same fragment-only guard as queueAdvance: starting a run from the
+        // page it already shows (or one that differs only after the #) must
+        // still reload so maybeResumeQueue fires
+        const here = location.href.split("#")[0];
+        location.href = m.list[0].url;
+        if (String(m.list[0].url).split("#")[0] === here) location.reload();
+      } catch (e) {} }, 60);
     })();
     return true;
   }

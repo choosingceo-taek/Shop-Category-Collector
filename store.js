@@ -61,9 +61,14 @@
     if (u) {
       try {
         const x = new URL(u);
-        // keep Inditex's pelement (it IS the product id), drop tracking noise
-        const pe = x.searchParams.get("pelement");
-        return (x.origin + x.pathname).replace(/\/$/, "").toLowerCase() + (pe ? "?pelement=" + pe : "");
+        // keep params that ARE the product id — Inditex's pelement, the Gap
+        // family's pid (product.do?pid=…) — and drop tracking noise. Without
+        // pid every Gap product shares one path and the whole scan collapses
+        // into a single catalog row.
+        const keep = ["pelement", "pid"]
+          .map(k => { const v = x.searchParams.get(k); return v ? k + "=" + v : ""; })
+          .filter(Boolean).join("&");
+        return (x.origin + x.pathname).replace(/\/$/, "").toLowerCase() + (keep ? "?" + keep : "");
       } catch (e) { return String(u).toLowerCase(); }
     }
     return ((it && it.brand) || "") .toLowerCase() + "|" + ((it && it.name) || "").toLowerCase();

@@ -1,0 +1,20 @@
+# Lululemon · Mango · Gap — live test list
+# Import in Market Lens (side panel → IMPORT), then press SCAN ALL.
+# These three sites block every server/datacenter request, so this run in a
+# real Chrome is the only way to verify them. If a brand comes back with 0
+# products, open that category page, press F12 → Console, paste
+# diagnose-generic.js and send the output.
+
+Lululemon
+- Sweatshirts : https://shop.lululemon.com/c/women-hoodies-and-sweatshirts/n1jux6
+- Tops : https://shop.lululemon.com/c/women-t-shirts/n1wx7w
+
+Mango
+- Tops : https://shop.mango.com/us/en/c/women/t-shirts/8e23bdfb
+- Sweatshirts : https://shop.mango.com/us/en/c/women/knitwear/7e46863e
+- Dresses : https://shop.mango.com/us/en/c/women/dresses-and-jumpsuits/e6bb8705
+
+Gap
+- Hoodies : https://www.gap.com/browse/women/sweatshirts-and-sweatpants?cid=1041168&nav=meganav%3AWomen%3ACategories%3ASweatshirts+%26+Sweatpants#pageId=0&department=136&style=3033105&mlink=1041168,1,W_SWEATS_MERCH_EBB_HOODIES
+- Pullovers : https://www.gap.com/browse/women/sweatshirts-and-sweatpants?cid=1041168&nav=meganav%3AWomen%3ACategories%3ASweatshirts+%26+Sweatpants#pageId=0&department=136&neckline=2015,2601,2016,394218373,2020&mlink=1041168,1,W_SWEATS_MERCH_EBB_PULLOVERS
+- Zip-ups : https://www.gap.com/browse/women/sweatshirts-and-sweatpants?cid=1041168&nav=meganav%3AWomen%3ACategories%3ASweatshirts+%26+Sweatpants#pageId=0&department=136&style=3033106&mlink=1041168,1,W_SWEATS_MERCH_EBB_ZIPUPS
