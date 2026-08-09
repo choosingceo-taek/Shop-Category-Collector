@@ -50,6 +50,8 @@
     fillProjects();
     render();
     if (!$("#v-lab").hidden) renderLab();
+    if (!$("#v-new").hidden) renderNew();
+    if (!$("#v-brands").hidden) renderBrands();
     const brands = new Set(items.map(i => i.brand).filter(Boolean)).size;
     const dated = items.filter(i => i.launched_at).length;
     $("#stats").textContent = items.length
@@ -379,12 +381,16 @@
   function tabTo(view) {
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.view === view));
     $("#v-lab").hidden = view !== "lab";
+    $("#v-new").hidden = view !== "new";
+    $("#v-brands").hidden = view !== "brands";
     $("#v-products").hidden = view !== "products";
     $("#v-lists").hidden = view !== "lists";
     // the search/brand/period row belongs to the product grid only
     document.querySelector(".filters").hidden = view !== "products";
     if (view === "lists") renderLists();
     if (view === "lab") renderLab();
+    if (view === "new") renderNew();
+    if (view === "brands") renderBrands();
   }
 
   // LAB — change over time, computed from what we collected (no external service)
@@ -398,6 +404,141 @@
   }
   ["labmonths", "labgran", "labdim"].forEach(id =>
     $("#" + id).addEventListener("change", renderLab));
+
+  /* ---- NEW ARRIVALS / BY BRAND --------------------------------------------
+
+     The same catalog rows, framed the way the team's weekly edit reads: a
+     week's new arrivals as a browsable feed, and a brand rail with each
+     brand's assortment. Nothing is fetched or computed beyond what the scans
+     already hold — "신상" here means first seen that week (addedAt), which is
+     honest for every shop; a shop-stated launch date exists only on Shopify
+     and is shown on the card when we have it. Clips are excluded, as in LAB:
+     hand-picked items are not arrivals. */
+  let curWeekStart = null, curBrand = "", curCat = "";
+
+  const scanned = () => items.filter(i => i && i.source !== "clip" && i.addedAt);
+
+  function weekBuckets() {
+    const rows = scanned();
+    if (!rows.length) return [];
+    const oldest = Math.min(...rows.map(i => i.addedAt));
+    const months = Math.max(2, Math.ceil((Date.now() - oldest) / (30 * 864e5)) + 1);
+    return window.TrendCalc.timeline(rows, { months, granularity: "week" }).filter(b => b.count);
+  }
+
+  // simple browse card — same look as the product grid, no selection checkbox
+  function feedCard(i) {
+    const onSale = i.price_was && i.price && priceNum(i.price_was) > priceNum(i.price);
+    const img = i.image_url
+      ? `<img class="thumb" src="${esc(i.image_url)}" alt="" loading="lazy">`
+      : `<div class="thumb ph">NO IMAGE</div>`;
+    const link = i.product_url ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">` : "";
+    const launched = i.launched_at && isFinite(Date.parse(i.launched_at))
+      ? `<div class="fb">업로드 ${new Date(Date.parse(i.launched_at)).toISOString().slice(0, 10)}</div>` : "";
+    return `<div class="c">
+      ${link}${img}${link ? "</a>" : ""}
+      <div class="body">
+        ${i.brand ? `<div class="bd">${esc(i.brand)}</div>` : ""}
+        <div class="nm">${link}${esc(i.name || "(이름 없음)")}${link ? "</a>" : ""}</div>
+        ${i.price ? `<div class="pr${onSale ? " sale" : ""}">${esc(i.price)}${onSale ? `<s>${esc(i.price_was)}</s>` : ""}</div>` : ""}
+        ${i.fabric_composition ? `<div class="fb">${esc(i.fabric_composition)}</div>` : ""}
+        ${launched}
+      </div></div>`;
+  }
+
+  const EMPTY_FEED = `<div class="empty">아직 스캔한 상품이 없습니다.<br>
+    사이드 패널에서 리스트를 만들어 <b>▶ Run all</b> 하면 주차별 피드가 여기에 쌓입니다.</div>`;
+
+  function renderNew() {
+    const el = $("#v-new");
+    const weeks = weekBuckets().slice().reverse();          // newest first
+    if (!weeks.length) { el.innerHTML = EMPTY_FEED; return; }
+    if (!weeks.some(w => w.start === curWeekStart)) curWeekStart = weeks[0].start;
+    const wk = weeks.find(w => w.start === curWeekStart);
+
+    const chips = weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}">
+      <b>${esc(w.label)}</b> · ${w.count}</button>`).join("");
+
+    // group the week's arrivals by brand — the shop's order inside each group
+    const groups = new Map();
+    wk.items.forEach(i => {
+      const b = i.brand || "기타";
+      if (!groups.has(b)) groups.set(b, []);
+      groups.get(b).push(i);
+    });
+    const sections = [...groups.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([brand, rows]) =>
+        `<div class="brandsec"><b>${esc(brand)}</b><span>${rows.length}개</span></div>
+         <div class="grid">${rows.map(feedCard).join("")}</div>`).join("");
+
+    el.innerHTML = `
+      <div class="edhead">
+        <div><span class="kicker">${wk.count} new arrivals · 이 주에 처음 수집된 상품</span>
+          <h2>신상 피드</h2></div>
+        <span class="weektag">WEEK ${esc(window.TrendCalc.weekId(wk.start))}</span>
+      </div>
+      <div class="weekchips">${chips}</div>
+      ${sections}`;
+    el.querySelectorAll(".weekchips button").forEach(b =>
+      b.addEventListener("click", () => { curWeekStart = +b.dataset.w; renderNew(); }));
+  }
+
+  function renderBrands() {
+    const el = $("#v-brands");
+    const rows = scanned();
+    if (!rows.length) { el.innerHTML = EMPTY_FEED; return; }
+
+    const byBrand = new Map();
+    rows.forEach(i => {
+      const b = i.brand || "기타";
+      if (!byBrand.has(b)) byBrand.set(b, []);
+      byBrand.get(b).push(i);
+    });
+    const brands = [...byBrand.keys()].sort((a, b) => byBrand.get(b).length - byBrand.get(a).length);
+    if (!byBrand.has(curBrand)) { curBrand = brands[0]; curCat = ""; }
+
+    const weeks = weekBuckets();
+    const latest = weeks[weeks.length - 1];
+    const newOf = b => latest ? latest.items.filter(i => (i.brand || "기타") === b).length : 0;
+
+    const rail = brands.map(b => `<button data-b="${esc(b)}" class="${b === curBrand ? "on" : ""}">
+      <span>${esc(b)}</span><span class="n">${byBrand.get(b).length}</span></button>`).join("");
+
+    const mine = byBrand.get(curBrand) || [];
+    const cats = [...new Set(mine.map(i => i.category).filter(Boolean))];
+    if (curCat && !cats.includes(curCat)) curCat = "";
+    const catChips = cats.length > 1
+      ? `<div class="catchips"><button data-c="" class="${curCat ? "" : "on"}">전체</button>` +
+        cats.map(c => `<button data-c="${esc(c)}" class="${c === curCat ? "on" : ""}">${esc(c)}</button>`).join("") + `</div>`
+      : "";
+    const shown = (curCat ? mine.filter(i => i.category === curCat) : mine)
+      .slice().sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));   // newest first
+    const nw = newOf(curBrand);
+
+    el.innerHTML = `
+      <div class="edhead">
+        <div><span class="kicker">${brands.length} brand profiles · 스캔에서 집계</span>
+          <h2>브랜드</h2></div>
+        ${latest ? `<span class="weektag">WEEK ${esc(window.TrendCalc.weekId(latest.start))}</span>` : ""}
+      </div>
+      <div class="brandwrap">
+        <div class="brail">${rail}</div>
+        <div>
+          <div class="bhero">
+            <h2>${esc(curBrand)}</h2>
+            <div class="bmeta">상품 ${mine.length}개 · 카테고리 ${cats.length || 1}개${
+              nw ? ` · <span class="bnew">이번 주 신규 ${nw}</span>` : ""}</div>
+          </div>
+          ${catChips}
+          <div class="grid">${shown.map(feedCard).join("")}</div>
+        </div>
+      </div>`;
+    el.querySelectorAll(".brail button").forEach(b =>
+      b.addEventListener("click", () => { curBrand = b.dataset.b; curCat = ""; renderBrands(); }));
+    el.querySelectorAll(".catchips button").forEach(b =>
+      b.addEventListener("click", () => { curCat = b.dataset.c; renderBrands(); }));
+  }
   document.querySelectorAll(".tab").forEach(b =>
     b.addEventListener("click", () => tabTo(b.dataset.view)));
 

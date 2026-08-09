@@ -110,6 +110,47 @@
   .foot { color:var(--muted); font-size:11.5px; line-height:1.7; margin-top:22px;
     padding-top:12px; border-top:1px solid var(--line); }
 
+  /* NEW ARRIVALS feed + BY BRAND — editorial framing over the same catalog data */
+  .edhead { display:flex; align-items:flex-end; justify-content:space-between; gap:14px;
+    margin:6px 0 4px; flex-wrap:wrap; }
+  .edhead .kicker { display:block; font-size:10px; text-transform:uppercase;
+    letter-spacing:.16em; color:var(--muted); margin-bottom:6px; }
+  .edhead h2 { font-size:30px; font-weight:700; letter-spacing:-.03em; margin:0; line-height:1.05; }
+  .weektag { font-size:10px; letter-spacing:.12em; border:1px solid var(--ink);
+    padding:4px 9px; white-space:nowrap; align-self:center; }
+  .weekchips { display:flex; gap:6px; flex-wrap:wrap; margin:14px 0 20px;
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:10px 0; }
+  .weekchips button { border:0; background:none; padding:5px 10px; font-size:11.5px;
+    color:var(--muted); border-radius:999px; }
+  .weekchips button b { font-weight:650; }
+  .weekchips button.on { background:var(--ink); color:var(--bg); }
+  .brandsec { margin:22px 0 6px; display:flex; align-items:baseline; gap:8px;
+    border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .brandsec b { font-size:13px; text-transform:uppercase; letter-spacing:.06em; }
+  .brandsec span { color:var(--muted); font-size:11.5px; }
+  .c .thumb.ph { display:flex; align-items:center; justify-content:center;
+    color:var(--muted); font-size:10px; letter-spacing:.08em; }
+
+  .brandwrap { display:grid; grid-template-columns:220px 1fr; gap:22px; align-items:start; }
+  @media (max-width:760px) { .brandwrap { grid-template-columns:1fr; } }
+  .brail { border:1px solid var(--line); border-radius:11px; background:var(--card);
+    overflow:hidden; position:sticky; top:120px; max-height:70vh; overflow-y:auto; }
+  .brail button { display:flex; width:100%; justify-content:space-between; gap:8px;
+    border:0; border-radius:0; border-bottom:1px solid var(--line); background:none;
+    padding:9px 12px; font-size:12.5px; text-align:left; }
+  .brail button:last-child { border-bottom:0; }
+  .brail button .n { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .brail button.on { background:var(--ink); color:var(--bg); }
+  .brail button.on .n { color:var(--bg); opacity:.7; }
+  .bhero { border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:16px; }
+  .bhero h2 { font-size:34px; font-weight:700; letter-spacing:-.03em; margin:0 0 4px; line-height:1; }
+  .bhero .bmeta { color:var(--muted); font-size:12px; }
+  .bhero .bnew { color:var(--ink); font-weight:650; }
+  .catchips { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 16px; }
+  .catchips button { border:1px solid var(--line); background:none; border-radius:999px;
+    padding:4px 11px; font-size:11.5px; color:var(--ink2); }
+  .catchips button.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+
   /* tabs */
   .tabs { display:flex; gap:2px; padding:0 20px; background:var(--card); border-bottom:1px solid var(--line); }
   .tab { border:0; border-bottom:2px solid transparent; border-radius:0; background:none;
@@ -194,6 +235,8 @@
   </header>
   <nav class="tabs">
     <button class="tab on" data-view="lab">LAB</button>
+    <button class="tab" data-view="new">신상 피드</button>
+    <button class="tab" data-view="brands">브랜드</button>
     <button class="tab" data-view="products">상품</button>
     <button class="tab" data-view="lists">스캔 목록</button>
   </nav>
@@ -222,6 +265,8 @@
       <div id="labbody"></div>
     </div>
 
+    <div id="v-new" hidden></div>
+    <div id="v-brands" hidden></div>
     <div id="v-products" hidden><div class="grid" id="grid"></div></div>
 
     <div id="v-lists" hidden>
