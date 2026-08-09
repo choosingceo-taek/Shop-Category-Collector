@@ -459,18 +459,33 @@
     const chips = weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}">
       <b>${esc(w.label)}</b> · ${w.count}</button>`).join("");
 
-    // group the week's arrivals by brand — the shop's order inside each group
-    const groups = new Map();
+    /* Day (newest first) → brand (biggest first) → cards. A week of scans is
+       usually several sittings, and "what came in on Tuesday" is how the team
+       talks about it — one undifferentiated week-pile hides that. The shop's
+       own order survives inside each brand group. */
+    const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+    const byDay = new Map();
     wk.items.forEach(i => {
-      const b = i.brand || "기타";
-      if (!groups.has(b)) groups.set(b, []);
-      groups.get(b).push(i);
+      const d = new Date(i.addedAt);
+      const k = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      if (!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k).push(i);
     });
-    const sections = [...groups.entries()]
-      .sort((a, b) => b[1].length - a[1].length)
-      .map(([brand, rows]) =>
-        `<div class="brandsec"><b>${esc(brand)}</b><span>${rows.length}개</span></div>
-         <div class="grid">${rows.map(feedCard).join("")}</div>`).join("");
+    const sections = [...byDay.entries()].sort((a, b) => b[0] - a[0]).map(([k, rows]) => {
+      const d = new Date(k);
+      const groups = new Map();
+      rows.forEach(i => {
+        const b = i.brand || "기타";
+        if (!groups.has(b)) groups.set(b, []);
+        groups.get(b).push(i);
+      });
+      const inner = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
+        .map(([brand, ii]) =>
+          `<div class="brandsec"><b>${esc(brand)}</b><span>${ii.length}개</span></div>
+           <div class="grid">${ii.map(feedCard).join("")}</div>`).join("");
+      return `<div class="dayhead"><b>${d.getMonth() + 1}/${d.getDate()} (${DOW[d.getDay()]})</b>
+        <span>${rows.length}개</span></div>${inner}`;
+    }).join("");
 
     el.innerHTML = `
       <div class="edhead">

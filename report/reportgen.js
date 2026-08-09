@@ -4,9 +4,16 @@
    The archival requirement drives the whole design: this file must still show
    the same information a year from now. So it references NOTHING external —
    images are embedded as data URIs (downscaled to ~240px, ≈14KB each, so 100
-   products land around 1.4MB), styles are inline, charts are inline SVG, and
-   there is no script. Shops delete products and rotate CDN paths; a report that
-   linked to them would quietly lose its pictures. This one cannot.
+   products land around 1.4MB), styles are inline, charts are inline SVG.
+   The only script is a ten-line inline tab switcher with no dependencies;
+   without it (print, ancient viewers) every section simply shows stacked, so
+   nothing is ever unreachable. Shops delete products and rotate CDN paths; a
+   report that linked to them would quietly lose its pictures. This one cannot.
+
+   The default template reads like the team's weekly edit, not like a printout:
+   a side rail with three sections — 01 New In (day-by-day, brands within each
+   day), 02 By Brand (each brand's assortment, categories within), 03 LAB (the
+   quantitative read). Same figures in every template, per the charter.
 
    Light-mode only, on purpose: it is a document that gets shared, opened on
    someone else's machine and printed, so it should look the same everywhere
@@ -195,14 +202,136 @@ ${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다
   <div><h2>카테고리</h2>${cats.length ? barsH(cats, { alt: "카테고리별 상품 수", labelW: 140 }) : ""}</div>
 </div>`;
 
+    /* ---- the pulse layout (default) ---------------------------------------
+       One card per product, pre-rendered once and reused by index in both the
+       New In and By Brand sections, so the two views can never disagree. */
+    const cardArr = norm.map((p, i) => {
+      const img = images[p.product_url] || "";
+      return `<figure class="p">
+        ${img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`}
+        <figcaption>
+          ${p.brand ? `<span class="pb">${esc(p.brand)}</span>` : ""}
+          <span class="pn">${esc(p.name || "(이름 없음)")}</span>
+          ${p.price != null ? `<span class="pp${p.onSale ? " sale" : ""}">${money(p.price)}${
+            p.onSale ? ` <s>${money(p.priceWas)}</s>` : ""}</span>` : ""}
+          ${p.fibers.length ? `<span class="pf">${esc(p.fibers.map(f => (f.pct != null ? f.pct + "% " : "") + f.fiber).join(", "))}</span>` : ""}
+        </figcaption></figure>`;
+    });
+    const raws = items || [];
+    const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+    const dayKey = ts => { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+    const dayLabel = ts => { const d = new Date(ts); return `${d.getMonth() + 1}/${d.getDate()} (${DOW[d.getDay()]})`; };
+
+    // NEW IN: day (newest first) → brand (biggest first) → cards. "New" is the
+    // day the product was FIRST collected — the one measure every shop shares.
+    const byDay = new Map();
+    raws.forEach((r, i) => {
+      const k = r.addedAt ? dayKey(r.addedAt) : 0;
+      if (!byDay.has(k)) byDay.set(k, []);
+      byDay.get(k).push(i);
+    });
+    const newIn = [...byDay.entries()].sort((a, b) => b[0] - a[0]).map(([k, idxs]) => {
+      const byBrand = new Map();
+      idxs.forEach(i => {
+        const b = raws[i].brand || "기타";
+        if (!byBrand.has(b)) byBrand.set(b, []);
+        byBrand.get(b).push(i);
+      });
+      const groups = [...byBrand.entries()].sort((a, b) => b[1].length - a[1].length)
+        .map(([brand, ii]) => `<div class="bsub">${esc(brand)} <span>${ii.length}</span></div>
+          <div class="grid">${ii.map(i => cardArr[i]).join("")}</div>`).join("");
+      return `<div class="day"><div class="dh"><b>${k ? esc(dayLabel(k)) : "수집일 미상"}</b>
+        <span>${idxs.length}개</span></div>${groups}</div>`;
+    }).join("");
+
+    // BY BRAND: brand (biggest first) → category → cards, with anchor chips.
+    const byBrandAll = new Map();
+    raws.forEach((r, i) => {
+      const b = r.brand || "기타";
+      if (!byBrandAll.has(b)) byBrandAll.set(b, []);
+      byBrandAll.get(b).push(i);
+    });
+    const brandOrder = [...byBrandAll.entries()].sort((a, b) => b[1].length - a[1].length);
+    const brandChips = brandOrder.map(([b, ii], n) =>
+      `<a class="bchip" href="#b${n}">${esc(b)} <span>${ii.length}</span></a>`).join("");
+    const brandSecs = brandOrder.map(([b, ii], n) => {
+      const byCat = new Map();
+      ii.forEach(i => {
+        const c = raws[i].category || "";
+        if (!byCat.has(c)) byCat.set(c, []);
+        byCat.get(c).push(i);
+      });
+      const inner = [...byCat.entries()].sort((a, b) => b[1].length - a[1].length)
+        .map(([cat, jj]) => `${cat ? `<div class="bsub">${esc(cat)} <span>${jj.length}</span></div>` : ""}
+          <div class="grid">${jj.map(i => cardArr[i]).join("")}</div>`).join("");
+      return `<div class="bsec" id="b${n}">
+        <div class="bhero"><h3>${esc(b)}</h3><span>상품 ${ii.length}개 · 카테고리 ${byCat.size}개</span></div>
+        ${inner}</div>`;
+    }).join("");
+
+    const secHead = (kicker, titleText) => `<div class="edhead">
+      <div><span class="kicker">${esc(kicker)}</span><h2 class="big">${esc(titleText)}</h2></div>
+      <span class="weektag">${esc(when)}</span></div>`;
+
+    const pulse = `
+<div class="shell">
+  <aside class="rail">
+    <div class="logo"><i>M</i><span>MARKET<br>LENS</span></div>
+    <nav>
+      <button class="nv on" data-s="new">01 &nbsp;New In</button>
+      <button class="nv" data-s="brand">02 &nbsp;By Brand</button>
+      <button class="nv" data-s="lab">03 &nbsp;LAB</button>
+    </nav>
+    <div class="railfoot">WEEKLY EDIT · ${esc(when)}</div>
+  </aside>
+  <div class="content">
+    <section data-sec="new">
+      ${secHead(`${agg.count.toLocaleString()} new arrivals · 처음 수집된 날짜 기준`, "New In")}
+      ${newIn || `<p class="sub">상품이 없습니다.</p>`}
+    </section>
+    <section data-sec="brand">
+      ${secHead(`${brandOrder.length} brand profiles`, "By Brand")}
+      <div class="bchips">${brandChips}</div>
+      ${brandSecs}
+    </section>
+    <section data-sec="lab">
+      ${secHead("result analysis · 모든 수치는 수집 데이터에서 계산", "LAB")}
+      ${summary}${charts}
+    </section>
+    <footer>
+      이 파일은 생성 시점의 정보를 그대로 담고 있습니다. 이미지와 수치가 파일 안에 저장되어
+      있어 인터넷 연결이나 원본 쇼핑몰 없이도 언제든 동일하게 열립니다.<br>
+      생성: ${esc(when)}${meta.source ? " · 출처: " + esc(meta.source) : ""}${
+        meta.subtitle ? " · " + esc(meta.subtitle) : ""}
+    </footer>
+  </div>
+</div>
+<script>
+(function () {
+  var nav = document.querySelectorAll(".nv"), secs = document.querySelectorAll("[data-sec]");
+  function show(id) {
+    for (var i = 0; i < nav.length; i++) nav[i].classList.toggle("on", nav[i].dataset.s === id);
+    for (var j = 0; j < secs.length; j++) secs[j].style.display = secs[j].dataset.sec === id ? "" : "none";
+  }
+  for (var i = 0; i < nav.length; i++) nav[i].addEventListener("click", function () { show(this.dataset.s); });
+  // brand anchor chips need the brand section visible first
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest(".bchip");
+    if (a) show("brand");
+  });
+  show("new");
+})();
+</script>`;
+
     const bodyByTemplate = {
-      standard: summary + charts + `<h2>상품 (${agg.count.toLocaleString()})</h2><div class="grid">${cards}</div>`,
+      standard: pulse,
       lookbook: `<div class="lbgrid">${plates}</div>` + summary +
         `<div class="two"><div><h2>원단</h2>${fibers.length ? barsH(fibers, { labelW: 140 }) : ""}</div>` +
         `<div><h2>색상</h2>${colors.length ? barsH(colors, { labelW: 140 }) : ""}</div></div>`,
       data: summary + `<h2>상품 상세 (${agg.count.toLocaleString()})</h2>${table}` + charts,
     };
     const body = bodyByTemplate[tmpl] || bodyByTemplate.standard;
+    const isPulse = body === pulse;
 
     return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
@@ -260,10 +389,54 @@ ${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다
   .tb .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .tb .num.sale { color:#d03b3b; font-weight:600; }
   .tb img.tt { width:40px; height:53px; object-fit:cover; border-radius:4px; display:block; }
+  /* pulse — side rail + three sections, the weekly-edit read */
+  .shell { display:grid; grid-template-columns:176px 1fr; min-height:100vh; }
+  .rail { background:#101010; color:#f2f1ec; padding:22px 16px; position:sticky; top:0;
+    height:100vh; display:flex; flex-direction:column; }
+  .logo { display:flex; gap:9px; align-items:center; margin-bottom:26px; }
+  .logo i { font-style:normal; width:30px; height:30px; border-radius:50%; background:#f2f1ec;
+    color:#101010; display:flex; align-items:center; justify-content:center; font-weight:800; }
+  .logo span { font-size:11.5px; font-weight:800; letter-spacing:.14em; line-height:1.3; }
+  .rail nav { display:flex; flex-direction:column; gap:2px; }
+  .nv { text-align:left; border:0; background:none; color:#8f8e88; padding:9px 10px;
+    border-radius:8px; font-size:12.5px; font-weight:600; letter-spacing:.02em; cursor:pointer; }
+  .nv.on { background:#2a2a2a; color:#fff; }
+  .railfoot { margin-top:auto; font-size:9.5px; letter-spacing:.14em; color:#7c7b75;
+    text-transform:uppercase; }
+  .content { padding:34px 40px 70px; background:${SURF}; min-width:0; }
+  .edhead { display:flex; align-items:flex-end; justify-content:space-between; gap:14px;
+    margin:2px 0 18px; flex-wrap:wrap; }
+  .kicker { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.16em;
+    color:${MUTED}; margin-bottom:7px; }
+  h2.big { font-size:34px; font-weight:750; letter-spacing:-.03em; margin:0; line-height:1;
+    border:0; padding:0; }
+  .weektag { font-size:10px; letter-spacing:.12em; border:1px solid ${INK};
+    padding:4px 9px; white-space:nowrap; align-self:center; }
+  .day { margin-bottom:8px; }
+  .dh { display:flex; align-items:baseline; gap:10px; border-bottom:2px solid ${INK};
+    padding:22px 0 7px; margin-bottom:4px; }
+  .dh b { font-size:16px; letter-spacing:-.01em; }
+  .dh span { color:${MUTED}; font-size:12px; }
+  .bsub { display:flex; align-items:baseline; gap:7px; margin:16px 0 9px;
+    font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+  .bsub span { color:${MUTED}; font-weight:400; }
+  .bchips { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:8px; }
+  .bchip { border:1px solid ${GRID}; border-radius:999px; padding:5px 12px; font-size:12px;
+    color:${INK}; text-decoration:none; background:#fff; }
+  .bchip span { color:${MUTED}; }
+  .bsec { margin-top:26px; }
+  .bhero { border-bottom:2px solid ${INK}; padding-bottom:9px; margin-bottom:4px; }
+  .bhero h3 { font-size:23px; margin:0 0 2px; letter-spacing:-.02em; }
+  .bhero span { color:${MUTED}; font-size:12px; }
+  @media (max-width:760px) { .shell { grid-template-columns:1fr; }
+    .rail { position:static; height:auto; flex-direction:row; align-items:center; gap:10px; }
+    .rail nav { flex-direction:row; } .railfoot { display:none; } .content { padding:20px 16px 50px; } }
   @media print { body { background:#fff; } .sheet { box-shadow:none; max-width:none; }
-    .p, .lb, .tb tr { break-inside:avoid; } }
+    .p, .lb, .tb tr, .day, .bsec { break-inside:avoid; }
+    .rail { display:none; } .shell { display:block; }
+    [data-sec] { display:block !important; } }
 </style></head>
-<body><div class="sheet">
+<body>${isPulse ? body : `<div class="sheet">
 <header>
   <h1>${esc(title)}</h1>
   ${meta.subtitle ? `<div class="sub">${esc(meta.subtitle)}</div>` : ""}
@@ -278,7 +451,7 @@ ${body}
   있어 인터넷 연결이나 원본 쇼핑몰 없이도 언제든 동일하게 열립니다.<br>
   생성: ${esc(when)}${meta.source ? " · 출처: " + esc(meta.source) : ""}
 </footer>
-</div></body></html>`;
+</div>`}</body></html>`;
   }
 
   const API = { build, barsH, histogram, swatchFor };
