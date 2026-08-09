@@ -81,6 +81,21 @@
   main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
   .view { flex:1; overflow-y:auto; display:none; flex-direction:column; }
   .view.on { display:flex; }
+  /* The collector does NOT scroll as a page. What you reach for while browsing
+     — the list you are filing into, the capture card, the filter — stays put,
+     the brands scroll between them, and the run controls are pinned to the
+     bottom. One moving part instead of three. */
+  #v-collector { overflow:hidden; }
+  #v-collector .listwrap { flex:1; min-height:0; display:flex; flex-direction:column; }
+  #v-collector .panelcard { flex:1; min-height:0; display:flex; flex-direction:column; }
+  #v-collector .fs.sites { flex:1; min-height:0; display:flex; flex-direction:column; }
+  #listbody { flex:1; min-height:80px; overflow-y:auto; overscroll-behavior:contain;
+    margin:0 -4px; padding:0 4px; }
+  .runbar { flex:none; background:var(--card); border-top:1px solid var(--line2);
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom)); }
+  .runbar .runrow { margin-bottom:7px; }
+  .runbar .runctl { margin-bottom:0; }
+  .runbar .runctl select { flex:0 0 auto; width:auto; font-size:12px; padding:8px 6px; }
 
   /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
   /* The capture card: what is about to be filed, spelled out. Brand and
@@ -338,7 +353,7 @@
              act (it goes out and does work), so it keeps its own card. -->
         <div class="panelcard">
 
-        <div class="fs">
+        <div class="fs sites">
           <div class="fhead"><span class="fico">🗂️</span><span class="ft"><b>Sites</b></span>
             <!-- the list's own tools, as icons: rename, delete, import, and
                  the two export formats, which name themselves -->
@@ -383,36 +398,34 @@
           </details>
         </div>
 
-        <!-- one fixed set of controls, always in the same place: the state
-             lives in enabled/disabled, not in buttons appearing and vanishing -->
-        <div class="fs">
-          <div class="fhead"><span class="fico">▶️</span><span class="ft"><b>Scan</b></span></div>
-          <div class="qstate" id="qstate" hidden></div>
-          <div class="runrow">
-            <button id="runlist" class="solid">▶ Scan all</button>
-          </div>
-          <div class="runctl">
-            <button id="jpause">⏸ Pause</button>
-            <button id="jreset" class="danger" title="Stop the run and clear its state">↺ Reset</button>
-          </div>
-          <label class="capline" for="maxitems">Max products per URL
-            <select id="maxitems" title="Upper limit of products taken from one URL">
-              <option value="30">30</option>
-              <option value="60" selected>60 (default)</option>
-              <option value="100">100</option>
-              <option value="200">200</option>
-              <option value="0">No limit</option>
-            </select>
-          </label>
-          <div class="result" id="listresult" hidden>
-            <span id="resulttext"></span>
-            <div class="row" style="margin-top:7px">
-              <button id="listxlsx" class="grow">⬇ Excel</button>
-              <button id="listview" class="grow">View</button>
-            </div>
+        </div>
+      </div>
+
+      <!-- The run controls are a fixed bottom bar, the way an iOS toolbar
+           works: they never scroll out from under the thumb, and the list of
+           brands above is the only thing that moves. -->
+      <div class="runbar">
+        <div class="qstate" id="qstate" hidden></div>
+        <div class="result" id="listresult" hidden>
+          <span id="resulttext"></span>
+          <div class="row" style="margin-top:7px">
+            <button id="listxlsx" class="grow">⬇ Excel</button>
+            <button id="listview" class="grow">View</button>
           </div>
         </div>
-
+        <div class="runrow">
+          <button id="runlist" class="solid">▶ Scan all</button>
+        </div>
+        <div class="runctl">
+          <button id="jpause">⏸ Pause</button>
+          <button id="jreset" class="danger" title="Stop the run and clear its state">↺ Reset</button>
+          <select id="maxitems" title="Products taken from one URL" aria-label="Max products per URL">
+            <option value="30">30</option>
+            <option value="60" selected>60</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="0">All</option>
+          </select>
         </div>
       </div>
     </section>
