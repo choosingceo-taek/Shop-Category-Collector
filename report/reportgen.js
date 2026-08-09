@@ -305,7 +305,7 @@
       });
       // data-brand lets the chip row filter without re-rendering anything
       const groups = [...byBrand.entries()].sort((a, b) => b[1].length - a[1].length)
-        .map(([brand, ii]) => `<div class="bgrp" data-brand="${esc(brand)}">
+        .map(([brand, ii]) => `<div class="bgrp" data-brand="${esc(brand)}" data-tier="${esc((raws[ii[0]] || {}).tier || "")}">
           <div class="bsub">${esc(brand)} <span>${ii.length}</span></div>
           <div class="grid">${ii.map(i => cardArr[i]).join("")}</div></div>`).join("");
       return `<div class="day"><div class="dh"><b>${k ? esc(dayLabel(k)) : "Date unknown"}</b>
@@ -324,6 +324,17 @@
         feedBrands.map(([b, n]) => `<button class="fch" data-b="${esc(b)}">${esc(b)} <span>${n}</span></button>`).join("") +
         `</div>`
       : "";
+    // tier chips filter the same feed, one level up from brands
+    const feedTiers = (() => {
+      const m = new Map();
+      raws.forEach(r => { const t = (r && r.tier) || ""; if (t) m.set(t, (m.get(t) || 0) + 1); });
+      return [...m.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    })();
+    const tierChips = feedTiers.length
+      ? `<div class="fchips tchips"><button class="fch tch on" data-t="">All tiers <span>${raws.length}</span></button>` +
+        feedTiers.map(([t, n]) => `<button class="fch tch" data-t="${esc(t)}">${esc(t)} <span>${n}</span></button>`).join("") +
+        `</div>`
+      : "";
 
     // BY BRAND: brand (biggest first) → category → cards, with anchor chips.
     const byBrandAll = new Map();
@@ -332,9 +343,24 @@
       if (!byBrandAll.has(b)) byBrandAll.set(b, []);
       byBrandAll.get(b).push(i);
     });
+    /* Tier ordering when the brand sheet has been imported: the team ask
+       "what are the hero brands doing" before "what is brand #37 doing", and a
+       flat list of forty names cannot answer that. Untiered brands keep their
+       own group rather than disappearing. */
+    const tierOfBrand = b => (raws[(byBrandAll.get(b) || [])[0]] || {}).tier || "";
     const brandOrder = [...byBrandAll.entries()].sort((a, b) => b[1].length - a[1].length);
-    const brandChips = brandOrder.map(([b, ii], n) =>
-      `<a class="bchip" href="#b${n}">${esc(b)} <span>${ii.length}</span></a>`).join("");
+    const tiersPresent = [...new Set(brandOrder.map(([b]) => tierOfBrand(b)))]
+      .sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || String(a).localeCompare(String(b)));
+    const hasTiers = tiersPresent.some(Boolean);
+    const brandChips = hasTiers
+      ? tiersPresent.map(t => {
+          const mine = brandOrder.filter(([b]) => tierOfBrand(b) === t);
+          if (!mine.length) return "";
+          return `<div class="tiergrp"><span class="tlabel">${esc(t || "Untiered")}</span>` +
+            mine.map(([b, ii]) => `<a class="bchip" href="#b${brandOrder.findIndex(x => x[0] === b)}">${esc(b)} <span>${ii.length}</span></a>`).join("") +
+            `</div>`;
+        }).join("")
+      : brandOrder.map(([b, ii], n) => `<a class="bchip" href="#b${n}">${esc(b)} <span>${ii.length}</span></a>`).join("");
     const brandSecs = brandOrder.map(([b, ii], n) => {
       const byCat = new Map();
       ii.forEach(i => {
@@ -345,8 +371,10 @@
       const inner = [...byCat.entries()].sort((a, b) => b[1].length - a[1].length)
         .map(([cat, jj]) => `${cat ? `<div class="bsub">${esc(cat)} <span>${jj.length}</span></div>` : ""}
           <div class="grid">${jj.map(i => cardArr[i]).join("")}</div>`).join("");
+      const tier = tierOfBrand(b);
       return `<div class="bsec" id="b${n}">
-        <div class="bhero"><h3>${esc(b)}</h3><span>${ii.length} products · ${byCat.size} categories</span></div>
+        <div class="bhero"><h3>${esc(b)}${tier ? `<em class="tierbadge">${esc(tier)}</em>` : ""}</h3>
+          <span>${ii.length} products · ${byCat.size} categories</span></div>
         ${inner}</div>`;
     }).join("");
 
@@ -368,6 +396,7 @@
   <div class="content">
     <section data-sec="new">
       ${secHead(`${agg.count.toLocaleString()} new arrivals · by first collected date`, "New In")}
+      ${tierChips}
       ${feedChips}
       ${newIn || `<p class="sub">No products.</p>`}
     </section>
@@ -400,24 +429,36 @@
 
   // brand filter for New In: hide the groups of other brands, and hide a day
   // once nothing is left in it, so the date headers never lie about the count
-  var chips = document.querySelectorAll(".fch");
-  function filterBrand(b) {
-    for (var i = 0; i < chips.length; i++) chips[i].classList.toggle("on", chips[i].dataset.b === b);
+  var bChips = document.querySelectorAll(".fch:not(.tch)");
+  var tChips = document.querySelectorAll(".fch.tch");
+  var curB = "", curT = "";
+  function applyFilter() {
+    for (var i = 0; i < bChips.length; i++) bChips[i].classList.toggle("on", bChips[i].dataset.b === curB);
+    for (var j = 0; j < tChips.length; j++) tChips[j].classList.toggle("on", tChips[j].dataset.t === curT);
     var days = document.querySelectorAll("[data-sec='new'] .day");
     for (var d = 0; d < days.length; d++) {
       var grps = days[d].querySelectorAll(".bgrp"), shown = 0, n = 0;
       for (var g = 0; g < grps.length; g++) {
-        var keep = !b || grps[g].dataset.brand === b;
+        var keep = (!curB || grps[g].dataset.brand === curB) &&
+                   (!curT || grps[g].dataset.tier === curT);
         grps[g].style.display = keep ? "" : "none";
         if (keep) { shown++; n += grps[g].querySelectorAll(".p").length; }
       }
       days[d].style.display = shown ? "" : "none";
       var c = days[d].querySelector(".dcount");
-      if (c) c.textContent = String(b ? n : c.dataset.all);
+      if (c) c.textContent = String((curB || curT) ? n : c.dataset.all);
+    }
+    // a brand chip that no longer belongs to the chosen tier would be a dead end
+    for (var q = 0; q < bChips.length; q++) {
+      var bn = bChips[q].dataset.b;
+      var any = !bn || !curT || document.querySelector("[data-sec='new'] .bgrp[data-brand='" + bn.replace(/'/g, "\\'") + "'][data-tier='" + curT + "']");
+      bChips[q].style.display = any ? "" : "none";
     }
   }
-  for (var k = 0; k < chips.length; k++)
-    chips[k].addEventListener("click", function () { filterBrand(this.dataset.b); });
+  for (var k = 0; k < bChips.length; k++)
+    bChips[k].addEventListener("click", function () { curB = this.dataset.b; applyFilter(); });
+  for (var t2 = 0; t2 < tChips.length; t2++)
+    tChips[t2].addEventListener("click", function () { curT = this.dataset.t; curB = ""; applyFilter(); });
   // brand anchor chips need the brand section visible first
   document.addEventListener("click", function (e) {
     var a = e.target.closest && e.target.closest(".bchip");
@@ -549,6 +590,14 @@
   .fch span { color:${MUTED}; margin-left:3px; }
   .fch.on { background:${INK}; color:#fff; border-color:${INK}; }
   .fch.on span { color:rgba(255,255,255,.7); }
+  .tchips { margin-bottom:10px; }
+  .fch.tch.on { background:#1f8c73; border-color:#1f8c73; }
+  .tiergrp { display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-bottom:8px; }
+  .tiergrp .tlabel { font-size:9.5px; letter-spacing:.12em; text-transform:uppercase;
+    color:${MUTED}; margin-right:2px; }
+  .bhero h3 .tierbadge { font-style:normal; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; vertical-align:middle; margin-left:10px; padding:3px 9px;
+    border:1px solid ${GRID}; border-radius:999px; color:${MUTED}; }
   .bchips { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:8px; }
   .bchip { border:1px solid ${GRID}; border-radius:999px; padding:5px 12px; font-size:12px;
     color:${INK}; text-decoration:none; background:#fff; }

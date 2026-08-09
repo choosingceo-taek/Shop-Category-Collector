@@ -72,19 +72,21 @@
   // different size stay comparable — a big drop week can't fake a rising fibre.
   const DIMS = {
     fabric: {
-      label: "원단",
+      label: "Fabric",
       keysOf: it => [...new Set(Calc.parseFibers(it.fabric_composition).map(f => f.fiber))],
     },
     color: {
-      label: "색상",
+      label: "Colour",
       keysOf: it => [...new Set(Calc.parseColors(it.colorways).map(titleCase))],
     },
     keyword: {
-      label: "키워드",
+      label: "Design keyword",
       keysOf: it => Calc.normItem(it).keywords,
     },
-    brand: { label: "브랜드", keysOf: it => (it.brand ? [it.brand] : []) },
-    category: { label: "카테고리", keysOf: it => (it.category ? [it.category] : []) },
+    brand: { label: "Brand", keysOf: it => (it.brand ? [it.brand] : []) },
+    category: { label: "Category", keysOf: it => (it.category ? [it.category] : []) },
+    // attached at display time from the imported brand sheet (lists.tierMap)
+    tier: { label: "Tier", keysOf: it => (it.tier ? [it.tier] : []) },
   };
   function titleCase(s) {
     return String(s || "").replace(/\s+/g, " ").trim().replace(/\b\w/g, c => c.toUpperCase());
@@ -387,6 +389,28 @@
     });
   }
 
+  /* Plain frequency ranking over the whole window.
+
+     The share charts answer "is this rising"; this answers the flatter question
+     a designer asks first — "what am I actually seeing, most to least". Counts
+     are products, not mentions: a name repeating a word does not vote twice
+     (keysOf de-duplicates per item), so the ranking cannot be inflated by
+     wordy titles. */
+  function ranked(items, opts) {
+    opts = opts || {};
+    const dim = opts.dim || "keyword";
+    const per = periodsFor(items, dim, opts).filter(p => p.count);
+    const total = per.reduce((n, p) => n + p.count, 0);
+    const counts = new Map();
+    per.forEach(p => p.counts.forEach((v, k) => counts.set(k, (counts.get(k) || 0) + v)));
+    const rows = [...counts.entries()]
+      .filter(([, v]) => v >= (opts.minCount == null ? 2 : opts.minCount))
+      .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+      .slice(0, opts.top || 20)
+      .map(([key, count]) => ({ key, count, share: total ? Math.round((count / total) * 1000) / 10 : 0 }));
+    return { dim, label: (DIMS[dim] || {}).label || dim, total, rows };
+  }
+
   // Headline numbers for the LAB header.
   function overview(items, opts) {
     opts = opts || {};
@@ -417,7 +441,8 @@
   }
 
   const API = { timeline, sharesByBucket, periodsFor, series, movers, latestChange,
-    emerging, ledger, priceByPeriod, overview, weeklySnapshots, weekId, DIMS, bucketStart };
+    emerging, ledger, ranked, priceByPeriod, overview, weeklySnapshots, weekId,
+    DIMS, bucketStart };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.TrendCalc = API;
 })(typeof self !== "undefined" ? self : this);

@@ -63,23 +63,34 @@
          row become brand and label by position
 
      Anything without a URL is skipped rather than guessed at. */
-  const HDR = {
-    url: /^(url|link|주소|링크|사이트)$/i,
-    brand: /^(brand|브랜드|shop|store|매장)$/i,
-    label: /^(category|카테고리|label|name|이름|분류|메모|note)$/i,
-  };
+  /* Header matching is by CONTAINS, in priority order, and each column is
+     claimed once. The team's brand sheet is why: its columns are
+       Brand Level | Primary Category | Secondary Category | Brand | Main Page Link
+     — "Main Page Link" never equalled "url", and "Brand Level" would have been
+     read as the brand column before "Brand" got a chance. Tier is tried first
+     precisely because its header usually contains the word Brand too. */
+  const HDR = [
+    ["tier",  /(tier|level|등급|티어|그룹)/i],
+    ["url",   /(url|link|주소|링크|사이트|address)/i],
+    ["brand", /(brand|브랜드|shop|store|매장|label)/i],
+    ["label", /(category|카테고리|name|이름|분류|메모|note|type)/i],
+  ];
+
   function parseGrid(grid) {
     const rows = (grid || []).map(r => (r || []).map(c => cellText(c)));
     if (!rows.length) return [];
 
     // find a header row in the first few lines
     let hdrIdx = -1, cols = null;
-    for (let i = 0; i < Math.min(5, rows.length); i++) {
+    for (let i = 0; i < Math.min(6, rows.length); i++) {
       const r = rows[i];
-      const found = { url: -1, brand: -1, label: -1 };
+      const found = { tier: -1, url: -1, brand: -1, label: -1 };
       r.forEach((c, j) => {
         const v = String(c || "").trim();
-        Object.keys(HDR).forEach(k => { if (found[k] < 0 && HDR[k].test(v)) found[k] = j; });
+        if (!v) return;
+        // first unclaimed key whose pattern this header matches wins the column
+        const hit = HDR.find(([k, re]) => found[k] < 0 && re.test(v));
+        if (hit) found[hit[0]] = j;
       });
       if (found.url >= 0) { hdrIdx = i; cols = found; break; }
     }
@@ -89,11 +100,12 @@
     let lastBrand = "";
     for (let i = start; i < rows.length; i++) {
       const r = rows[i];
-      let url = "", brand = "", label = "";
+      let url = "", brand = "", label = "", tier = "";
       if (cols) {
         url = firstUrl(r[cols.url]);
         brand = cols.brand >= 0 ? String(r[cols.brand] || "").trim() : "";
         label = cols.label >= 0 ? String(r[cols.label] || "").trim() : "";
+        tier = cols.tier >= 0 ? tierOf(r[cols.tier]) : "";
         if (!url) url = firstUrl(r.join(" "));      // URL drifted to another column
       } else {
         const j = r.findIndex(c => firstUrl(c));
@@ -119,9 +131,22 @@
           label = (segs.pop() || "").replace(/\.html?$/i, "").replace(/[-_]+/g, " ").trim();
         } catch (e) { label = ""; }
       }
-      out.push({ brand, label, url });
+      out.push(tier ? { brand, label, url, tier } : { brand, label, url });
     }
     return out;
+  }
+
+  /* "Tier 1 : Hero Reference Brands" -> "Tier 1".
+     The sheet writes a tier and a nickname in one cell; only the tier is a
+     stable key to group by, and the prose after the colon changes wording
+     between revisions. Anything without a recognisable tier number is kept
+     verbatim so an unexpected scheme still groups, just under its own name. */
+  function tierOf(v) {
+    const t = String(cellText(v) || "").trim();
+    if (!t) return "";
+    const m = t.match(/tier\s*([0-9]+)|(?:^|[^0-9])([0-9]+)\s*(?:차|등급)/i);
+    if (m) return "Tier " + (m[1] || m[2]);
+    return t.split(/[:：]/)[0].trim().slice(0, 24);
   }
   // an ExcelJS cell can be a string, a hyperlink object, or a rich-text run
   function cellText(c) {
@@ -189,11 +214,17 @@
 
   // parseGrid's header shape. Header words are the ones HDR already matches, so
   // a file exported here re-imports without the user renaming anything.
-  const GRID_HEADER = ["브랜드", "카테고리", "URL"];
+  const GRID_HEADER = ["Brand", "Category", "URL"];
   function toGrid(entries) {
-    return [GRID_HEADER.slice()].concat((entries || [])
-      .filter(e => e && e.url)
-      .map(e => [String(e.brand || ""), String(e.label || ""), String(e.url)]));
+    const rows = (entries || []).filter(e => e && e.url);
+    // the Tier column only appears when something actually carries a tier, so a
+    // plain list round-trips as three columns exactly as before
+    const withTier = rows.some(e => e.tier);
+    const head = withTier ? ["Tier"].concat(GRID_HEADER) : GRID_HEADER.slice();
+    return [head].concat(rows.map(e => {
+      const base = [String(e.brand || ""), String(e.label || ""), String(e.url)];
+      return withTier ? [String(e.tier || "")].concat(base) : base;
+    }));
   }
 
   /* Merge an imported list back in.
@@ -217,10 +248,12 @@
       }
       const cur = list[index.get(k)];
       const nb = String(e.brand || "").trim(), nl = String(e.label || "").trim();
-      const changed = (nb && nb !== cur.brand) || (nl && nl !== cur.label);
+      const nt = String(e.tier || "").trim();
+      const changed = (nb && nb !== cur.brand) || (nl && nl !== cur.label) || (nt && nt !== cur.tier);
       if (changed) {
         if (nb) cur.brand = nb;
         if (nl) cur.label = nl;
+        if (nt) cur.tier = nt;
         updated++;
       } else skipped++;
     });
@@ -239,8 +272,20 @@
     try { chrome.storage.local.set({ [KEY]: lists }, () => r()); } catch (e) { r(); }
   });
 
+  /* brand -> tier, from whatever the lists carry. Applied at DISPLAY time by
+     brand name, so importing the tier sheet once labels products that were
+     scanned long before — no re-scan, no migration. */
+  function tierMap(lists) {
+    const m = {};
+    [].concat(lists || []).forEach(l => (l.entries || []).forEach(e => {
+      const b = String((e && e.brand) || "").trim().toLowerCase();
+      if (b && e.tier) m[b] = e.tier;
+    }));
+    return m;
+  }
+
   const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl,
-    toText, toGrid, GRID_HEADER, load, save, KEY };
+    toText, toGrid, GRID_HEADER, tierOf, tierMap, load, save, KEY };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.ScanLists = API;
 })(typeof self !== "undefined" ? self : this);

@@ -18,6 +18,8 @@
   let projects = [];
   let snapshots = [];         // frozen weekly numbers (survive product cleanup)
   let merged = 0;             // rows collapsed as the same product
+  let tiers = {};             // brand (lowercased) -> "Tier 1" … from the imported sheet
+  let curTier = "";           // tier filter shared by LAB / New In / By Brand
   const picked = new Set();   // product keys the user has selected
 
   const priceNum = v => { const m = String(v || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
@@ -41,8 +43,16 @@
   async function load() {
     // one product, one row — see store.dedupe for what counts as the same product
     const raw = await S.allProducts();
+    /* Tier comes from the imported brand sheet and is applied HERE, by brand
+       name, rather than being stamped during a scan. That way importing the
+       sheet once labels everything collected months ago — no re-scan. */
+    try { tiers = window.ScanLists.tierMap(await window.ScanLists.load()); } catch (e) { tiers = {}; }
     // repair rows the pre-fix scans stored with a placeholder "photo"
-    raw.forEach(i => { if (i) i.image_url = S.cleanImage(i.image_url); });
+    raw.forEach(i => {
+      if (!i) return;
+      i.image_url = S.cleanImage(i.image_url);
+      i.tier = tiers[String(i.brand || "").trim().toLowerCase()] || "";
+    });
     const dd = S.dedupe(raw);
     items = dd.rows; merged = dd.merged;
     projects = await S.allProjects();
@@ -411,12 +421,14 @@
 
   // LAB — change over time, computed from what we collected (no external service)
   function renderLab() {
-    window.LabView.render($("#labbody"), items, {
+    window.LabView.render($("#labbody"), items.filter(inTier), {
+      tierChips: tierChips(new Map(tierList().map(t => [t, items.filter(i => i.tier === t).length]))),
       months: parseInt($("#labmonths").value, 10) || 6,
       granularity: $("#labgran").value,
       dim: $("#labdim").value,
       snapshots,
     });
+    wireTierChips($("#labbody"), renderLab);
   }
   ["labmonths", "labgran", "labdim"].forEach(id =>
     $("#" + id).addEventListener("change", renderLab));
@@ -432,7 +444,27 @@
      hand-picked items are not arrivals. */
   let curWeekStart = null, curBrand = "", curCat = "", curFeedBrand = "";
 
-  const scanned = () => items.filter(i => i && i.source !== "clip" && i.addedAt);
+  const tierList = () => [...new Set(items.map(i => i.tier).filter(Boolean))].sort();
+  const inTier = i => !curTier || i.tier === curTier;
+  const scanned = () => items.filter(i => i && i.source !== "clip" && i.addedAt && inTier(i));
+
+  /* One chip row, reused by every view that can be narrowed to a tier. Counts
+     are shown so a chip can never lead to an empty screen, and the row is
+     omitted entirely when no tier data has been imported. */
+  function tierChips(counts) {
+    const list = tierList();
+    if (!list.length) return "";
+    const n = t => (counts ? (counts.get(t) || 0) : null);
+    const all = counts ? [...counts.values()].reduce((a, b) => a + b, 0) : null;
+    return `<div class="catchips tierchips">
+      <button data-t="" class="${curTier ? "" : "on"}">All tiers${all != null ? ` · ${all}` : ""}</button>` +
+      list.map(t => `<button data-t="${esc(t)}" class="${t === curTier ? "on" : ""}">${esc(t)}${
+        n(t) != null ? ` · ${n(t)}` : ""}</button>`).join("") + `</div>`;
+  }
+  function wireTierChips(el, rerender) {
+    el.querySelectorAll(".tierchips button").forEach(b =>
+      b.addEventListener("click", () => { curTier = b.dataset.t; rerender(); }));
+  }
 
   // the same haystack the 상품 grid searches, so one query means one thing
   const matchesQ = (i, q) => !q ||
@@ -556,9 +588,11 @@
         <span class="weektag">WEEK ${esc(window.TrendCalc.weekId(wk.start))}</span>
       </div>
       <div class="weekchips">${chips}</div>
+      ${tierChips(new Map(tierList().map(t => [t, wk.items.filter(i => i.tier === t).length])))}
       ${brandChips}
       ${sections || `<div class="none">${q ? `Nothing matches "${esc(q)}" in this week.` : "No products in this week."}</div>`}`;
     armImgFallback(el);
+    wireTierChips(el, () => { curFeedBrand = ""; renderNew(); });
     el.querySelectorAll(".weekchips button").forEach(b =>
       b.addEventListener("click", () => { curWeekStart = +b.dataset.w; curFeedBrand = ""; renderNew(); }));
     el.querySelectorAll(".catchips button").forEach(b =>
@@ -583,8 +617,21 @@
     const latest = weeks[weeks.length - 1];
     const newOf = b => latest ? latest.items.filter(i => (i.brand || "Other") === b).length : 0;
 
-    const rail = brands.map(b => `<button data-b="${esc(b)}" class="${b === curBrand ? "on" : ""}">
-      <span>${esc(b)}</span><span class="n">${byBrand.get(b).length}</span></button>`).join("");
+    /* The rail groups by tier when the sheet has been imported: the team think
+       in tiers first ("what are the hero brands doing"), and a flat list of 40
+       brands makes that question unanswerable. Untiered brands sit under a
+       plain heading rather than being hidden. */
+    const btn = b => `<button data-b="${esc(b)}" class="${b === curBrand ? "on" : ""}">
+      <span>${esc(b)}</span><span class="n">${byBrand.get(b).length}</span></button>`;
+    const railTiers = [...new Set(brands.map(b => (byBrand.get(b)[0] || {}).tier || ""))]
+      .sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || String(a).localeCompare(String(b)));
+    const rail = railTiers.length > 1 || railTiers[0]
+      ? railTiers.map(t => {
+          const mine = brands.filter(b => ((byBrand.get(b)[0] || {}).tier || "") === t);
+          if (!mine.length) return "";
+          return `<div class="railgrp">${esc(t || "Untiered")}</div>` + mine.map(btn).join("");
+        }).join("")
+      : brands.map(btn).join("");
 
     const mine = byBrand.get(curBrand) || [];
     const cats = [...new Set(mine.map(i => i.category).filter(Boolean))];
@@ -605,11 +652,12 @@
           <h2>By Brand</h2></div>
         ${latest ? `<span class="weektag">WEEK ${esc(window.TrendCalc.weekId(latest.start))}</span>` : ""}
       </div>
+      ${tierChips(new Map(tierList().map(t => [t, rows.filter(i => i.tier === t).length])))}
       <div class="brandwrap">
         <div class="brail">${rail}</div>
         <div>
           <div class="bhero">
-            <h2>${esc(curBrand)}</h2>
+            <h2>${esc(curBrand)}${(mine[0] || {}).tier ? `<em class="tierbadge">${esc(mine[0].tier)}</em>` : ""}</h2>
             <div class="bmeta">${mine.length} products · ${cats.length || 1} categories${
               nw ? ` · <span class="bnew">${nw} new this week</span>` : ""}</div>
           </div>
@@ -619,6 +667,7 @@
         </div>
       </div>`;
     armImgFallback(el);
+    wireTierChips(el, () => { curBrand = ""; curCat = ""; renderBrands(); });
     el.querySelectorAll(".brail button").forEach(b =>
       b.addEventListener("click", () => { curBrand = b.dataset.b; curCat = ""; renderBrands(); }));
     el.querySelectorAll(".catchips button").forEach(b =>

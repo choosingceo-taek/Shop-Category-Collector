@@ -110,6 +110,16 @@
   .lg2 .pd .arch { font-style:normal; font-size:9px; margin-left:5px; padding:1px 4px;
     border:1px dashed var(--line); color:var(--muted); }
   .lg2 .tp { color:var(--ink2); }
+  /* frequency ranking */
+  .rank { display:flex; flex-direction:column; }
+  .rk { display:grid; grid-template-columns:26px minmax(90px,180px) 1fr auto; gap:10px;
+    align-items:center; padding:5px 0; font-size:12.5px; }
+  .rk .ri { color:var(--muted); font-size:11px; text-align:right; font-variant-numeric:tabular-nums; }
+  .rk .rn { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rk .rb { background:var(--line); height:8px; border-radius:999px; overflow:hidden; }
+  .rk .rb i { display:block; height:100%; background:var(--accent); border-radius:999px; }
+  .rk .rc { font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:650; }
+  .rk .rc em { font-style:normal; font-weight:400; color:var(--muted); margin-left:6px; font-size:11px; }
   .none { color:var(--muted); font-size:12px; padding:10px 0; }
   .notice { padding:10px 12px; background:var(--wash); border-radius:8px; font-size:12.5px;
     margin-top:16px; }
@@ -161,6 +171,13 @@
   .catchips button { border:1px solid var(--line); background:none; border-radius:999px;
     padding:4px 11px; font-size:11.5px; color:var(--ink2); }
   .catchips button.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .tierchips { margin:2px 0 12px; }
+  .brail .railgrp { font-size:9.5px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted); padding:9px 12px 5px; border-bottom:1px solid var(--line);
+    background:var(--wash); }
+  .bhero h2 .tierbadge { font-style:normal; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; vertical-align:middle; margin-left:9px; padding:3px 8px;
+    border:1px solid var(--line); border-radius:999px; color:var(--muted); }
 
   /* tabs */
   .tabs { display:flex; gap:2px; padding:0 20px; background:var(--card); border-bottom:1px solid var(--line); }
@@ -271,6 +288,7 @@
             <option value="keyword">Design keyword</option>
             <option value="brand">Brand</option>
             <option value="category">Category</option>
+            <option value="tier">Tier</option>
           </select></div>
       </div>
       <div id="labbody"></div>

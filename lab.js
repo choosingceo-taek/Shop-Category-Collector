@@ -187,6 +187,25 @@
       </tr></thead><tbody>${table}</tbody></table>`;
   }
 
+  /* Plain frequency ranking — "what am I seeing, most to least".
+
+     This is the flat question the share charts skip past. Bars are drawn
+     relative to the top row so the shape of the tail is visible; the count and
+     the share are both printed because a share alone hides how thin a sample
+     is. Counts are products, not word mentions. */
+  function rankedList(r) {
+    if (!r.rows.length) {
+      return `<div class="none">Nothing recorded ${r.total ? "above the sample floor" : "yet"}.</div>`;
+    }
+    const max = r.rows[0].count || 1;
+    return `<div class="rank">` + r.rows.map((x, i) => `<div class="rk">
+      <span class="ri">${i + 1}</span>
+      <span class="rn">${esc(x.key)}</span>
+      <span class="rb"><i style="width:${Math.max(2, (x.count / max) * 100).toFixed(1)}%"></i></span>
+      <span class="rc">${x.count}<em>${x.share}%</em></span>
+    </div>`).join("") + `</div>`;
+  }
+
   // Rising / falling table with the change in percentage points.
   function moverList(rows, dir) {
     if (!rows.length) return `<div class="none">None</div>`;
@@ -227,10 +246,12 @@
     const c = T.latestChange(items, Object.assign({ dim, top: 10, minCount: 2 }, base));
     const e = T.emerging(items, Object.assign({ dim, top: 8, window: 3, minCount: 2 }, base));
     const led = T.ledger(items, Object.assign({ dim, top: 4 }, base));
+    const rk = T.ranked(items, Object.assign({ dim, top: 20, minCount: 2 }, base));
     const label = (T.DIMS[dim] || {}).label || dim;
     const unit = granularity === "week" ? "week" : "month";
 
     el.innerHTML = `
+      ${opts.tierChips || ""}
       <div class="labhead">
         <div class="tiles">
           <div class="tile"><div class="tl">Products</div><div class="tv">${o.total.toLocaleString()}</div>
@@ -252,6 +273,9 @@
 
       <h3>${esc(label)} to watch now <span class="sub">reason always shown</span></h3>
       ${emergingBoard(e)}
+
+      <h3>Most seen ${esc(label)} <span class="sub">whole window, by frequency</span></h3>
+      ${rankedList(rk)}
 
       <h3>New arrivals per period</h3>
       ${volumeChart(s.labels, s.counts)}
@@ -281,5 +305,5 @@
         clipped ? ` ${clipped} hand-picked products are excluded here because that sample is biased (they remain in the product list and in Excel).` : ""}</p>`;
   }
 
-  root.LabView = { render, lineChart, volumeChart, changeBoard, emergingBoard, ledgerTable, priceBoard };
+  root.LabView = { render, lineChart, volumeChart, changeBoard, emergingBoard, ledgerTable, priceBoard, rankedList };
 })(typeof self !== "undefined" ? self : this);
