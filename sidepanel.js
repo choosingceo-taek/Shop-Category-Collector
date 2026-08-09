@@ -368,6 +368,47 @@
     toast(`${m.added}개 추가` + (m.skipped ? ` · ${m.skipped}개 중복` : ""));
   });
 
+  // ---- import a list from a file -------------------------------------------
+  // Designers keep these lists in Excel as often as in a text file, so accept
+  // both. Spreadsheets are read with the ExcelJS already bundled for export.
+  async function gridFromFile(file) {
+    const name = (file.name || "").toLowerCase();
+    if (/\.(xlsx|xlsm)$/.test(name)) {
+      const wb = new window.ExcelJS.Workbook();
+      await wb.xlsx.load(await file.arrayBuffer());
+      const grid = [];
+      (wb.worksheets || []).forEach(ws => {
+        ws.eachRow({ includeEmpty: false }, row => {
+          const vals = Array.isArray(row.values) ? row.values.slice(1) : [];
+          grid.push(vals);
+        });
+      });
+      return L.parseGrid(grid);
+    }
+    const text = await file.text();
+    if (/\.(csv|tsv)$/.test(name)) return L.parseGrid(L.parseCsv(text));
+    // .txt — try the written format first, fall back to a delimited grid
+    const asText = L.parseList(text);
+    return asText.length ? asText : L.parseGrid(L.parseCsv(text));
+  }
+
+  $("#importbtn").addEventListener("click", () => $("#importfile").click());
+  $("#importfile").addEventListener("change", async e => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";                       // allow re-importing the same file
+    if (!file) return;
+    let parsed;
+    try { parsed = await gridFromFile(file); }
+    catch (err) { return toast("파일을 읽지 못했습니다"); }
+    if (!parsed || !parsed.length) return toast("URL을 찾지 못했습니다");
+    parsed = parsed.map(en => Object.assign(en, { scannable: !!adapterFor(en.url) }));
+    const m = L.mergeEntries(curList.entries || [], parsed);
+    curList.entries = m.list;
+    await L.save(lists);
+    fillListSelect(); renderList(); paintNow(); paintListResult();
+    toast(`${m.added}개 가져옴` + (m.skipped ? ` · ${m.skipped}개 중복` : ""));
+  });
+
   $("#runlist").addEventListener("click", async () => {
     const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
     if (!entries.length) return toast("스캔 가능한 사이트가 없습니다");
