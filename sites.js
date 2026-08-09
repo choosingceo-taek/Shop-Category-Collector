@@ -1135,6 +1135,10 @@
   // ---------------------------------------------------------------------------
   const shopify = (function () {
     const stripVariant = u => { try { const x = new URL(u); x.search = ""; x.hash = ""; return x.toString(); } catch (e) { return u; } };
+    // The collection page the current scan is reading. Detail lookups need it to
+    // find the bulk JSON endpoint; the product URL alone doesn't name the
+    // collection it came from.
+    let _listUrl = "";
 
     function match(url, doc) {
       if (!doc || !doc.querySelector) return false;
@@ -1154,6 +1158,7 @@
 
     function scrapeList(doc, url) {
       doc = doc || document;
+      if (url) _listUrl = url;
       const category = categoryFromUrl(url);
       // 1) generic tile detection, kept only for real product links
       let items = generic.scrapeList(doc, url)
@@ -1204,8 +1209,100 @@
       };
     }
 
+    /* ---- bulk collection JSON ----------------------------------------------
+
+       Every Shopify storefront publishes its catalogue as JSON at
+         /collections/<handle>/products.json?limit=250&page=N
+       with no key and no CORS trouble from the page's own origin. One request
+       returns up to 250 products COMPLETE — vendor, product_type, tags, every
+       option value (so the full colour list), every variant price and
+       compare_at_price, and published_at (when the product actually went live).
+
+       Why bother when we already read each PDP's .js? Because this is one
+       request instead of N: a 200-product collection goes from 200 fetches to
+       one, which is the difference between a scan that finishes and a scan the
+       shop starts rate-limiting. The data is also richer and identical in shape
+       for every Shopify shop, so there is nothing site-specific to maintain.
+
+       It does NOT decide WHICH products get collected — the rendered page still
+       does that, so the storefront filters and sort the user chose are respected
+       and the charter's "scan what's on screen" rule is untouched. This is
+       enrichment keyed by handle: anything the bulk pull doesn't cover falls
+       back to the per-product endpoint below. */
+    const BULK_PAGES = 4, BULK_LIMIT = 250;
+    let _bulk = null;                       // { key, map: Map<handle, product> }
+
+    const handleOf = u => {
+      const m = String(u || "").match(/\/products\/([^/?#]+)/i);
+      return m ? decodeURIComponent(m[1]).toLowerCase() : "";
+    };
+
+    async function loadBulk(listUrl) {
+      let base;
+      try {
+        const x = new URL(listUrl);
+        const m = x.pathname.match(/\/collections\/([^/?#]+)/i);
+        if (!m) return null;
+        base = x.origin + x.pathname.slice(0, x.pathname.indexOf(m[0]) + m[0].length);
+      } catch (e) { return null; }
+      if (_bulk && _bulk.key === base) return _bulk.map;
+
+      const map = new Map();
+      for (let page = 1; page <= BULK_PAGES; page++) {
+        let list;
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 15000);
+          let res;
+          try {
+            res = await fetch(`${base}/products.json?limit=${BULK_LIMIT}&page=${page}`,
+              { credentials: "include", signal: ctrl.signal });
+          } finally { clearTimeout(timer); }
+          if (!res.ok) break;
+          const j = await res.json();
+          list = j && j.products;
+        } catch (e) { break; }                       // shop disabled it — fall back
+        if (!Array.isArray(list) || !list.length) break;
+        list.forEach(p => { if (p && p.handle) map.set(String(p.handle).toLowerCase(), p); });
+        if (list.length < BULK_LIMIT) break;
+      }
+      _bulk = { key: base, map };
+      return map;
+    }
+
+    // products.json shape: prices are decimal strings, options carry every value.
+    function parseCollectionProduct(p) {
+      const opt = (p.options || []).find(o => /colou?r/i.test(((o && (o.name || o)) || "") + ""));
+      const colorways = opt ? (opt.values || []).join("; ") : "";
+      const composition = compositionFromText(p.body_html || "");
+      const num = v => { const n = parseFloat(String(v || "").replace(/,/g, "")); return isFinite(n) ? n : null; };
+      let price_was = "";
+      const v = (p.variants || [])[0];
+      if (v) {
+        const now = num(v.price), was = num(v.compare_at_price);
+        if (was != null && now != null && was > now) price_was = was.toFixed(2);
+      }
+      return {
+        composition, colorways, design: "",
+        brand: p.vendor || "",
+        category: p.product_type || "",
+        price_was,
+        // when the shop actually published it — a real launch date, unlike our
+        // own "first seen". Stored for later; trends still bucket by first-seen
+        // so brands measured different ways never get compared as if equal.
+        launched_at: p.published_at || "",
+        reason: composition ? "" : "not_found",
+      };
+    }
+
     async function fetchDetail(url) {
       const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
+      // one bulk pull covers the whole collection; only what it misses is fetched
+      if (_listUrl) {
+        const map = await loadBulk(_listUrl);
+        const hit = map && map.get(handleOf(url));
+        if (hit) return parseCollectionProduct(hit);
+      }
       let jsUrl;
       try {
         const u = new URL(url); u.search = ""; u.hash = "";
@@ -1247,6 +1344,7 @@
       fetchDetail, buildWorkbook: generic.buildWorkbook,
       templateUrl: null,
       _parseProductJson: parseProductJson, _categoryFromUrl: categoryFromUrl,
+      _parseCollectionProduct: parseCollectionProduct, _handleOf: handleOf,
     };
   })();
 

@@ -13,12 +13,18 @@
                indexes: brand, category, source, addedAt
      scans     one row per scan run (provenance for the rows it produced)
      projects  {id, name, createdAt, keys: [productKey]} — the report's input unit
+     snapshots one row per WEEK: how many products were newly seen and how often
+               each keyword/fibre/colour/brand/category appeared (see
+               report/trend.js weeklySnapshots). Products are live data — a
+               re-scan rewrites them and a cleanup deletes them — so the weekly
+               numbers are frozen separately. A few KB a week keeps a multi-year
+               trend readable from ~100 rows instead of ~100,000 products.
 
    Everything here is plain data access. Aggregation lives in report/report.js,
    so both stay independently testable. */
 (function (root) {
   "use strict";
-  const DB = "shopcat", VER = 1;
+  const DB = "shopcat", VER = 2;
   let _db = null;
 
   function open() {
@@ -36,6 +42,10 @@
         }
         if (!db.objectStoreNames.contains("scans")) db.createObjectStore("scans", { keyPath: "id" });
         if (!db.objectStoreNames.contains("projects")) db.createObjectStore("projects", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("snapshots")) {
+          const s = db.createObjectStore("snapshots", { keyPath: "id" });   // "2026-W32"
+          s.createIndex("start", "start", { unique: false });
+        }
       };
       req.onsuccess = () => { _db = req.result; res(_db); };
       req.onerror = () => rej(req.error);
@@ -125,6 +135,38 @@
   const allProducts = () => all("products");
   const allScans = () => all("scans");
   const allProjects = () => all("projects");
+  const allSnapshots = () => all("snapshots").then(r => r.sort((a, b) => a.start - b.start));
+
+  /* Write this week's (and any earlier week's) frozen numbers.
+
+     Overwrite by id on purpose: a week is rebuilt from the products still in
+     the catalog every time the LAB opens, so the current week keeps growing as
+     more scans land, and an older week is simply re-confirmed. Once the products
+     are gone the last written row is what remains — which is the point.
+
+     Never lets a rebuild shrink a week: if the products behind week W were
+     deleted, the stored row for W is kept as-is rather than replaced by a
+     smaller one computed from what is left. */
+  async function putSnapshots(rows) {
+    if (!rows || !rows.length) return { written: 0, kept: 0 };
+    const db = await open();
+    let written = 0, kept = 0;
+    await new Promise((res, rej) => {
+      const t = db.transaction("snapshots", "readwrite");
+      const S = t.objectStore("snapshots");
+      t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+      rows.forEach(r => {
+        const g = S.get(r.id);
+        g.onsuccess = () => {
+          const prev = g.result;
+          if (prev && prev.products > r.products) { kept++; return; }
+          written++;
+          S.put(Object.assign({}, r, { firstBuiltAt: (prev && prev.firstBuiltAt) || r.builtAt }));
+        };
+      });
+    });
+    return { written, kept };
+  }
 
   async function stats() {
     const items = await allProducts();
@@ -164,14 +206,15 @@
   }
   async function clearAll() {
     const db = await open();
-    const t = db.transaction(["products", "scans", "projects"], "readwrite");
-    ["products", "scans", "projects"].forEach(n => t.objectStore(n).clear());
+    const names = ["products", "scans", "projects", "snapshots"];
+    const t = db.transaction(names, "readwrite");
+    names.forEach(n => t.objectStore(n).clear());
     return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   }
 
-  const API = { open, putScan, allProducts, allScans, allProjects, stats,
-    saveProject, deleteProject, projectItems, removeProducts, clearAll,
-    productKey, merge };
+  const API = { open, putScan, allProducts, allScans, allProjects, allSnapshots,
+    putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
+    clearAll, productKey, merge };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;
 })(typeof self !== "undefined" ? self : this);

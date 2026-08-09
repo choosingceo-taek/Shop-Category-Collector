@@ -16,13 +16,32 @@
 
   let items = [];             // everything in the catalog
   let projects = [];
+  let snapshots = [];         // frozen weekly numbers (survive product cleanup)
   const picked = new Set();   // product keys the user has selected
 
   const priceNum = v => { const m = String(v || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
 
+  /* Freeze this week's numbers (and re-confirm earlier ones) every time the LAB
+     is opened. Products are live — re-scanned, updated, eventually cleaned up —
+     so the weekly aggregate is written down separately and never shrinks. That
+     is what makes the long view possible: a year from now the charts still have
+     every week, at a few KB each, whether or not the products are still here. */
+  async function rollup() {
+    const scanned = items.filter(i => i && i.source !== "clip" && i.addedAt);
+    if (!scanned.length) return;
+    const oldest = Math.min(...scanned.map(i => i.addedAt));
+    const months = Math.max(2, Math.ceil((Date.now() - oldest) / (30 * 864e5)) + 1);
+    try {
+      await S.putSnapshots(window.TrendCalc.weeklySnapshots(scanned, { months }));
+      snapshots = await S.allSnapshots();
+    } catch (e) { /* snapshots are an optimisation — never block the view */ }
+  }
+
   async function load() {
     items = await S.allProducts();
     projects = await S.allProjects();
+    try { snapshots = await S.allSnapshots(); } catch (e) { snapshots = []; }
+    await rollup();
     fillFilters();
     fillProjects();
     render();
@@ -339,6 +358,7 @@
       months: parseInt($("#labmonths").value, 10) || 6,
       granularity: $("#labgran").value,
       dim: $("#labdim").value,
+      snapshots,
     });
   }
   ["labmonths", "labgran", "labdim"].forEach(id =>

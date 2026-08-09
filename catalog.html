@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>상품 카탈로그</title>
+<title>Market Lens — LAB</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -79,6 +79,30 @@
     padding:1px 4px; border:1px solid var(--line); color:var(--muted); }
   .mv .mb { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
   .mv .md { font-weight:650; font-variant-numeric:tabular-nums; }
+  .mv .mb .cn, .lg2 .cn { color:var(--muted); font-size:11px; }
+  .mv .mk .new.gone { border-style:dashed; }
+  .cmp { font-size:12.5px; color:var(--ink2); padding:9px 12px; background:var(--wash);
+    border-radius:8px; margin-bottom:8px; }
+  .cmp .ar { color:var(--muted); margin:0 4px; }
+  /* suggestions — reason always shown next to the key, never a bare verdict */
+  .sugs { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:10px; }
+  .sug { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--card); }
+  .sug .sk { font-weight:650; font-size:13px; display:flex; align-items:center; gap:6px; }
+  .sug .sk .tag { font-style:normal; font-size:9px; letter-spacing:.08em; padding:1px 5px;
+    border-radius:3px; border:1px solid var(--line); color:var(--muted); }
+  .sug .sk .tag.new { border-color:#1baf7a; color:#0f7f57; }
+  .sug .sr { font-size:11.5px; color:var(--muted); margin-top:3px; }
+  .sug .sp { font-size:11.5px; color:var(--ink2); margin-top:5px; font-variant-numeric:tabular-nums; }
+  /* weekly ledger */
+  .lg2 { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .lg2 th { text-align:left; font-weight:600; color:var(--muted); font-size:11px;
+    padding:6px 8px; border-bottom:1px solid var(--line); }
+  .lg2 td { padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .lg2 .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .lg2 .pd { font-weight:600; white-space:nowrap; }
+  .lg2 .pd .arch { font-style:normal; font-size:9px; margin-left:5px; padding:1px 4px;
+    border:1px dashed var(--line); color:var(--muted); }
+  .lg2 .tp { color:var(--ink2); }
   .none { color:var(--muted); font-size:12px; padding:10px 0; }
   .notice { padding:10px 12px; background:var(--wash); border-radius:8px; font-size:12.5px;
     margin-top:16px; }
@@ -120,7 +144,7 @@
 <body>
   <header>
     <div class="top">
-      <h1>상품 카탈로그</h1>
+      <h1>LAB</h1>
       <span class="stats" id="stats">불러오는 중…</span>
     </div>
     <div class="filters">
@@ -173,17 +197,18 @@
       <div class="labbar">
         <div class="selwrap"><span class="cap">기간</span>
           <select id="labmonths">
+            <option value="2">최근 8주</option>
             <option value="3">최근 3개월</option>
             <option value="6" selected>최근 6개월</option>
             <option value="12">최근 12개월</option>
           </select></div>
         <div class="selwrap"><span class="cap">단위</span>
-          <select id="labgran"><option value="month" selected>월별</option><option value="week">주별</option></select></div>
+          <select id="labgran"><option value="week" selected>주별</option><option value="month">월별</option></select></div>
         <div class="selwrap"><span class="cap">기준</span>
           <select id="labdim">
-            <option value="fabric" selected>원단</option>
+            <option value="fabric">원단</option>
             <option value="color">색상</option>
-            <option value="keyword">키워드</option>
+            <option value="keyword" selected>키워드</option>
             <option value="brand">브랜드</option>
             <option value="category">카테고리</option>
           </select></div>

@@ -33,7 +33,12 @@
 - 엔진 라우팅: `sites.js`의 어댑터 레지스트리 `[walmart, target, cottonon, zara, aritzia, cos, massimodutti, shopify, generic]`
   - walmart: 커스텀 SPA 엔진 (embedded JSON 컨테이너 스코핑 + 상세 fetch)
   - target: 커스텀 SPA (?Nao=24 오프셋 페이지네이션, JSON-LD·불릿 상세, multiBrand)
-  - shopify: **플랫폼 감지형** (페이지 내 CDN 마커) — Edikted 등 모든 Shopify 몰
+  - shopify: **플랫폼 감지형** (페이지 내 CDN 마커) — Edikted 등 모든 Shopify 몰.
+    상세는 **컬렉션 벌크 JSON**(`/collections/<handle>/products.json?limit=250`)
+    한 번으로 전부 채우고, 거기 없는 것만 PDP `.js`로 폴백. 키 불필요.
+    vendor·product_type·전체 옵션값(색상)·compare_at_price·published_at 제공.
+    **수집 대상은 여전히 렌더된 페이지가 결정**한다(사용자가 건 스토어 필터 보존) —
+    벌크 JSON은 handle로 매칭하는 보강용
   - cottonon: SFCC(Demandware) — URL 슬러그/cgid + PDP variationAttributes.
     PDP 할인가(정가/세일가) 추출 → Current Price 반영
   - zara: 단일 브랜드 SPA (무한 스크롤 lazy-scroll 60라운드, -p코드.html 상품, JSON-LD 상세)
@@ -62,6 +67,17 @@
   **트렌드 통계에는 섞지 않는다** — 손으로 담은 표본은 편향되므로 inspo·참고용.
   우클릭 담기는 activeTab만 사용(사전 권한 0), 패널 버튼은 클릭 시점에 해당
   오리진만 요청(`optional_host_permissions`)
+- **LAB**(구 CATALOG 탭, `catalog.html` 기본 화면): 쌓인 스캔을 주차별로 보는 화면.
+  ① 주차별 최근 변화(데이터 있는 마지막 두 구간 비교) ② 지금 주목할 키워드
+  (신규 / N구간 연속 상승 — **근거를 항상 함께 표시**) ③ 구간별 신규 수
+  ④ 점유율 추이 ⑤ 기간 전체 상승·하락 ⑥ 주차별 기록 표.
+  계산은 `report/trend.js`(순수 함수, LLM·외부 API 없음), 렌더는 `lab.js`.
+  - **주간 스냅샷**(IndexedDB `snapshots`, 키 `2026-W32`): 상품은 재스캔·정리로
+    변하는 살아있는 데이터라, 그 주의 집계를 따로 얼려 둔다. 주당 수 KB(연 수백 KB).
+    상품이 남아 있는 주는 항상 상품에서 다시 계산하고, 상품이 사라진 주만
+    스냅샷이 대신한다. **재계산이 기록을 줄이지 못한다**(더 작은 값으로 덮어쓰기 금지).
+  - 빈 구간은 0%가 아니라 **선을 끊는다** — "안 봤다"를 "사라졌다"로 그리지 않는다.
+    상승/하락도 달력 창이 아니라 **데이터가 있는 구간**을 반으로 갈라 비교한다.
 - post-scan 필터: 브랜드/주브랜드만/이름 포함·제외 (내보내기 시점 적용)
 - 테스트: `scratchpad`의 Node 스위트 + Playwright로 실제 Chrome에 확장을 로드해
   패널·카탈로그·스캔 흐름을 검증(xvfb 필요, headless는 확장 로드 불가)
