@@ -69,6 +69,50 @@
     return ((it && it.brand) || "") .toLowerCase() + "|" + ((it && it.name) || "").toLowerCase();
   }
 
+  /* Collapse the same product appearing twice.
+
+     Re-scanning a category weekly does NOT duplicate anything — the product URL
+     is the key, so week two updates week one's row and keeps its addedAt. What
+     does slip through is one garment reachable at two URLs: a locale prefix, a
+     colour-specific slug, or the same style listed in two categories the shop
+     routes differently.
+
+     So this is a second, conservative pass on brand + name. Both must be
+     non-empty and match exactly after normalising case and spacing — a name
+     alone is not enough (two shops both sell a "LINEN SHIRT"). The survivor
+     keeps the EARLIEST addedAt, because first-seen is what the weekly trend
+     buckets on and the later sighting is not a new arrival. Field values are
+     filled in from the loser only where the survivor is blank, so merging never
+     loses a composition or an image.
+
+     Returns { rows, merged } — merged is reported in the UI rather than being
+     silently applied, since a number that quietly shrinks is exactly what makes
+     a team stop trusting the tool. */
+  function dedupe(items) {
+    const norm = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const out = [], byName = new Map();
+    let merged = 0;
+    (items || []).forEach(it => {
+      if (!it) return;
+      const b = norm(it.brand), n = norm(it.name);
+      const k = (b && n) ? b + "|" + n : "";
+      if (!k) { out.push(it); return; }
+      const prev = byName.get(k);
+      if (prev == null) { byName.set(k, out.length); out.push(it); return; }
+      merged++;
+      const keep = out[prev];
+      Object.keys(it).forEach(f => {
+        const v = it[f];
+        if (v === "" || v == null) return;
+        if (keep[f] === "" || keep[f] == null) keep[f] = v;      // fill gaps only
+      });
+      keep.addedAt = Math.min(keep.addedAt || Infinity, it.addedAt || Infinity);
+      keep.listIds = [...new Set([].concat(keep.listIds || [], it.listIds || []))];
+      keep.dupCount = (keep.dupCount || 1) + 1;
+    });
+    return { rows: out, merged };
+  }
+
   // Merge an incoming row over the stored one. A re-scan should refresh prices
   // and fill gaps WITHOUT wiping a field the new scan happened to miss —
   // otherwise a partial run degrades good data already in the catalog.
@@ -214,7 +258,7 @@
 
   const API = { open, putScan, allProducts, allScans, allProjects, allSnapshots,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
-    clearAll, productKey, merge };
+    clearAll, productKey, merge, dedupe };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;
 })(typeof self !== "undefined" ? self : this);

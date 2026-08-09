@@ -17,6 +17,7 @@
   let items = [];             // everything in the catalog
   let projects = [];
   let snapshots = [];         // frozen weekly numbers (survive product cleanup)
+  let merged = 0;             // rows collapsed as the same product
   const picked = new Set();   // product keys the user has selected
 
   const priceNum = v => { const m = String(v || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
@@ -38,7 +39,10 @@
   }
 
   async function load() {
-    items = await S.allProducts();
+    // one product, one row — see store.dedupe for what counts as the same product
+    const raw = await S.allProducts();
+    const dd = S.dedupe(raw);
+    items = dd.rows; merged = dd.merged;
     projects = await S.allProjects();
     try { snapshots = await S.allSnapshots(); } catch (e) { snapshots = []; }
     await rollup();
@@ -46,9 +50,12 @@
     fillProjects();
     render();
     if (!$("#v-lab").hidden) renderLab();
-    const st = await S.stats();
-    $("#stats").textContent = st.products
-      ? `상품 ${st.products.toLocaleString()}개 · 브랜드 ${st.brands} · 카테고리 ${st.categories} · 사이트 ${st.sources}`
+    const brands = new Set(items.map(i => i.brand).filter(Boolean)).size;
+    const dated = items.filter(i => i.launched_at).length;
+    $("#stats").textContent = items.length
+      ? `상품 ${items.length.toLocaleString()}개 · 브랜드 ${brands}` +
+        (merged ? ` · 중복 ${merged}개 합침` : "") +
+        (dated ? ` · 업로드일 확인 ${dated}개` : "")
       : "아직 비어 있습니다";
   }
 
@@ -79,6 +86,19 @@
   // Window for the period filter, on addedAt — the moment a product FIRST
   // entered the catalog. That is what "이번 주 신규" means to a designer: newly
   // seen this week, not merely re-scanned. Weeks start Monday.
+  /* The shop's own publish date, where the shop states one.
+
+     Only some platforms tell us: Shopify's products.json carries published_at.
+     There is no way to infer it for the rest, and guessing would be exactly the
+     kind of invented value the output rules forbid — so a product without one
+     simply has no upload date, and the date filter says how many rows it can
+     actually see rather than silently filtering on a field most rows lack. */
+  const launchedAt = i => {
+    if (!i || !i.launched_at) return null;
+    const t = Date.parse(i.launched_at);
+    return isFinite(t) ? t : null;
+  };
+
   function periodRange(v) {
     if (!v) return null;
     const now = new Date();
@@ -108,8 +128,11 @@
       if (s && (i.site || i.source) !== s) return false;
       if (projKeys && !projKeys.has(i.key)) return false;
       if (range) {
-        const t = i.addedAt || 0;
-        if (!(t >= range.from && t < range.to)) return false;
+        // "수집일" = when we first saw it; "업로드일" = when the shop published
+        // it. A row with no upload date is dropped from an upload-date window
+        // rather than falling back to a different measure.
+        const t = $("#datebasis").value === "launch" ? launchedAt(i) : (i.addedAt || 0);
+        if (t == null || !(t >= range.from && t < range.to)) return false;
       }
       if (q) {
         const hay = [i.name, i.fabric_composition, i.colorways, i.brand, i.design].join(" ").toLowerCase();
@@ -122,6 +145,10 @@
       sort === "priceUp" ? (priceNum(x.price) ?? 1e12) - (priceNum(y.price) ?? 1e12)
       : sort === "priceDown" ? (priceNum(y.price) ?? -1) - (priceNum(x.price) ?? -1)
       : sort === "name" ? String(x.name).localeCompare(String(y.name))
+      // newest upload first; rows with no upload date go last, never guessed at
+      : sort === "launch" ? ((launchedAt(y) ?? -1) - (launchedAt(x) ?? -1))
+      : sort === "brand" ? (String(x.brand || "￿").localeCompare(String(y.brand || "￿"))
+                            || (y.addedAt || 0) - (x.addedAt || 0))
       : (y.addedAt || 0) - (x.addedAt || 0));
     return out;
   }
@@ -259,8 +286,9 @@
     const b = $("#brand").value, c = $("#cat").value, s = $("#src").value;
     const scope = [b, c, s].filter(Boolean).join(" · ");
     // say plainly which slice this is, so the file still explains itself later
-    const periodLabel = ({ "7": "최근 7일 수집", "14": "최근 14일 수집", "30": "최근 30일 수집",
-      thisweek: "이번 주 신규", lastweek: "지난 주 신규" })[$("#period").value] || "";
+    const basis = $("#datebasis").value === "launch" ? "업로드" : "수집";
+    const periodLabel = ({ "7": `최근 7일 ${basis}`, "14": `최근 14일 ${basis}`, "30": `최근 30일 ${basis}`,
+      thisweek: `이번 주 ${basis}`, lastweek: `지난 주 ${basis}` })[$("#period").value] || "";
     const proj = projects.find(p => p.id === $("#projf").value);
     const today = new Date().toISOString().slice(0, 10);
     const html = window.ReportGen.build(rows, images, {
@@ -330,11 +358,11 @@
   }
   $("#xlsx").addEventListener("click", exportXlsx);
 
-  ["q", "brand", "cat", "src", "sort", "period", "projf"].forEach(id =>
+  ["q", "brand", "cat", "src", "sort", "period", "datebasis", "projf"].forEach(id =>
     $("#" + id).addEventListener("input", render));
   $("#reset").addEventListener("click", () => {
     ["q", "brand", "cat", "src", "period", "projf"].forEach(id => { $("#" + id).value = ""; });
-    $("#sort").value = "new"; render();
+    $("#sort").value = "new"; $("#datebasis").value = "added"; render();
   });
 
   // ---- scan lists tab -------------------------------------------------------

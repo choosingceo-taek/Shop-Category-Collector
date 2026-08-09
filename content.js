@@ -17,6 +17,12 @@
 
 const JOB = "wpb_job";
 const QUEUE = "wpb_queue";          // batch run over a saved list of category URLs
+/* Products taken from one URL. Infinite-scroll grids (Zara, COS, Massimo Dutti)
+   put a whole category on a single page, so "current page only" alone still
+   unrolls into hundreds of rows — enough to bury the curated list and to make
+   the detail phase crawl. 60 is roughly what a shop shows before the first
+   "load more", which is the slice a designer actually looks at. */
+const DEFAULT_MAX_ITEMS = 60;
 const MAX_PAGES = 200;              // hard safety cap
 const EMPTY_PAGE_LIMIT = 2;         // stop after this many consecutive no-new-item pages
 
@@ -93,9 +99,16 @@ function fetchImageViaBg(url) {
   });
 }
 
+/* Write a progress line for the panel and the FAB to read.
+
+   Only ever writes over a job that is still running. report() is a
+   read-modify-write of the whole job record, so a late message — a background
+   fetch that resolves after the run closed — used to write the OLD object back
+   and set active:true again. The panel then showed "카탈로그에 저장됨…" with a
+   live progress bar forever, on a scan that had already finished. */
 async function report(msg) {
   const j = await g();
-  if (!j) return;
+  if (!j || !j.active) return;
   // while running a saved list, prefix which URL of how many we're on
   const q = await getQueue();
   j.status = (q && q.active) ? `[${q.idx + 1}/${q.list.length}] ${msg}` : msg;
@@ -123,19 +136,123 @@ function sameCollection(a, b) {
   try { return collectionSig(a) === collectionSig(b); } catch (e) { return a === b; }
 }
 
+/* Push a finished scan's rows into the catalog (IndexedDB, service-worker side)
+   and return the same rows as a plain scan record.
+
+   Every scan does this, whether it downloads its own spreadsheet or is one leg
+   of a list run — the catalog is what makes the data reusable later without
+   re-visiting the shop, and what LAB reads. Passing the queue stamps the rows
+   with the list that produced them, so "export this list" can mean exactly the
+   products that list collected. */
+async function catalogSave(j, a, kept, total, queue) {
+  const keptItems = [].concat.apply([], Object.values(kept || {}));
+  const fromList = queue || await getQueue();
+  const inList = fromList && fromList.active;
+  const scan = {
+    meta: {
+      schema: "shop-scan/1",
+      source: a.id, site: a.label,
+      brand: (j.items[0] && j.items[0].brand) || "",
+      category: (j.items[0] && j.items[0].category) || "",
+      url: j.startUrl || location.href,
+      scannedAt: new Date().toISOString(),
+      count: total,
+      listId: inList ? fromList.listId : "",
+      listName: inList ? fromList.name : "",
+    },
+    items: keptItems.map(it => ({
+      brand: it.brand || "", name: it.name || "", category: it.category || "",
+      price: it.price || "", price_was: it.price_was || "",
+      colorways: it.colorways || "", color_count: it.color_count || "",
+      size_range: it.size_range || "", fabric_composition: it.fabric_composition || "",
+      design: it.design || "", product_url: it.product_url || "", image_url: it.image_url || "",
+      // when the shop itself published the product, where the shop tells us
+      launched_at: it.launched_at || "",
+    })),
+  };
+  /* Awaited, not fire-and-forget: the reply used to land after the run had
+     closed and its report() call brought the finished job back to life. */
+  const saved = await new Promise(res => {
+    try {
+      chrome.runtime.sendMessage({ type: "catalogPut", scan }, r => {
+        void chrome.runtime.lastError; res(r && r.ok ? r : null);
+      });
+    } catch (e) { res(null); }
+  });
+  if (saved && !inList) await report(`카탈로그에 저장됨 — 새 상품 ${saved.added}, 갱신 ${saved.updated}`);
+  return scan;
+}
+
+/* Save the whole list run as ONE workbook.
+
+   A list is "26SS 상의" — four brands' top categories that belong in one
+   spreadsheet, not four downloads the user then has to merge by hand. So a
+   queued scan writes its rows into the queue instead of downloading, and the
+   file is built once here, at the end, with every brand in it (excel.js groups
+   the rows by brand). Also runs when the user stops early, so stopping still
+   yields the work already done. */
+async function queueExport(q) {
+  const rows = (q && q.rows) || [];
+  if (!rows.length) return;
+  const a = adapter();
+  if (!a) return;
+  const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);
+  const stamp = new Date().toISOString().slice(0, 10);
+  try {
+    await report(`리스트 Excel 만드는 중… ${rows.length}개`);
+    const { bytes, kept } = await a.buildWorkbook(rows, {
+      ExcelJS: self.ExcelJS,
+      fetchImage: fetchImageViaBg,
+      filters: q.filters || {},
+      onProgress: (i, total) => report(`리스트 Excel… 이미지 ${i}/${total}`),
+    });
+    const total = Object.values(kept).reduce((n, v) => n + (v.length || 0), 0);
+    const filename = `${tag}_${total}items_${stamp}.xlsx`;
+    let b64 = "";
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    b64 = btoa(b64);
+    const saved = await new Promise(res => {
+      try {
+        chrome.runtime.sendMessage({ type: "downloadXlsx", filename, b64 },
+          r => res(!chrome.runtime.lastError && !!(r && r.ok)));
+      } catch (e) { res(false); }
+    });
+    if (!saved) {
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url; el.download = filename;
+      document.body.appendChild(el); el.click(); el.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+    const brands = [...new Set(rows.map(r => r.brand).filter(Boolean))];
+    await report(`리스트 완료 — ${total}개, 브랜드 ${brands.length}개를 Excel 한 파일로 저장했습니다`);
+  } catch (e) {
+    await report("리스트 Excel 실패: " + (e && e.message || e) + " (패널의 ⬇ Excel로 다시 받을 수 있습니다)");
+  }
+}
+
 // Called when a scan finishes. Advances the queue, or ends it.
 async function queueAdvance() {
   const q = await getQueue();
   if (!q || !q.active) return false;
   const me = await myTabId();
   if (q.tabId != null && me != null && q.tabId !== me) return false;   // not this tab's queue
+  // Closing the job before we navigate matters: the build phase works from
+  // already-collected items, so a still-active job would resume on the NEXT
+  // URL and re-export the previous category's rows there.
+  const closeJob = async () => { const d = await g(); if (d) { d.active = false; await s(d); } };
   q.idx += 1;
   if (q.idx >= q.list.length) {
     q.active = false; q.finishedAt = Date.now();
     await setQueue(q);
+    await queueExport(q);          // job is still active here, so progress shows
+    await closeJob();
     return false;
   }
   await setQueue(q);
+  await closeJob();
   const next = q.list[q.idx];
   setTimeout(() => { try { location.href = next.url; } catch (e) {} }, 1500);
   return true;
@@ -217,6 +334,14 @@ async function runStep(j) {
         const h = document.body.scrollHeight;
         if (n === lastN && h === lastH) stable++; else stable = 0;
         lastN = n; lastH = h;
+        // Enough for one research pass — stop unrolling. On an infinite-scroll
+        // grid there is no page 2 to stop at, so the cap IS "the first page":
+        // without it a single Zara category unrolls into several hundred rows
+        // and buries the list the user actually assembled.
+        if (j.maxItems && n >= j.maxItems) {
+          await report(`${n}개까지 불러왔습니다 (상한 ${j.maxItems}개)`);
+          break;
+        }
         await report(`Loading all items… ${n} rendered`);
       }
       window.scrollTo(0, 0);
@@ -225,10 +350,15 @@ async function runStep(j) {
     try { scraped = a.scrapeList(document, location.href) || []; }
     catch (e) { scraped = []; await report(`Page ${page} parse error (skipped): ${e && e.message || e}`); }
     j.seen = j.seen || {};
-    let added = 0;
+    let added = 0, hitCap = false;
     for (const r of scraped) {
       const k = itemKey(r);
       if (!k || j.seen[k]) continue;
+      // Cap per URL. A list of eight categories at a few hundred rows each is
+      // not a research pass, it is a dump — and the detail phase would fetch
+      // every one of them. Keeping the FIRST n preserves the shop's own order,
+      // which is the merchandiser's ranking.
+      if (j.maxItems && j.items.length >= j.maxItems) { hitCap = true; break; }
       j.seen[k] = 1; j.items.push(r); added++;
     }
     j.pagesDone = page;
@@ -239,7 +369,7 @@ async function runStep(j) {
     const target = j.resultCount ? "/" + j.resultCount : "";
     await report(j.singlePage === false
       ? `Collecting… ${page}${j.totalPages ? "/" + j.totalPages + "p" : "p"} · ${j.items.length}${target} items (+${added} this page)`
-      : `이 페이지에서 ${j.items.length}${target}개 수집`);
+      : `이 페이지에서 ${j.items.length}${target}개 수집${hitCap ? ` (상한 ${j.maxItems}개)` : ""}`);
 
     // Current page only (the default). Walking a whole category returns far more
     // products than a research pass can use, and the point is a curated list of
@@ -306,6 +436,9 @@ async function runStep(j) {
             // SFCC size lists)
             if (d.brand && !it.brand) it.brand = d.brand;
             if (d.category && !it.category) it.category = d.category;
+            // the shop's own publish date, where the shop states one (Shopify's
+            // published_at). Never inferred — a missing date stays missing.
+            if (d.launched_at && !it.launched_at) it.launched_at = d.launched_at;
             // a PDP markdown (both current + original present) is authoritative
             // for this product — the listing tile often shows only the regular
             // price, so reflect the on-page sale in Current Price.
@@ -373,6 +506,23 @@ async function runStep(j) {
       } catch (e) {}
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T-]/g, "").slice(8); // HHMMSS
       const filename = `${a.id}_${brandTag}${catTag ? "_" + catTag : ""}_${total}items_${stamp}.xlsx`;
+      /* Part of a saved-list run? Hold the rows instead of downloading. Four
+         URLs used to mean four spreadsheets (plus four JSONs) that the designer
+         had to merge by hand; the list is one research question, so it gets one
+         file, built in queueExport() when the last URL finishes. */
+      const queue = await getQueue();
+      const inList = !!(queue && queue.active && j.queued);
+      if (inList) {
+        const keptRows = [].concat.apply([], Object.values(kept || {}));
+        queue.rows = (queue.rows || []).concat(keptRows);
+        await setQueue(queue);
+        await catalogSave(j, a, kept, total, queue);
+        await report(`${total}개 수집 — 리스트가 끝나면 Excel 한 파일로 저장합니다`);
+        // the job stays active until queueAdvance closes it, so the final
+        // "Excel 만드는 중…" lines still reach the panel
+        await queueAdvance();
+        return;
+      }
       // Save via the service worker (chrome.downloads) — the in-page <a download>
       // click is silently swallowed on some retailers (Target). Fall back to the
       // anchor only if the worker path fails.
@@ -401,40 +551,7 @@ async function runStep(j) {
       // (market-research dashboards). Same base name, ".json". No new permissions:
       // it's just a second download, exactly like the xlsx.
       try {
-        const keptItems = [].concat.apply([], Object.values(kept || {}));
-        // Stamp the saved list that produced this scan, so its results can be
-        // exported as a set later ("scan this list, export this list").
-        const qq = await getQueue();
-        const fromList = (qq && qq.active) ? qq : null;
-        const scan = {
-          meta: {
-            schema: "shop-scan/1",
-            source: a.id, site: a.label,
-            brand: (j.items[0] && j.items[0].brand) || "",
-            category: (j.items[0] && j.items[0].category) || "",
-            url: j.startUrl || location.href,
-            scannedAt: new Date().toISOString(),
-            count: total,
-            listId: fromList ? fromList.listId : "",
-            listName: fromList ? fromList.name : "",
-          },
-          items: keptItems.map(it => ({
-            brand: it.brand || "", name: it.name || "", category: it.category || "",
-            price: it.price || "", price_was: it.price_was || "",
-            colorways: it.colorways || "", color_count: it.color_count || "",
-            size_range: it.size_range || "", fabric_composition: it.fabric_composition || "",
-            design: it.design || "", product_url: it.product_url || "", image_url: it.image_url || "",
-          })),
-        };
-        // Accumulate into the catalog (IndexedDB, service-worker side). The
-        // xlsx stays the immediate deliverable; the catalog is what makes the
-        // data reusable later without re-scanning the site.
-        try {
-          chrome.runtime.sendMessage({ type: "catalogPut", scan }, r => {
-            void chrome.runtime.lastError;
-            if (r && r.ok) report(`카탈로그에 저장됨 — 새 상품 ${r.added}, 갱신 ${r.updated}`);
-          });
-        } catch (e) {}
+        const scan = await catalogSave(j, a, kept, total, null);
         const jsonName = filename.replace(/\.xlsx$/i, "") + ".json";
         const jb64 = btoa(unescape(encodeURIComponent(JSON.stringify(scan))));
         const jsonSaved = await new Promise(res => {
@@ -475,6 +592,8 @@ async function startJob(opts) {
       totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false, tabId,
       startUrl: location.href, queued: !!opts.queued,
       singlePage: opts.singlePage !== false,   // current page only unless asked otherwise
+      // how many products one URL may contribute (0 = no cap)
+      maxItems: opts.maxItems == null ? DEFAULT_MAX_ITEMS : (parseInt(opts.maxItems, 10) || 0),
       filters: opts.filters || {}, sig: collectionSig(location.href), status: "Starting…" });
   // collection always begins at the first page, wherever the user started from.
   // Adapters whose pagination isn't ?page=N (e.g. SFCC's ?start=N&sz=M) provide
@@ -527,7 +646,8 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
       const tabId = await myTabId();
       await clear();                              // any half-finished job is replaced
       await setQueue({ active: true, tabId, listId: m.listId || "", name: m.name || "",
-        list: m.list, idx: 0,
+        list: m.list, idx: 0, rows: [],
+        maxItems: m.maxItems == null ? DEFAULT_MAX_ITEMS : m.maxItems,
         withSpec: m.withSpec !== false, filters: m.filters || {}, startedAt: Date.now() });
       send({ ok: true, count: m.list.length });
       setTimeout(() => { location.href = m.list[0].url; }, 60);
@@ -536,7 +656,15 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   }
   if (m.type === "queueStatus") { getQueue().then(q => send(q || {})); return true; }
   if (m.type === "queueStop") {
-    getQueue().then(async q => { if (q) { q.active = false; await setQueue(q); } send({ ok: true }); });
+    (async () => {
+      const q = await getQueue();
+      if (q) { q.active = false; q.finishedAt = Date.now(); await setQueue(q); }
+      send({ ok: true });
+      // stopping early still hands over what was collected, in one file — then
+      // the job is closed so the half-finished URL doesn't carry on scanning
+      if (q && (q.rows || []).length) await queueExport(q);
+      const d = await g(); if (d) { d.active = false; await s(d); }
+    })();
     return true;
   }
   return true;
@@ -578,5 +706,6 @@ function ownsAndMatches(job, myTab, sig) {
   const cur = q.list[q.idx];
   if (!cur || !sameCollection(cur.url, location.href)) return;
   if (!adapter()) return;                       // unsupported page — leave it alone
-  startJob({ withSpec: q.withSpec !== false, filters: q.filters || {}, queued: true });
+  startJob({ withSpec: q.withSpec !== false, filters: q.filters || {}, queued: true,
+    maxItems: q.maxItems });
 })();

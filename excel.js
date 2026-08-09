@@ -285,7 +285,20 @@
     const fetchImage = typeof ctx.fetchImage === "function" ? ctx.fetchImage : null;
     const onProgress = typeof ctx.onProgress === "function" ? ctx.onProgress : null;
 
-    const { kept, dropped } = filterKept(items, ctx.filters);
+    const { kept: unsorted, dropped } = filterKept(items, ctx.filters);
+
+    /* One file, grouped by BRAND only. A list run collects several brands, and
+       a spreadsheet that interleaves them is unreadable — the designer wants
+       Cotton On's rows together, then Zara's.
+
+       Brand alone, not brand-then-category: splitting again by category slices
+       the sheet into too many small blocks to read, and each scan already
+       covers one category, so a brand's categories land together anyway.
+       Array#sort is stable, so inside a brand the shop's own order survives —
+       that order is the merchandiser's ranking and re-sorting by name would
+       throw the information away. Rows with no brand sink to the bottom. */
+    const grp = r => String(r.brand || "￿").toLowerCase();
+    const kept = unsorted.slice().sort((a, b) => grp(a).localeCompare(grp(b)));
 
     // colour-variant families: how many kept rows share each product slug
     const family = new Map();

@@ -259,27 +259,60 @@
     finally { btn.disabled = false; btn.textContent = label; }
   }
 
+  /* Which tab is doing the work.
+
+     A list run pins itself to one tab (queue.tabId) so the user can browse
+     elsewhere without disturbing it; a single scan runs in whatever tab the FAB
+     was pressed in. Controls have to reach that tab, not the one currently in
+     front of the panel. */
+  function engineTab() {
+    if (queue && queue.active && queue.tabId != null) return queue.tabId;
+    return tab && tab.id;
+  }
+  function sendEngine(type, cb) {
+    const id = engineTab();
+    if (id == null) return cb && cb(null);
+    try {
+      chrome.tabs.sendMessage(id, { type }, r => {
+        void chrome.runtime.lastError; cb && cb(r || null);
+      });
+    } catch (e) { cb && cb(null); }
+  }
+
   function paintQueue() {
     const box = $("#qstate");
     const running = !!(queue && queue.active);
     box.hidden = !running;
-    $("#stoplist").hidden = !running;
     if (running) {
       const cur = queue.list[queue.idx] || {};
       box.innerHTML = `<b>${queue.idx + 1}/${queue.list.length}</b> ${esc(cur.brand || "")} · ${esc(cur.label || "")}`;
     }
     renderList();
+    paintLive();          // the controls depend on BOTH the job and the queue
   }
   function paintLive() {
     const on = !!(job && job.active);
     $("#live").classList.toggle("on", on);
-    if (on) $("#livetext").textContent = job.status || "작업 중…";
+    // clear it when the run ends — a leftover "저장됨…" line with a progress bar
+    // reads as "still working" long after the scan is done
+    $("#livetext").textContent = on ? (job.status || "작업 중…") : "";
     $("#dot").className = "dot" + (on && !job.paused ? " busy" : "");
+    // controls exist only while there is something to control
+    const busy = on || !!(queue && queue.active);
+    $("#runctl").hidden = !busy;
+    $("#runlist").disabled = busy;
+    $("#jpause").hidden = !on || !!job.paused;
+    $("#jresume").hidden = !on || !job.paused;
+    $("#stoplist").hidden = !(queue && queue.active);
   }
 
   // ---- products -------------------------------------------------------------
   async function refreshProducts() {
-    try { products = await window.CatalogStore.allProducts(); } catch (e) { products = []; }
+    // one product, one card — the same collapse the LAB does (store.dedupe)
+    try {
+      const raw = await window.CatalogStore.allProducts();
+      products = window.CatalogStore.dedupe(raw).rows;
+    } catch (e) { products = []; }
     const fill = (sel, values) => {
       const cur = sel.value;
       sel.innerHTML = '<option value="">All</option>' +
@@ -461,6 +494,7 @@
     let tries = 0;
     const send = () => chrome.tabs.sendMessage(t.id,
       { type: "runList", listId: curList.id, name: curList.name, list: entries,
+        maxItems: parseInt($("#maxitems").value, 10) || 0,
         withSpec: true, filters: {} },
       r => {
         if (chrome.runtime.lastError || !r) {
@@ -471,11 +505,44 @@
       });
     setTimeout(send, 1500);
   });
+  /* Stop goes to the scanning tab, not straight to storage.
+
+     Writing storage alone left the current URL's scan running with nothing to
+     close it, and the rows collected so far were never written out — the user
+     pressed Stop and got no file. The tab's handler ends the job AND builds the
+     spreadsheet from what it already has. Storage is the fallback for a tab
+     that has gone away. */
   $("#stoplist").addEventListener("click", () => {
-    chrome.storage.local.get(QUEUE, o => {
+    const fallback = () => chrome.storage.local.get(QUEUE, o => {
       const q = o && o[QUEUE];
       if (q) { q.active = false; chrome.storage.local.set({ [QUEUE]: q }); }
     });
+    const tabId = queue && queue.tabId;
+    if (tabId == null) return fallback();
+    try {
+      chrome.tabs.sendMessage(tabId, { type: "queueStop" }, r => {
+        if (chrome.runtime.lastError || !r) fallback();
+        else toast("중지 — 여기까지 수집한 상품을 Excel로 저장합니다");
+      });
+    } catch (e) { fallback(); }
+  });
+
+  // ⏸ / ▶ — the scan keeps its place, so resuming never re-scrapes a page
+  $("#jpause").addEventListener("click", () =>
+    sendEngine("pause", () => toast("일시정지 — ▶ 계속을 누르면 이어서 진행합니다")));
+  $("#jresume").addEventListener("click", () => sendEngine("resume"));
+
+  /* ↺ — throw the run away. Separate from "중지 후 저장" on purpose: one keeps
+     the work, this one discards it, and a button that could mean either is a
+     button nobody dares press. */
+  $("#jreset").addEventListener("click", async () => {
+    if (!(await confirmIn("지금까지 모은 상품을 버리고 처음으로 되돌릴까요?\n" +
+      "이미 카탈로그에 저장된 상품은 그대로 남습니다."))) return;
+    chrome.storage.local.get(QUEUE, o => {
+      const q = o && o[QUEUE];
+      if (q) { q.active = false; q.rows = []; chrome.storage.local.set({ [QUEUE]: q }); }
+    });
+    sendEngine("reset", () => toast("초기화했습니다"));
   });
   $("#listxlsx").addEventListener("click", () => {
     const rows = productsOfList(curList && curList.id);
