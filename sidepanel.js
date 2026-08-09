@@ -16,11 +16,14 @@
   const $ = s => document.querySelector(s);
   const RC = "rc_store_v1";     // collections
   const JOB = "wpb_job";        // the scan job the content script drives
+  const QUEUE = "wpb_queue";    // the batch run over the scan list
 
   let store = { collections: [], items: [], activeId: "" };
   let tab = null;               // current tab
   let read = null;              // what we last understood about the page
   let job = null;
+  let queue = null;             // live batch-run state
+  let lists = [], curList = null;   // the curated brand/category URL list
 
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const load = k => new Promise(r => chrome.storage.local.get(k, o => r(o[k] || null)));
@@ -103,13 +106,21 @@
     if (read.kind === "shop") {
       const a = read.adapter;
       const where = [a.site, a.category].filter(Boolean).join(" · ");
-      // Scanning is the FAB's job (bottom-left of the page) — say so rather than
-      // offering a second button that does the same thing from a different place.
+      const inList = urlInList(tab && tab.url);
+      // The panel's job on a category page is curating the scan list: this is
+      // where the user builds their own set of brand categories to re-run.
+      // (An immediate one-off scan stays on the FAB at bottom-left.)
       obs.innerHTML = `<b>${esc(where || read.host)}</b> 카테고리를 보고 있습니다.` +
-        `<span class='sub'>전체 스캔은 페이지 <b>좌측 하단의 동그란 아이콘</b>을 눌러 시작하세요. ` +
-        `모든 페이지를 돌며 원단·색상·사이즈·가격까지 수집합니다.</span>`;
-      cta.textContent = "＋ 이 상품만 담기";
-      cta.onclick = clipHere;
+        `<span class='sub'>${inList
+          ? "이미 스캔 목록에 있는 카테고리입니다. ▶ 전체 스캔으로 목록 전체를 수집하세요."
+          : "목록에 담아두면 ▶ 전체 스캔 한 번으로 매주 같은 카테고리들을 다시 수집합니다. 지금 바로 이 페이지만 스캔하려면 좌측 하단 동그란 아이콘."}</span>`;
+      if (inList) {
+        cta.textContent = "✓ 목록에 있음 — 이 상품만 담기";
+        cta.onclick = clipHere;
+      } else {
+        cta.textContent = "＋ 이 카테고리를 목록에 담기";
+        cta.onclick = () => addCategoryToList(a);
+      }
       alt.hidden = false; alt.textContent = "📁 카탈로그 열기";
       alt.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") });
       return;
@@ -181,6 +192,105 @@
     if (on) $("#livetext").textContent = job.status || "작업 중…";
     $("#dot").className = "dot" + (on && !job.paused ? " busy" : (read && read.kind !== "internal" ? "" : " idle"));
   }
+
+  // ---- the scan list: curated brand categories, managed visually -----------
+  const L = window.ScanLists;
+
+  async function loadLists() {
+    lists = await L.load();
+    if (!lists.length) {
+      lists = [{ id: "l" + Date.now(), name: "주간 리서치", entries: [], createdAt: Date.now() }];
+      await L.save(lists);
+    }
+    curList = lists[0];   // the panel curates the primary list; others live in the catalog tab
+  }
+  function urlInList(url) {
+    if (!url || !curList) return false;
+    const k = L.normUrl(url);
+    return (curList.entries || []).some(e => L.normUrl(e.url) === k);
+  }
+  async function addCategoryToList(adapterInfo) {
+    if (!tab || !tab.url) return;
+    const entry = {
+      brand: (adapterInfo && adapterInfo.site) || read.host || "",
+      label: (adapterInfo && adapterInfo.category) || (tab.title || "").slice(0, 60),
+      url: tab.url,
+    };
+    const m = L.mergeEntries(curList.entries || [], [entry]);
+    if (!m.added) return toast("이미 목록에 있습니다");
+    curList.entries = m.list;
+    await L.save(lists);
+    renderList(); paint();
+    toast(`목록에 담았습니다 — ${entry.brand} · ${entry.label}`);
+  }
+
+  // The list, drawn as brand groups of category chips. During a batch run the
+  // finished ones dim and the current one is highlighted, so progress is
+  // visible at a glance.
+  function renderList() {
+    const body = $("#listbody");
+    const entries = (curList && curList.entries) || [];
+    $("#lcount").textContent = entries.length ? entries.length + "개 카테고리" : "";
+    $("#runlist").disabled = !entries.length || !!(queue && queue.active);
+    if (!entries.length) {
+      body.innerHTML = '<div class="lempty">쇼핑몰 카테고리 페이지에서 <b>＋ 목록에 담기</b>를 누르면 여기에 쌓입니다.<br>여러 개 담아두고 ▶ 전체 스캔 한 번으로 전부 수집하세요.</div>';
+      return;
+    }
+    const running = queue && queue.active;
+    const idxOf = e => running ? queue.list.findIndex(x => L.normUrl(x.url) === L.normUrl(e.url)) : -1;
+    const groups = new Map();
+    entries.forEach(e => {
+      const b = e.brand || "기타";
+      if (!groups.has(b)) groups.set(b, []);
+      groups.get(b).push(e);
+    });
+    body.innerHTML = [...groups.entries()].map(([brand, es]) => `<div class="bgroup">
+      <div class="bname">${esc(brand)}</div>
+      <div class="chips">${es.map(e => {
+        const qi = idxOf(e);
+        const cls = running ? (qi > -1 && qi < queue.idx ? " done" : qi === queue.idx ? " cur" : "") : "";
+        return `<span class="chip${cls}" data-u="${esc(e.url)}">
+          <a href="${esc(e.url)}" target="_blank" rel="noopener" title="${esc(e.url)}">${esc(e.label || e.url)}</a>
+          <button class="cx" title="목록에서 빼기">✕</button></span>`;
+      }).join("")}</div></div>`).join("");
+    body.querySelectorAll(".cx").forEach(b => b.addEventListener("click", async ev => {
+      ev.preventDefault();
+      const u = b.closest(".chip").getAttribute("data-u");
+      curList.entries = curList.entries.filter(e => e.url !== u);
+      await L.save(lists);
+      renderList(); paint();
+    }));
+  }
+
+  function paintQueue() {
+    const box = $("#qstate");
+    const running = !!(queue && queue.active);
+    box.hidden = !running;
+    $("#stoplist").hidden = !running;
+    $("#runlist").hidden = running;
+    if (running) {
+      const cur = queue.list[queue.idx] || {};
+      box.innerHTML = `<b>${queue.idx + 1}/${queue.list.length}</b> ${esc(cur.brand || "")} · ${esc(cur.label || "")} 수집 중`;
+    }
+    renderList();
+  }
+
+  $("#runlist").addEventListener("click", async () => {
+    const entries = (curList && curList.entries) || [];
+    if (!entries.length) return;
+    if (!confirm(`${entries.length}개 카테고리를 순서대로 전체 스캔합니다. 시작할까요?`)) return;
+    const t = await chrome.tabs.create({ url: entries[0].url, active: false });
+    const send = () => chrome.tabs.sendMessage(t.id,
+      { type: "runList", name: curList.name, list: entries, withSpec: true, filters: {} },
+      r => { if (chrome.runtime.lastError || !r) return setTimeout(send, 900); toast("전체 스캔을 시작했습니다"); });
+    setTimeout(send, 1500);
+  });
+  $("#stoplist").addEventListener("click", () => {
+    chrome.storage.local.get(QUEUE, o => {
+      const q = o && o[QUEUE];
+      if (q) { q.active = false; chrome.storage.local.set({ [QUEUE]: q }); }
+    });
+  });
 
   // ---- collection ----------------------------------------------------------
   function exportJson() {
@@ -274,13 +384,21 @@
     if (area !== "local") return;
     if (ch[RC]) { store = ch[RC].newValue || store; renderTray(); }
     if (ch[JOB]) { job = ch[JOB].newValue || null; paintLive(); }
+    if (ch[QUEUE]) { queue = ch[QUEUE].newValue || null; paintQueue(); }
+    if (ch[L.KEY]) {   // list edited elsewhere (catalog tab) — stay in sync
+      lists = ch[L.KEY].newValue || lists;
+      curList = lists.find(x => curList && x.id === curList.id) || lists[0];
+      renderList(); paint();
+    }
   });
 
   (async () => {
     store = (await load(RC)) || store;
     job = await load(JOB);
+    queue = await load(QUEUE);
+    await loadLists();
     ensureCollection(); save();
-    renderTray(); paintLive(); paint();
+    renderTray(); paintLive(); paintQueue(); paint();
     observe();
   })();
 })();

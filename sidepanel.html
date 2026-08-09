@@ -53,6 +53,27 @@
     animation:slide 1.3s ease-in-out infinite; }
   @keyframes slide { 0%{margin-left:-30%} 100%{margin-left:100%} }
 
+  /* scan list — the visual list of curated brand categories */
+  .listsec { border-bottom:1px solid var(--line); background:var(--card); padding:10px 13px 12px; }
+  .lhead { display:flex; align-items:center; gap:7px; font-size:12.5px; margin-bottom:8px; }
+  .lcount { color:var(--muted); font-size:11.5px; }
+  .mini { padding:4px 9px; font-size:11.5px; border-radius:7px; }
+  .qstate { padding:8px 10px; border-radius:8px; background:var(--wash); font-size:12px; margin-bottom:8px; }
+  .listbody { display:flex; flex-direction:column; gap:8px; max-height:34vh; overflow-y:auto; }
+  .bgroup .bname { font-size:11px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.04em; margin-bottom:4px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; max-width:100%;
+    border:1px solid var(--line); border-radius:999px; padding:3px 9px;
+    font-size:11.5px; background:var(--bg); }
+  .chip.cur { border-color:var(--accent); background:var(--wash); }
+  .chip.done { opacity:.55; }
+  .chip a { color:inherit; text-decoration:none; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; max-width:150px; }
+  .chip a:hover { text-decoration:underline; }
+  .chip .cx { border:0; background:none; color:var(--muted); padding:0 1px; cursor:pointer; font-size:11px; }
+  .lempty { color:var(--muted); font-size:12px; line-height:1.6; }
+
   .tools { padding:9px 13px; border-bottom:1px solid var(--line); background:var(--card); }
   .colrow { margin-bottom:0; }
   #tray { flex:1; overflow-y:auto; padding:10px 13px 22px; }
@@ -92,6 +113,19 @@
 
   <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
 
+  <!-- the scan list: the brand/category URLs this user curates and re-runs -->
+  <section class="listsec">
+    <div class="lhead">
+      <b>내 스캔 목록</b>
+      <span class="lcount" id="lcount"></span>
+      <span style="flex:1"></span>
+      <button id="runlist" class="mini primary" title="목록의 모든 카테고리를 순서대로 전체 스캔">▶ 전체 스캔</button>
+      <button id="stoplist" class="mini" hidden>■ 중지</button>
+    </div>
+    <div class="qstate" id="qstate" hidden></div>
+    <div id="listbody" class="listbody"></div>
+  </section>
+
   <div class="tools row">
     <button id="catalog" class="primary grow">📁 카탈로그 열기</button>
     <button id="export" title="이 컬렉션 내보내기">내보내기</button>
@@ -101,6 +135,7 @@
   <div class="count" id="count"></div>
   <div id="tray"></div>
   <div class="toast" id="toast"></div>
+  <script src="lists.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

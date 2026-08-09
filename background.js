@@ -26,17 +26,12 @@ function toBase64(bytes) {
 // The toolbar icon opens the research companion panel. Unlike the old popup it
 // stays open while the user browses, which is what makes it read as a working
 // assistant rather than a dialog.
-// Scanning belongs to the in-page FAB (bottom-left): it sits where the work is,
-// on the category the user is looking at. The toolbar icon is therefore NOT a
-// second scan button — it opens the catalog, i.e. everything already collected
-// plus the report builder. Two entry points that both said "scan" was the
-// confusing part; each now has one job.
-chrome.action.onClicked.addListener(() => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") });
-});
-
+// The side panel is the companion's home: it reads the page, curates the scan
+// list (brand categories the user re-runs weekly), shows batch progress, and
+// links to the catalog. So the toolbar icon opens the panel. Scanning a single
+// page stays on the in-page FAB at bottom-left — one job per entry point.
 chrome.runtime.onInstalled.addListener(() => {
-  try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) {}
+  try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); } catch (e) {}
   try {
     chrome.contextMenus.removeAll(() => {
       chrome.contextMenus.create({ id: "rc_image", title: "이미지를 컬렉션에 담기", contexts: ["image"] });
@@ -44,7 +39,7 @@ chrome.runtime.onInstalled.addListener(() => {
     });
   } catch (e) {}
 });
-try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) {}
+try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); } catch (e) {}
 
 const RC_KEY = "rc_store_v1";
 function rcAdd(data) {
