@@ -19,8 +19,9 @@
 2. **설명 없이 시작돼야 한다.** 팀원마다 붙어서 알려줄 수 없다. 아이콘을 누르면
    사이드 패널이 페이지를 읽고 "여기선 이걸 하면 된다"를 먼저 말해준다.
    (그래서 패널은 부가 UI가 아니라 온보딩의 핵심이다.)
-3. **사이트 커버리지**: 팀의 Young Women's 브랜드 리스트 59개 도메인이 manifest에
-   등록되어 있다(2026-08). 대부분 Shopify라 플랫폼 감지로 자동 동작하고, 나머지는
+3. **사이트 커버리지**: 팀의 Young Women's 리스트(59개) + Miro 리서치 리스트
+   (120개 도메인, Contemporary/Basics/Active — Everlane, Sezane, J.Crew, Vince,
+   Lululemon, H&M 등)가 manifest에 등록되어 있다(2026-08). 총 370개 매치 패턴. 대부분 Shopify라 플랫폼 감지로 자동 동작하고, 나머지는
    generic 폴백 — 정확도는 사이트별 진단 출력으로 맞춘다. Inditex 계열(Bershka·
    Pull&Bear·Stradivarius)은 house-brand 팩토리 승격 후보. 원칙: **새 어댑터
    추가보다 정확도·사용성 우선.** 팀이 보는 몰이 대체로 지원된다고

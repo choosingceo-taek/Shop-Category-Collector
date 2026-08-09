@@ -1165,7 +1165,7 @@
 
     return {
       id: "generic",
-      label: "일반 사이트 (기본 정보만)",
+      label: "Generic site (basic info only)",
       match: () => true,   // catch-all; manifest.json's host allowlist is the real gate
       context, scrapeList, totalPages, resultCount, nextPageUrl, buildWorkbook, isResultsPage,
       templateUrl: null,
@@ -1391,7 +1391,7 @@
 
     return {
       id: "shopify",
-      label: "Shopify 스토어",
+      label: "Shopify store",
       /* Modern Shopify themes (Edikted's among them) render the grid as you
          scroll: at load only the first viewport of tiles exists in the DOM, so
          scraping straight away collected a handful of products or none at all.
