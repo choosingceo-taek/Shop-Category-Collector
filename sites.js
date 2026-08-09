@@ -1819,6 +1819,14 @@
       const design = featuresFromDoc(doc).slice(0, 3).join("\n");   // first 3 Features bullets, one per line
       const category = breadcrumbCategory(doc, productName);
       const pp = priceFromDoc(doc, rawHtml);
+      // og:image — the one photo nearly every PDP declares. Semantic markup,
+      // not a CSS selector, so it survives redesigns; only used when both the
+      // listing tile and JSON-LD gave nothing.
+      if (!image && doc.querySelector) {
+        const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
+        const u = og && og.getAttribute("content");
+        if (u && /^https?:/i.test(u)) image = u.trim();
+      }
       return {
         composition, colorways: colors.join("; "), color_count: colorCount || "", image_url: image,
         design, category, brand, sizes: sizes.join("; "),
@@ -2099,6 +2107,14 @@
         if (v.length > 90) v = v.slice(0, 90).replace(/[\s,;]+\S*$/, "") + "…";
         parts.push(`${cat}: ${v}`);
       }
+      // og:image — the one photo nearly every PDP declares. Semantic markup,
+      // not a CSS selector, so it survives redesigns; only used when both the
+      // listing tile and JSON-LD gave nothing.
+      if (!image && doc.querySelector) {
+        const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
+        const u = og && og.getAttribute("content");
+        if (u && /^https?:/i.test(u)) image = u.trim();
+      }
       return {
         composition, colorways: colors.join("; "), design: parts.join("\n").slice(0, 400), image_url: image,
         brand, sizes: sizes.join("; "),
@@ -2262,6 +2278,14 @@
       const liText = doc.querySelectorAll
         ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
       const composition = compositionFromText(liText) || compositionFromText(rawHtml || "");
+      // og:image — the one photo nearly every PDP declares. Semantic markup,
+      // not a CSS selector, so it survives redesigns; only used when both the
+      // listing tile and JSON-LD gave nothing.
+      if (!image && doc.querySelector) {
+        const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
+        const u = og && og.getAttribute("content");
+        if (u && /^https?:/i.test(u)) image = u.trim();
+      }
       return {
         composition, colorways: colors.join("; "), design: "",
         brand: brand || "ZARA", sizes: sizes.join("; "), image_url: image,
@@ -2704,6 +2728,14 @@
         ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
       const composition = compositionFromText(liText)
         || compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
+      // og:image — the one photo nearly every PDP declares. Semantic markup,
+      // not a CSS selector, so it survives redesigns; only used when both the
+      // listing tile and JSON-LD gave nothing.
+      if (!image && doc.querySelector) {
+        const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
+        const u = og && og.getAttribute("content");
+        if (u && /^https?:/i.test(u)) image = u.trim();
+      }
       return {
         composition, colorways: colors.join("; "), color_count: colors.length || "",
         design: "", brand: brand || cfg.brand, sizes: sizes.join("; "), image_url: image,

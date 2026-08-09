@@ -41,6 +41,8 @@
   async function load() {
     // one product, one row — see store.dedupe for what counts as the same product
     const raw = await S.allProducts();
+    // repair rows the pre-fix scans stored with a placeholder "photo"
+    raw.forEach(i => { if (i) i.image_url = S.cleanImage(i.image_url); });
     const dd = S.dedupe(raw);
     items = dd.rows; merged = dd.merged;
     projects = await S.allProjects();
@@ -414,7 +416,7 @@
      honest for every shop; a shop-stated launch date exists only on Shopify
      and is shown on the card when we have it. Clips are excluded, as in LAB:
      hand-picked items are not arrivals. */
-  let curWeekStart = null, curBrand = "", curCat = "";
+  let curWeekStart = null, curBrand = "", curCat = "", curFeedBrand = "";
 
   const scanned = () => items.filter(i => i && i.source !== "clip" && i.addedAt);
 
@@ -459,13 +461,34 @@
     const chips = weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}">
       <b>${esc(w.label)}</b> · ${w.count}</button>`).join("");
 
+    // Brand filter for the week — counts shown per brand so an empty pick
+    // can't happen. The filter narrows THIS view only; it never touches what
+    // was collected (charter: attribute filters are post-scan, display-side).
+    const brandCount = new Map();
+    wk.items.forEach(i => {
+      const b = i.brand || "기타";
+      brandCount.set(b, (brandCount.get(b) || 0) + 1);
+    });
+    const feedBrands = [...brandCount.entries()].sort((a, b) => b[1] - a[1]);
+    if (curFeedBrand && !brandCount.has(curFeedBrand)) curFeedBrand = "";
+    const brandChips = feedBrands.length > 1
+      ? `<div class="catchips">
+           <button data-b="" class="${curFeedBrand ? "" : "on"}">전체 · ${wk.count}</button>` +
+        feedBrands.map(([b, n]) =>
+          `<button data-b="${esc(b)}" class="${b === curFeedBrand ? "on" : ""}">${esc(b)} · ${n}</button>`).join("") +
+        `</div>`
+      : "";
+    const shownItems = curFeedBrand
+      ? wk.items.filter(i => (i.brand || "기타") === curFeedBrand)
+      : wk.items;
+
     /* Day (newest first) → brand (biggest first) → cards. A week of scans is
        usually several sittings, and "what came in on Tuesday" is how the team
        talks about it — one undifferentiated week-pile hides that. The shop's
        own order survives inside each brand group. */
     const DOW = ["일", "월", "화", "수", "목", "금", "토"];
     const byDay = new Map();
-    wk.items.forEach(i => {
+    shownItems.forEach(i => {
       const d = new Date(i.addedAt);
       const k = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
       if (!byDay.has(k)) byDay.set(k, []);
@@ -494,9 +517,12 @@
         <span class="weektag">WEEK ${esc(window.TrendCalc.weekId(wk.start))}</span>
       </div>
       <div class="weekchips">${chips}</div>
+      ${brandChips}
       ${sections}`;
     el.querySelectorAll(".weekchips button").forEach(b =>
-      b.addEventListener("click", () => { curWeekStart = +b.dataset.w; renderNew(); }));
+      b.addEventListener("click", () => { curWeekStart = +b.dataset.w; curFeedBrand = ""; renderNew(); }));
+    el.querySelectorAll(".catchips button").forEach(b =>
+      b.addEventListener("click", () => { curFeedBrand = b.dataset.b; renderNew(); }));
   }
 
   function renderBrands() {

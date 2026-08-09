@@ -311,6 +311,7 @@
     // one product, one card — the same collapse the LAB does (store.dedupe)
     try {
       const raw = await window.CatalogStore.allProducts();
+      raw.forEach(i => { if (i) i.image_url = window.CatalogStore.cleanImage(i.image_url); });
       products = window.CatalogStore.dedupe(raw).rows;
     } catch (e) { products = []; }
     const fill = (sel, values) => {

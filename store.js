@@ -113,13 +113,34 @@
     return { rows: out, merged };
   }
 
+  /* A thumbnail value that is not actually a photo.
+
+     Lazy-loading grids hand out 1x1 transparent GIFs (as data: URIs) and
+     spacer files while the real photo waits for a scroll event. Rows scanned
+     before the srcset fix stored those placeholders VERBATIM — and because the
+     field then reads as "already filled", neither a re-scan nor the PDP image
+     fallback would replace it. The card renders a black box instead of saying
+     NO IMAGE, which is worse than empty: it looks broken instead of honest.
+
+     So placeholders are treated as empty everywhere: cleaned before a row is
+     stored, and cleaned again when rows are read (which repairs the rows the
+     old scans already poisoned, without a migration). */
+  const IMG_PLACEHOLDER = /^data:|(?:^|\/)(?:blank|placeholder|spacer|transparent|1x1|pixel)\.(?:gif|png|svg)(?:[?#]|$)/i;
+  function cleanImage(u) {
+    const s = String(u || "").trim();
+    return (!s || IMG_PLACEHOLDER.test(s) || !/^https?:/i.test(s)) ? "" : s;
+  }
+
   // Merge an incoming row over the stored one. A re-scan should refresh prices
   // and fill gaps WITHOUT wiping a field the new scan happened to miss —
   // otherwise a partial run degrades good data already in the catalog.
   function merge(oldRec, incoming, meta) {
     const out = Object.assign({}, oldRec || {}, {});
+    // a stored placeholder counts as a gap, so a real photo can land in it
+    if (out.image_url) out.image_url = cleanImage(out.image_url);
     Object.keys(incoming).forEach(k => {
-      const v = incoming[k];
+      let v = incoming[k];
+      if (k === "image_url") v = cleanImage(v);
       if (v === "" || v == null) return;             // never overwrite with blank
       out[k] = v;
     });
@@ -258,7 +279,7 @@
 
   const API = { open, putScan, allProducts, allScans, allProjects, allSnapshots,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
-    clearAll, productKey, merge, dedupe };
+    clearAll, productKey, merge, dedupe, cleanImage };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;
 })(typeof self !== "undefined" ? self : this);
