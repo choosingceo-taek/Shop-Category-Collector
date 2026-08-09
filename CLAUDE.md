@@ -86,10 +86,12 @@
   디자이너가 흰 패널 옆에서 검은 LAB을 열게 되고, 옷 사진의 색 판단은 흰 바탕에서
   해야 한다. 팀의 Market Research 화면과 같은 언어이고, 패널과 LAB이 같은 토큰을
   쓴다: 흰 바탕, 얇은 헤어라인, 각진 모서리(`--r:4px`), 대문자 마이크로 라벨.
-  컨트롤 묶음마다 **테두리 위에
-  이름이 얹힌 박스**(`.fs` + `.lg`)를 두어 "이 버튼들이 무엇을 위한 것인가"를
-  제목 줄 없이 답한다 — LIST / ADD PAGE / SCAN / SITES IN THIS LIST / IMPORT,
-  일이 일어나는 순서 그대로. 색은 상태에만 쓴다(실행 중·스캔 중인 행).
+  컨트롤 묶음마다 **아이콘 칩 + 굵은 제목 + 한 줄 설명 헤더**(`.fhead`, v1.61 —
+  9px 테두리 라벨을 대체: 정확했지만 눈을 찡그려야 읽혔다)를 두어 "이 버튼들이
+  무엇을 위한 것인가"를 보자마자 답한다 — Lists / Add this page / Scan /
+  Sites in this list / Import, 일이 일어나는 순서 그대로. LAB의 탭도 같은 이유로
+  아이콘+이름+부제 2줄이다(📈 LAB·Weekly trends / 🆕 New In·Arrivals by week /
+  🏷️ By Brand / 🧺 Products / 🗂️ Scan lists), 본문 섹션 제목에도 픽토그램. 색은 상태에만 쓴다(실행 중·스캔 중인 행).
   **솔리드 검정은 그룹당 하나까지** — LAB과 SCAN ALL이 가져가고, ADD THIS PAGE는
   같은 검정을 세 번 쌓지 않도록 아웃라인이다(똑같은 버튼 두 개는 하나로 읽힌다).
   - **LAB 툴바도 같은 라벨 박스**로 묶는다 — FIND / NARROW / PERIOD / ORDER /

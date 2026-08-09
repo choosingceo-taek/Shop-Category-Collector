@@ -268,30 +268,30 @@
         </div>
       </div>
 
-      <h3>Latest change by ${unit} <span class="sub">vs the previous recorded period</span></h3>
+      <h3>🔄 Latest change by ${unit} <span class="sub">vs the previous recorded period</span></h3>
       ${changeBoard(c, label)}
 
-      <h3>${esc(label)} to watch now <span class="sub">reason always shown</span></h3>
+      <h3>👀 ${esc(label)} to watch now <span class="sub">reason always shown</span></h3>
       ${emergingBoard(e)}
 
-      <h3>Most seen ${esc(label)} <span class="sub">whole window, by frequency</span></h3>
+      <h3>🏆 Most seen ${esc(label)} <span class="sub">whole window, by frequency</span></h3>
       ${rankedList(rk)}
 
-      <h3>New arrivals per period</h3>
+      <h3>🆕 New arrivals per period</h3>
       ${volumeChart(s.labels, s.counts)}
 
-      <h3>${esc(label)} share over time <span class="sub">% of each period\u2019s new arrivals</span></h3>
+      <h3>📈 ${esc(label)} share over time <span class="sub">% of each period\u2019s new arrivals</span></h3>
       ${lineChart(s, { alt: label + " share over time" })}
 
       <div class="movers">
-        <div><h3>Rising over the window</h3>${moverList(m.risers || [], "up")}</div>
-        <div><h3>Falling over the window</h3>${moverList(m.fallers || [], "down")}</div>
+        <div><h3>⬆️ Rising over the window</h3>${moverList(m.risers || [], "up")}</div>
+        <div><h3>⬇️ Falling over the window</h3>${moverList(m.fallers || [], "down")}</div>
       </div>
 
-      <h3>Price &amp; markdown pressure <span class="sub">where the season stands</span></h3>
+      <h3>💰 Price &amp; markdown pressure <span class="sub">where the season stands</span></h3>
       ${priceBoard(T.priceByPeriod(items, base), unit)}
 
-      <h3>Record by ${unit} <span class="sub">at a glance</span></h3>
+      <h3>🗓️ Record by ${unit} <span class="sub">at a glance</span></h3>
       ${ledgerTable(led)}
 
       <p class="foot">
