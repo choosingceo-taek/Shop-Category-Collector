@@ -102,6 +102,41 @@
       sub ? `<div class="ts">${esc(sub)}</div>` : ""}</div>`;
   }
 
+  /* ---- KPI cards, dashboard-style -----------------------------------------
+     A headline number is easier to trust when its shape sits next to it, so
+     each card carries a thumbnail chart of the same measure. Tinted grounds
+     separate the cards at a glance without adding rules; the tint is
+     decoration, and every figure still comes from the scan. */
+  function sparkBars(values, color) {
+    if (!values.length) return "";
+    const W = 120, H = 34, max = Math.max(1, ...values);
+    const bw = W / values.length;
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+      values.map((v, i) => {
+        const h = Math.max(1.5, (H - 2) * (v / max));
+        return `<rect x="${(i * bw + bw * 0.16).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(bw * 0.68).toFixed(1)}" height="${h.toFixed(1)}" rx="1.2" fill="${color}"/>`;
+      }).join("") + `</svg>`;
+  }
+  function sparkLine(values, color) {
+    const pts = values.filter(v => v != null);
+    if (pts.length < 2) return "";
+    const W = 120, H = 34, max = Math.max(...pts), min = Math.min(...pts);
+    const span = max - min || 1;
+    const d = values.map((v, i) => {
+      const x = (W * i) / (values.length - 1);
+      const y = 3 + (H - 6) * (1 - (v - min) / span);
+      return `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  function kpi(tint, label, value, sub, chart) {
+    return `<div class="kpi ${tint}">
+      <div class="kl">${esc(label)}</div>
+      <div class="krow"><div class="kv">${esc(value)}</div>${chart || ""}</div>
+      ${sub ? `<div class="ks">${esc(sub)}</div>` : ""}</div>`;
+  }
+
   /* items: catalog rows (raw fields). images: { [product_url]: dataUri }.
      meta: { title, subtitle, period, scope, generatedAt } */
   function build(items, images, meta) {
@@ -189,18 +224,49 @@
   ${statTile("원단 확인", agg.compositionKnownPct + "%", "조성 수집된 비율")}
   ${statTile("색상 종류", agg.distinctColors + "종")}
 </div>`;
-    const charts = `<h2>가격 분포</h2>
-${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다.</p>`}
-<div class="two">
-  <div><h2>원단 (상품 중 사용 비율)</h2>
-    ${fibers.length ? barsH(fibers, { alt: "원단별 사용 비율", labelW: 140 }) : `<p class="sub">조성 정보가 없습니다.</p>`}</div>
-  <div><h2>색상 빈도</h2>
-    ${colors.length ? barsH(colors, { alt: "색상 빈도", labelW: 140 }) : `<p class="sub">색상 정보가 없습니다.</p>`}</div>
-</div>
-<div class="two">
-  <div><h2>브랜드</h2>${brands.length ? barsH(brands, { alt: "브랜드별 상품 수", labelW: 140 }) : ""}</div>
-  <div><h2>카테고리</h2>${cats.length ? barsH(cats, { alt: "카테고리별 상품 수", labelW: 140 }) : ""}</div>
-</div>`;
+
+    // arrivals per collection day — the shape behind the headline count
+    const dayCounts = (() => {
+      const m = new Map();
+      (items || []).forEach(r => {
+        if (!r || !r.addedAt) return;
+        const d = new Date(r.addedAt);
+        m.set(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(), 0);
+      });
+      (items || []).forEach(r => {
+        if (!r || !r.addedAt) return;
+        const d = new Date(r.addedAt);
+        const k = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        m.set(k, m.get(k) + 1);
+      });
+      return [...m.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]).slice(-14);
+    })();
+    const kpis = `<div class="kpis">
+      ${kpi("k1", "수집 상품", agg.count.toLocaleString(),
+        dayCounts.length > 1 ? `수집일 ${dayCounts.length}일` : "",
+        sparkBars(dayCounts, SERIES[0]))}
+      ${kpi("k2", "브랜드 · 카테고리", `${agg.brandShare.length} · ${agg.categoryShare.length}`,
+        agg.brandShare.length ? `최다 ${agg.brandShare[0].key}` : "",
+        sparkBars(agg.brandShare.slice(0, 8).map(b => b.value), SERIES[6]))}
+      ${kpi("k3", "중앙가", agg.medianPrice != null ? money(agg.medianPrice) : "—",
+        agg.minPrice != null ? `${money(agg.minPrice)} – ${money(agg.maxPrice)}` : "",
+        sparkLine((agg.priceHistogram.buckets || []).map(b => b.count), SERIES[7]))}
+      ${kpi("k4", "세일 비중", agg.onSalePct + "%",
+        agg.avgDiscountPct != null ? `평균 ${Math.round(agg.avgDiscountPct)}% 인하` : "세일 상품 없음",
+        sparkBars([agg.onSalePct, 100 - agg.onSalePct], SERIES[1]))}
+    </div>`;
+
+    const card = (title, inner) => `<section class="card"><h3>${esc(title)}</h3>${inner}</section>`;
+    const charts = kpis +
+      card("가격 분포", histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다.</p>`) +
+      `<div class="two">
+        ${card("원단 (상품 중 사용 비율)", fibers.length ? barsH(fibers, { alt: "원단별 사용 비율", labelW: 140 }) : `<p class="sub">조성 정보가 없습니다.</p>`)}
+        ${card("색상 빈도", colors.length ? barsH(colors, { alt: "색상 빈도", labelW: 140 }) : `<p class="sub">색상 정보가 없습니다.</p>`)}
+      </div>
+      <div class="two">
+        ${card("브랜드", brands.length ? barsH(brands, { alt: "브랜드별 상품 수", labelW: 140 }) : `<p class="sub">브랜드 정보가 없습니다.</p>`)}
+        ${card("카테고리", cats.length ? barsH(cats, { alt: "카테고리별 상품 수", labelW: 140 }) : `<p class="sub">카테고리 정보가 없습니다.</p>`)}
+      </div>`;
 
     /* ---- the pulse layout (default) ---------------------------------------
        One card per product, pre-rendered once and reused by index in both the
@@ -296,7 +362,7 @@ ${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다
     </section>
     <section data-sec="lab">
       ${secHead("result analysis · 모든 수치는 수집 데이터에서 계산", "LAB")}
-      ${summary}${charts}
+      ${charts}
     </section>
     <footer>
       이 파일은 생성 시점의 정보를 그대로 담고 있습니다. 이미지와 수치가 파일 안에 저장되어
@@ -355,7 +421,7 @@ ${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다
   .tl { font-size:11.5px; color:${MUTED}; }
   .tv { font-size:21px; font-weight:650; letter-spacing:-.02em; margin-top:2px; }
   .ts { font-size:11px; color:${MUTED}; margin-top:1px; }
-  .two { display:grid; grid-template-columns:1fr 1fr; gap:26px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
   @media (max-width:760px) { .two { grid-template-columns:1fr; } .sheet { padding:22px 18px 40px; } }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:13px; }
   .p { margin:0; }
@@ -391,19 +457,38 @@ ${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다
   .tb img.tt { width:40px; height:53px; object-fit:cover; border-radius:4px; display:block; }
   /* pulse — side rail + three sections, the weekly-edit read */
   .shell { display:grid; grid-template-columns:176px 1fr; min-height:100vh; }
-  .rail { background:#101010; color:#f2f1ec; padding:22px 16px; position:sticky; top:0;
-    height:100vh; display:flex; flex-direction:column; }
+  .rail { background:#eef3f1; color:#20302b; padding:22px 15px; position:sticky; top:0;
+    height:100vh; display:flex; flex-direction:column; border-right:1px solid #dfe7e4; }
   .logo { display:flex; gap:9px; align-items:center; margin-bottom:26px; }
-  .logo i { font-style:normal; width:30px; height:30px; border-radius:50%; background:#f2f1ec;
-    color:#101010; display:flex; align-items:center; justify-content:center; font-weight:800; }
+  .logo i { font-style:normal; width:30px; height:30px; border-radius:50%; background:#1f8c73;
+    color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; }
   .logo span { font-size:11.5px; font-weight:800; letter-spacing:.14em; line-height:1.3; }
   .rail nav { display:flex; flex-direction:column; gap:2px; }
-  .nv { text-align:left; border:0; background:none; color:#8f8e88; padding:9px 10px;
-    border-radius:8px; font-size:12.5px; font-weight:600; letter-spacing:.02em; cursor:pointer; }
-  .nv.on { background:#2a2a2a; color:#fff; }
-  .railfoot { margin-top:auto; font-size:9.5px; letter-spacing:.14em; color:#7c7b75;
+  .nv { text-align:left; border:0; background:none; color:#5c6b66; padding:10px 12px;
+    border-radius:11px; font-size:12.5px; font-weight:600; letter-spacing:.02em; cursor:pointer; }
+  .nv:hover { background:rgba(255,255,255,.65); }
+  .nv.on { background:#fff; color:#12201c; box-shadow:0 1px 3px rgba(20,40,35,.10); }
+  .railfoot { margin-top:auto; font-size:9.5px; letter-spacing:.14em; color:#77877f;
     text-transform:uppercase; }
-  .content { padding:34px 40px 70px; background:${SURF}; min-width:0; }
+  .content { padding:30px 34px 70px; background:#f7f7f4; min-width:0; }
+
+  /* KPI cards — headline number beside the shape of the same measure */
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px;
+    margin:4px 0 18px; }
+  .kpi { border-radius:16px; padding:14px 16px 13px; border:1px solid rgba(20,20,20,.05); }
+  .kpi.k1 { background:#e3f2ee; } .kpi.k2 { background:#e8ecfb; }
+  .kpi.k3 { background:#fbe9ef; } .kpi.k4 { background:#fdf0dd; }
+  .kl { font-size:11.5px; color:${INK2}; font-weight:600; }
+  .krow { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin-top:6px; }
+  .kv { font-size:26px; font-weight:700; letter-spacing:-.03em; line-height:1; }
+  .ks { font-size:11px; color:${MUTED}; margin-top:6px; }
+  .spark { width:110px; height:34px; flex:none; opacity:.95; }
+
+  /* every chart block is a card floating on the page ground */
+  .card { background:#fff; border:1px solid ${GRID}; border-radius:16px; padding:16px 18px 18px;
+    margin-bottom:14px; box-shadow:0 1px 2px rgba(20,20,20,.04); }
+  .card h3 { font-size:13px; margin:0 0 12px; font-weight:650; letter-spacing:-.01em; }
+  .two > .card { margin-bottom:0; }
   .edhead { display:flex; align-items:flex-end; justify-content:space-between; gap:14px;
     margin:2px 0 18px; flex-wrap:wrap; }
   .kicker { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.16em;
@@ -429,10 +514,11 @@ ${histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다
   .bhero h3 { font-size:23px; margin:0 0 2px; letter-spacing:-.02em; }
   .bhero span { color:${MUTED}; font-size:12px; }
   @media (max-width:760px) { .shell { grid-template-columns:1fr; }
-    .rail { position:static; height:auto; flex-direction:row; align-items:center; gap:10px; }
+    .rail { position:static; height:auto; flex-direction:row; align-items:center; gap:10px;
+      border-right:0; border-bottom:1px solid #dfe7e4; }
     .rail nav { flex-direction:row; } .railfoot { display:none; } .content { padding:20px 16px 50px; } }
   @media print { body { background:#fff; } .sheet { box-shadow:none; max-width:none; }
-    .p, .lb, .tb tr, .day, .bsec { break-inside:avoid; }
+    .p, .lb, .tb tr, .day, .bsec, .card, .kpi { break-inside:avoid; }
     .rail { display:none; } .shell { display:block; }
     [data-sec] { display:block !important; } }
 </style></head>

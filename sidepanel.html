@@ -4,37 +4,47 @@
 <meta charset="utf-8">
 <title>Market Lens</title>
 <style>
-  /* Minimal / editorial: monochrome, hairline rules, square corners, uppercase
-     micro-labels. The tone matches the team's other tools; the layout is our
-     own, built around the one job — collecting reference URLs while browsing. */
+  /* Warm paper, serif display, soft cards, black pill actions.
+
+     The reference the team supplied reads as a printed page rather than an
+     app chrome: a cream ground, a serif headline, rounded cards floating on
+     it, and one solid black control per screen. Borrowed as SENSIBILITY, not
+     as a copy — the layout stays ours, built around the one job (collecting
+     reference URLs while browsing).
+
+     Why it suits this tool: the panel sits open all day beside shop pages that
+     are themselves loud and white. A warm ground separates "my workspace" from
+     "the site I'm looking at", and reserving pure black for actions makes the
+     next step obvious at a glance. */
   :root {
     color-scheme: light dark;
-    --bg:#ffffff; --ink:#111111; --ink2:#454545; --muted:#8c8c8c;
-    --line:#e5e3df; --hard:#111111; --wash:#f6f5f2; --overlay:rgba(18,18,18,.55);
-    /* the panel is deliberately monochrome; this accent is spent on ONE thing —
-       the LAB entry — so the only colour on screen also means one thing */
-    --accent:#4a3aa7; --accent2:#7b4ae0;
+    --bg:#f6f1e6; --card:#fffdf8; --ink:#1b1813; --ink2:#4d463c; --muted:#8d8574;
+    --line:#e4dac5; --hard:#1b1813; --wash:#efe8d8; --overlay:rgba(20,17,13,.58);
+    /* one warm accent, spent on emphasis only (streak/flame in the reference) */
+    --accent:#d2691e; --accent2:#f0a04b;
+    --serif: ui-serif, Georgia, "Times New Roman", "Apple SD Gothic Neo", serif;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#121212; --ink:#f2f0ec; --ink2:#c8c6c1; --muted:#8f8d88;
-      --line:#2b2b29; --hard:#f2f0ec; --wash:#1c1c1a; --overlay:rgba(0,0,0,.6);
-      --accent:#6f5ce0; --accent2:#9a7bf0; }
+    :root { --bg:#17140f; --card:#221e17; --ink:#f3eee1; --ink2:#cdc5b4; --muted:#8f8878;
+      --line:#332d22; --hard:#f3eee1; --wash:#1e1a14; --overlay:rgba(0,0,0,.62);
+      --accent:#e8a33d; --accent2:#f0c07a; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
     font:13px/1.5 system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;
     display:flex; flex-direction:column; height:100vh; overflow:hidden; }
-  button, select, input { font:inherit; color:var(--ink); background:var(--bg);
-    border:1px solid var(--line); border-radius:0; padding:7px 10px; }
+  button, select, input { font:inherit; color:var(--ink); background:var(--card);
+    border:1px solid var(--line); border-radius:999px; padding:7px 12px; }
   button { cursor:pointer; }
   button:hover:not(:disabled) { border-color:var(--hard); }
   button:disabled { opacity:.4; cursor:default; }
-  .solid { background:var(--hard); color:var(--bg); border-color:var(--hard); font-weight:600; }
+  .solid { background:var(--hard); color:var(--bg); border-color:var(--hard); font-weight:650; }
+  textarea, input[type=search] { border-radius:12px; }
   .cap { text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
   .row { display:flex; gap:6px; align-items:center; }
   .grow { flex:1; min-width:0; }
 
-  header { padding:12px 14px 0; border-bottom:1px solid var(--hard); }
+  header { padding:12px 14px 0; border-bottom:1px solid var(--line); background:var(--bg); }
   .brandline { display:flex; align-items:center; gap:8px; }
   .lens { width:20px; height:20px; flex:none; color:var(--ink); display:block; }
   .lens svg { width:100%; height:100%; display:block; }
@@ -48,29 +58,34 @@
   .tab { border:0; background:none; padding:0 0 9px; font-size:10.5px; font-weight:700;
     letter-spacing:.12em; text-transform:uppercase; color:var(--muted);
     border-bottom:2px solid transparent; }
-  .tab.on { color:var(--ink); border-bottom-color:var(--hard); }
+  .tab.on { color:var(--ink); border-bottom-color:var(--accent); }
 
   main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
   .view { flex:1; overflow-y:auto; display:none; flex-direction:column; }
   .view.on { display:flex; }
 
   /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
-  .adder { padding:13px 14px; border-bottom:1px solid var(--line); }
+  .adder { padding:13px 14px 4px; }
   .now { font-size:11.5px; color:var(--ink2); margin-bottom:10px; line-height:1.5; }
   .now .host { font-weight:700; color:var(--ink); }
   .now .badge { display:inline-block; margin-left:6px; padding:1px 6px; font-size:9px;
     letter-spacing:.09em; text-transform:uppercase; border:1px solid var(--line); color:var(--muted); }
   .now .badge.ok { border-color:var(--hard); color:var(--ink); }
-  #addbtn { width:100%; padding:11px; letter-spacing:.1em; text-transform:uppercase;
+  #addbtn { width:100%; padding:12px; letter-spacing:.08em; text-transform:uppercase;
     font-size:11px; font-weight:700; }
   .addrow { display:flex; gap:6px; margin-top:6px; }
   .addrow button { flex:1; font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:6px; }
 
-  .listwrap { padding:11px 14px 18px; }
+  .listwrap { padding:4px 14px 18px; }
+  /* soft card blocks floating on the warm ground, as in the reference */
+  .panelcard { background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:12px 13px; margin-bottom:10px; }
+  .panelcard > .cap { display:block; color:var(--muted); margin-bottom:8px; }
   .lhead { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
-  .lhead select { flex:1; min-width:0; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .lhead select { flex:1; min-width:0; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    border-radius:12px; }
   .iconbtn { width:30px; height:30px; padding:0; display:inline-flex; align-items:center;
-    justify-content:center; flex:none; font-size:13px; }
+    justify-content:center; flex:none; font-size:13px; border-radius:50%; }
   .runrow { display:flex; gap:6px; margin-bottom:8px; }
   .upnote { border:1px solid rgba(80,200,120,.45); border-radius:10px; padding:10px 12px;
     margin-bottom:10px; font-size:12px; line-height:1.55; }
@@ -82,42 +97,45 @@
   .runctl { display:flex; gap:6px; margin-bottom:10px; }
   .runctl button { flex:1; font-size:10.5px; font-weight:700; letter-spacing:.06em;
     text-transform:uppercase; }
-  .runctl .danger { color:#ff8a8a; border-color:rgba(255,92,92,.3); }
-  /* LAB — the panel's brightest element; everything else is a step toward it */
-  .labbtn { display:block; width:100%; text-align:left; margin:12px 0 4px;
-    padding:13px 15px; border:0; border-radius:12px;
-    background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; }
-  .labbtn:hover { filter:brightness(1.08); }
+  .runctl .danger { color:#b4462f; border-color:rgba(180,70,47,.35); }
+  @media (prefers-color-scheme: dark) { .runctl .danger { color:#ff9a7a; } }
+  /* LAB — the destination. On a cream ground the strongest mark available is
+     solid ink, which is also what the reference reserves for its one action. */
+  .labbtn { display:block; width:100%; text-align:left; margin:10px 14px 12px;
+    width:calc(100% - 28px); padding:15px 17px; border:0; border-radius:18px;
+    background:var(--hard); color:var(--bg); }
+  .labbtn:hover { background:#000; }
+  @media (prefers-color-scheme: dark) { .labbtn:hover { background:#fff; } }
   .labbtn .lbmain { display:flex; align-items:center; justify-content:space-between;
-    font-size:19px; font-weight:800; letter-spacing:.14em; }
-  .labbtn .lbgo { font-size:15px; opacity:.85; letter-spacing:0; }
-  .labbtn .lbsub { display:block; font-size:11px; opacity:.9; margin-top:2px; letter-spacing:.01em; }
+    font-family:var(--serif); font-size:25px; font-weight:600; letter-spacing:.02em; }
+  .labbtn .lbgo { font-size:16px; color:var(--accent2); }
+  .labbtn .lbsub { display:block; font-size:11px; opacity:.72; margin-top:3px; }
   .capline { display:flex; align-items:center; justify-content:space-between; gap:8px;
     font-size:11px; color:var(--muted); margin-bottom:12px; }
   .capline select { width:auto; flex:0 0 auto; font-size:11px; padding:3px 6px; }
   .runrow button { flex:1; font-size:10.5px; font-weight:700; letter-spacing:.1em;
-    text-transform:uppercase; padding:9px; }
-  .qstate { padding:8px 10px; background:var(--wash); font-size:11.5px; margin-bottom:11px;
-    border-left:2px solid var(--hard); }
-  .result { padding:9px 10px; background:var(--wash); margin-bottom:12px; font-size:11.5px; }
+    text-transform:uppercase; padding:11px; }
+  .qstate { padding:9px 11px; background:var(--wash); font-size:11.5px; margin-bottom:11px;
+    border-radius:12px; border-left:3px solid var(--accent); }
+  .result { padding:11px 12px; background:var(--wash); margin-bottom:12px; font-size:11.5px;
+    border-radius:14px; }
   .result b { font-weight:700; }
   .result button { font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:6px; }
 
   .grp { margin-bottom:14px; }
   .grp .gname { display:flex; align-items:baseline; gap:6px; font-size:9.5px; color:var(--muted);
-    text-transform:uppercase; letter-spacing:.12em; padding-bottom:5px;
-    border-bottom:1px solid var(--line); margin-bottom:2px; }
+    text-transform:uppercase; letter-spacing:.12em; padding:0 2px 6px; margin-bottom:4px; }
   .grp .gn { color:var(--muted); }
-  .ent { display:flex; align-items:center; gap:8px; padding:8px 0;
-    border-bottom:1px solid var(--line); }
-  .ent.cur { background:var(--wash); }
+  .ent { display:flex; align-items:center; gap:8px; padding:9px 10px; margin-bottom:4px;
+    background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  .ent.cur { background:var(--wash); border-color:var(--accent); }
   .ent.done { opacity:.42; }
   .ent .txt { flex:1; min-width:0; }
   .ent .lb { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ent .u { font-size:10px; color:var(--muted); overflow:hidden; text-overflow:ellipsis;
     white-space:nowrap; display:block; }
   .ent .tag { font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
-    border:1px solid var(--line); padding:1px 4px; flex:none; }
+    border:1px solid var(--line); border-radius:999px; padding:1px 6px; flex:none; }
   .ent .act { border:0; background:none; color:var(--muted); padding:2px 4px; font-size:11px; flex:none; }
   .ent .act:hover { color:var(--ink); }
   .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
@@ -131,11 +149,11 @@
     text-transform:uppercase; padding:7px; }
   .paste .hint { font-size:10.5px; color:var(--muted); line-height:1.55; margin-top:6px; }
 
-  .live { padding:9px 14px; border-bottom:1px solid var(--line); font-size:11.5px;
+  .live { padding:9px 14px; font-size:11.5px;
     color:var(--ink2); display:none; }
   .live.on { display:block; }
   .bar { height:2px; background:var(--line); margin-top:7px; overflow:hidden; }
-  .bar i { display:block; height:100%; background:var(--hard); width:30%;
+  .bar i { display:block; height:100%; background:var(--accent); width:30%;
     animation:slide 1.3s ease-in-out infinite; }
   @keyframes slide { 0%{margin-left:-30%} 100%{margin-left:100%} }
 
@@ -150,8 +168,8 @@
   .selwrap { flex:1; min-width:0; }
   .selwrap .cap { display:block; color:var(--muted); margin-bottom:3px; }
   .selwrap select { width:100%; text-transform:uppercase; font-size:10.5px; letter-spacing:.05em; }
-  .pgrid { display:grid; grid-template-columns:1fr 1fr; gap:2px; padding:2px; }
-  .pc { position:relative; background:var(--wash); margin:0; }
+  .pgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px 14px; }
+  .pc { position:relative; background:var(--wash); margin:0; border-radius:14px; overflow:hidden; }
   .pc img, .pc .ph { width:100%; aspect-ratio:3/4; object-fit:cover; display:block; background:var(--wash); }
   .pc figcaption { position:absolute; left:0; right:0; bottom:0; padding:20px 8px 7px;
     background:linear-gradient(transparent, var(--overlay)); color:#fff;
@@ -181,7 +199,8 @@
   .ask { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
     align-items:center; justify-content:center; padding:18px; z-index:20; }
   .ask[hidden] { display:none; }
-  .askbox { background:var(--bg); border:1px solid var(--hard); padding:14px; width:100%; max-width:320px; }
+  .askbox { background:var(--card); border:1px solid var(--line); border-radius:18px;
+    padding:16px; width:100%; max-width:320px; }
   .asktext { font-size:12.5px; line-height:1.55; margin-bottom:10px; }
   #askinput { width:100%; margin-bottom:10px; }
   .askrow { display:flex; gap:6px; }
@@ -189,7 +208,7 @@
     font-weight:700; padding:8px; }
 
   .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:16px;
-    background:var(--hard); color:var(--bg); padding:7px 14px; font-size:11.5px;
+    background:var(--hard); color:var(--bg); padding:8px 16px; border-radius:999px; font-size:11.5px;
     opacity:0; transition:opacity .18s; pointer-events:none; z-index:9; }
   .toast.on { opacity:.97; }
 </style>
@@ -238,6 +257,8 @@
       <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
 
       <div class="listwrap">
+        <!-- list + its controls read as one card floating on the warm ground -->
+        <div class="panelcard">
         <div class="lhead">
           <select id="listsel" title="리스트 선택"></select>
           <button class="iconbtn" id="newlist" title="새 리스트">＋</button>
@@ -268,6 +289,7 @@
             <option value="0">제한 없음</option>
           </select>
         </label>
+        </div>
         <div class="result" id="listresult" hidden>
           <span id="resulttext"></span>
           <div class="row" style="margin-top:7px">
