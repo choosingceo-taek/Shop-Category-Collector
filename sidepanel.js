@@ -29,6 +29,34 @@
   const load = k => new Promise(r => chrome.storage.local.get(k, o => r(o[k] || null)));
   const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
 
+  /* Chrome side panels silently suppress window.confirm/prompt/alert — the call
+     returns immediately (confirm as false), so anything gated behind one simply
+     never ran. These render inside the panel instead. */
+  function ask(text, initial) {           // initial === undefined -> confirm
+    return new Promise(res => {
+      const box = $("#ask"), input = $("#askinput");
+      $("#asktext").textContent = text;
+      const wantsText = initial !== undefined;
+      input.hidden = !wantsText;
+      if (wantsText) { input.value = initial || ""; }
+      box.hidden = false;
+      if (wantsText) setTimeout(() => { input.focus(); input.select(); }, 30);
+      const done = v => {
+        box.hidden = true;
+        $("#askok").onclick = null; $("#askcancel").onclick = null; input.onkeydown = null;
+        res(v);
+      };
+      $("#askok").onclick = () => done(wantsText ? (input.value.trim() || null) : true);
+      $("#askcancel").onclick = () => done(wantsText ? null : false);
+      input.onkeydown = e => {
+        if (e.key === "Enter") { e.preventDefault(); $("#askok").onclick(); }
+        if (e.key === "Escape") { e.preventDefault(); done(wantsText ? null : false); }
+      };
+    });
+  }
+  const confirmIn = text => ask(text);
+  const promptIn = (text, initial) => ask(text, initial == null ? "" : initial);
+
   let toastT;
   function toast(msg) {
     const t = $("#toast"); t.textContent = msg; t.classList.add("on");
@@ -172,9 +200,9 @@
       });
       el.querySelector(".ren").addEventListener("click", async () => {
         const e = curList.entries[i];
-        const label = prompt("이름", e.label || "");
+        const label = await promptIn("이름", e.label || "");
         if (label == null) return;
-        const brand = prompt("브랜드 / 그룹", e.brand || "");
+        const brand = await promptIn("브랜드 / 그룹", e.brand || "");
         if (brand == null) return;
         e.label = label.trim(); e.brand = brand.trim();
         await L.save(lists); renderList();
@@ -350,20 +378,20 @@
     renderList(); paintNow(); paintListResult();
   });
   $("#newlist").addEventListener("click", async () => {
-    const name = prompt("새 리스트 이름", "My references");
+    const name = await promptIn("새 리스트 이름", "My references");
     if (!name) return;
     curList = { id: "l" + Date.now(), name: name.trim(), entries: [], createdAt: Date.now() };
     lists.push(curList); await L.save(lists); fillListSelect(); renderList(); paintNow();
   });
   $("#renlist").addEventListener("click", async () => {
     if (!curList) return;
-    const name = prompt("리스트 이름", curList.name);
+    const name = await promptIn("리스트 이름", curList.name);
     if (!name) return;
     curList.name = name.trim(); await L.save(lists); fillListSelect();
   });
   $("#dellist").addEventListener("click", async () => {
     if (!curList || lists.length < 2) return toast("리스트가 하나뿐입니다");
-    if (!confirm(`"${curList.name}" 리스트를 삭제할까요?`)) return;
+    if (!await confirmIn(`"${curList.name}" 리스트를 삭제할까요? 담긴 사이트도 함께 사라집니다.`)) return;
     lists = lists.filter(l => l.id !== curList.id);
     curList = lists[0]; await L.save(lists); fillListSelect(); renderList(); paintNow();
   });
@@ -422,14 +450,25 @@
   $("#runlist").addEventListener("click", async () => {
     const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
     if (!entries.length) return toast("스캔 가능한 사이트가 없습니다");
-    if (!confirm(`${entries.length}개 사이트를 순서대로 전체 스캔합니다. 시작할까요?`)) return;
+    if (!await confirmIn(`${entries.length}개 사이트를 순서대로 스캔합니다. 시작할까요?`)) return;
     // Foreground on purpose: Chrome throttles timers and fetches in hidden tabs
     // (down to roughly once a minute after a few minutes), which stalls a run.
     const t = await chrome.tabs.create({ url: entries[0].url, active: true });
+    // The content script only exists once the page has loaded, so retry — but a
+    // bounded number of times: if the site never answers (blocked, offline, or a
+    // page the extension isn't injected into) the run must say so instead of
+    // retrying invisibly forever.
+    let tries = 0;
     const send = () => chrome.tabs.sendMessage(t.id,
       { type: "runList", listId: curList.id, name: curList.name, list: entries,
         withSpec: true, filters: {} },
-      r => { if (chrome.runtime.lastError || !r) return setTimeout(send, 900); toast("스캔을 시작했습니다"); });
+      r => {
+        if (chrome.runtime.lastError || !r) {
+          if (++tries < 14) return setTimeout(send, 900);
+          return toast(`첫 사이트를 열지 못했습니다 — ${hostOf(entries[0].url)} 접속을 확인하세요`);
+        }
+        toast("스캔을 시작했습니다");
+      });
     setTimeout(send, 1500);
   });
   $("#stoplist").addEventListener("click", () => {
