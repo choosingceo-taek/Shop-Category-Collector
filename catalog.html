@@ -4,15 +4,20 @@
 <meta charset="utf-8">
 <title>Market Lens — LAB</title>
 <style>
+  /* One light room, whatever the browser theme is set to.
+
+     LAB used to follow prefers-color-scheme, so a designer running Chrome in
+     dark mode opened a black page while the panel beside it stayed white. This
+     is a surface for judging garment photographs and numbers, so the ground is
+     fixed white and the language matches the panel exactly: hairlines, squared
+     corners, uppercase micro-labels, colour reserved for state. */
   :root {
-    color-scheme: light dark;
-    --bg:#f9f9f7; --card:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
-    --line:rgba(11,11,11,.11); --accent:#2a78d6; --accent-ink:#fff; --wash:rgba(42,120,214,.08);
-    --sale:#d03b3b;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0d0d0d; --card:#1a1a19; --ink:#fff; --ink2:#c3c2b7; --muted:#898781;
-      --line:rgba(255,255,255,.12); --accent:#3987e5; --wash:rgba(57,135,229,.14); --sale:#e66767; }
+    color-scheme: light;
+    --bg:#fff; --card:#fff; --ink:#111; --ink2:#3f3f3f; --muted:#8a8a8a;
+    --line:#e5e5e5; --line2:#d8d8d8; --wash:#f7f7f7;
+    --accent:#111; --accent-ink:#fff;
+    --sale:#c0392b;
+    --r:4px;
   }
   * { box-sizing:border-box; }
   /* the hidden attribute must always win — .filters is display:flex, which
@@ -21,10 +26,10 @@
   [hidden] { display:none !important; }
   /* on the feed/brand tabs only the search is meaningful — the dropdowns and
      export buttons act on the PRODUCTS grid and would lie anywhere else */
-  .filters.slim > :not(#q) { display:none; }
+  .filters.slim > .fs:not(:has(#q)) { display:none; }
   body { margin:0; background:var(--bg); color:var(--ink);
     font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  button, select, input { font:inherit; border-radius:9px; border:1px solid var(--line);
+  button, select, input { font:inherit; border-radius:var(--r); border:1px solid var(--line2);
     background:var(--card); color:var(--ink); padding:8px 11px; }
   button { cursor:pointer; }
   button:hover:not(:disabled) { border-color:var(--muted); }
@@ -36,15 +41,23 @@
   .top { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
   h1 { font-size:17px; margin:0; font-weight:650; letter-spacing:-.01em; }
   .stats { color:var(--muted); font-size:12.5px; }
-  .filters { display:flex; gap:8px; margin-top:11px; flex-wrap:wrap; align-items:center; }
-  .filters input[type=search] { min-width:230px; flex:1; }
+  .filters { display:flex; gap:10px; margin-top:13px; flex-wrap:wrap; align-items:stretch; }
+  .filters input[type=search] { min-width:210px; width:100%; }
+  /* a labelled box: the group names itself on its own top border, so a wall
+     of nine dropdowns becomes five named jobs */
+  .fs { position:relative; display:flex; gap:6px; align-items:center; flex-wrap:wrap;
+    border:1px solid var(--line); border-radius:var(--r); padding:13px 10px 10px; }
+  .fs.grow { flex:1; min-width:230px; }
+  .fs > .lg { position:absolute; top:-7px; left:9px; padding:0 6px; background:var(--bg);
+    font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .fs select, .fs button { font-size:12.5px; padding:6px 9px; }
   .selbar { display:none; align-items:center; gap:10px; margin-top:10px; padding:9px 12px;
-    background:var(--wash); border-radius:9px; font-size:13px; }
+    background:var(--wash); border-radius:var(--r); font-size:13px; }
   .selbar.on { display:flex; }
 
   main { padding:16px 20px 60px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:13px; }
-  .c { border:1px solid var(--line); border-radius:11px; background:var(--card); overflow:hidden;
+  .c { border:1px solid var(--line); border-radius:var(--r); background:var(--card); overflow:hidden;
     display:flex; flex-direction:column; position:relative; }
   .c.sel { border-color:var(--accent); box-shadow:0 0 0 2px var(--wash); }
   .c .thumb { aspect-ratio:3/4; background:var(--line); display:block; width:100%; object-fit:cover; }
@@ -70,7 +83,7 @@
     border-bottom:1px solid var(--line); font-weight:650; }
   #v-lab h3 .sub { font-weight:400; color:var(--muted); font-size:11.5px; margin-left:7px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:11px; }
-  .tile { border:1px solid var(--line); border-radius:10px; padding:12px 13px; background:var(--card); }
+  .tile { border:1px solid var(--line); border-radius:var(--r); padding:12px 13px; background:var(--card); }
   .tile .tl { font-size:11px; color:var(--muted); }
   .tile .tv { font-size:22px; font-weight:650; letter-spacing:-.02em; margin-top:2px; }
   .tile .ts { font-size:11px; color:var(--muted); margin-top:1px; }
@@ -89,11 +102,11 @@
   .mv .mb .cn, .lg2 .cn { color:var(--muted); font-size:11px; }
   .mv .mk .new.gone { border-style:dashed; }
   .cmp { font-size:12.5px; color:var(--ink2); padding:9px 12px; background:var(--wash);
-    border-radius:8px; margin-bottom:8px; }
+    border-radius:var(--r); margin-bottom:8px; }
   .cmp .ar { color:var(--muted); margin:0 4px; }
   /* suggestions — reason always shown next to the key, never a bare verdict */
   .sugs { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:10px; }
-  .sug { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--card); }
+  .sug { border:1px solid var(--line); border-radius:var(--r); padding:10px 12px; background:var(--card); }
   .sug .sk { font-weight:650; font-size:13px; display:flex; align-items:center; gap:6px; }
   .sug .sk .tag { font-style:normal; font-size:9px; letter-spacing:.08em; padding:1px 5px;
     border-radius:3px; border:1px solid var(--line); color:var(--muted); }
@@ -121,7 +134,7 @@
   .rk .rc { font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:650; }
   .rk .rc em { font-style:normal; font-weight:400; color:var(--muted); margin-left:6px; font-size:11px; }
   .none { color:var(--muted); font-size:12px; padding:10px 0; }
-  .notice { padding:10px 12px; background:var(--wash); border-radius:8px; font-size:12.5px;
+  .notice { padding:10px 12px; background:var(--wash); border-radius:var(--r); font-size:12.5px;
     margin-top:16px; }
   .labempty { text-align:center; color:var(--muted); padding:70px 20px; line-height:1.9; }
   .foot { color:var(--muted); font-size:11.5px; line-height:1.7; margin-top:22px;
@@ -154,7 +167,7 @@
 
   .brandwrap { display:grid; grid-template-columns:220px 1fr; gap:22px; align-items:start; }
   @media (max-width:760px) { .brandwrap { grid-template-columns:1fr; } }
-  .brail { border:1px solid var(--line); border-radius:11px; background:var(--card);
+  .brail { border:1px solid var(--line); border-radius:var(--r); background:var(--card);
     overflow:hidden; position:sticky; top:120px; max-height:70vh; overflow-y:auto; }
   .brail button { display:flex; width:100%; justify-content:space-between; gap:8px;
     border:0; border-radius:0; border-bottom:1px solid var(--line); background:none;
@@ -189,11 +202,11 @@
   .lists-head { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
   .lists-head .spacer { flex:1; }
   .lists-head select { min-width:200px; }
-  .runstate { padding:11px 13px; border-radius:9px; background:var(--wash); margin-bottom:14px;
+  .runstate { padding:11px 13px; border-radius:var(--r); background:var(--wash); margin-bottom:14px;
     font-size:13px; }
   .urlrows { display:flex; flex-direction:column; gap:7px; margin-bottom:26px; }
   .ur { display:grid; grid-template-columns:auto 150px 1fr auto; gap:10px; align-items:center;
-    padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:var(--card); }
+    padding:9px 11px; border:1px solid var(--line); border-radius:var(--r); background:var(--card); }
   .ur.cur { border-color:var(--accent); background:var(--wash); }
   .ur .n { color:var(--muted); font-size:12px; min-width:22px; }
   .ur .bd { font-weight:600; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -205,7 +218,7 @@
   .paste p { color:var(--muted); font-size:12.5px; margin:0 0 9px; line-height:1.6; }
   .paste code { background:var(--line); padding:1px 5px; border-radius:4px; font-size:11.5px; }
   .paste textarea { width:100%; font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;
-    border:1px solid var(--line); border-radius:9px; padding:10px 12px; background:var(--card);
+    border:1px solid var(--line); border-radius:var(--r); padding:10px 12px; background:var(--card);
     color:var(--ink); resize:vertical; }
   .paste button { margin-top:9px; }
 </style>
@@ -217,41 +230,54 @@
       <span class="stats" id="stats">Loading…</span>
     </div>
     <div class="filters">
-      <input type="search" id="q" placeholder="Search name · fabric · colour">
-      <select id="brand"><option value="">All brands</option></select>
-      <select id="cat"><option value="">All categories</option></select>
-      <select id="src"><option value="">All sites</option></select>
-      <select id="datebasis" title="What the period counts — first collected (when we first saw it) or published (when the shop posted it)">
-        <option value="added">By collected date</option>
-        <option value="launch">By published date</option>
-      </select>
-      <select id="period" title="Period">
-        <option value="">All time</option>
-        <option value="7">Last 7 days</option>
-        <option value="14">Last 14 days</option>
-        <option value="30">Last 30 days</option>
-        <option value="thisweek">This week</option>
-        <option value="lastweek">Last week</option>
-      </select>
-      <select id="projf" title="Project folder">
-        <option value="">All products</option>
-      </select>
-      <select id="sort">
-        <option value="new">Newest collected</option>
-        <option value="priceUp">Price low to high</option>
-        <option value="priceDown">Price high to low</option>
-        <option value="name">Name</option>
-        <option value="brand">Brand</option>
-        <option value="launch">Newest published</option>
-      </select>
-      <button id="reset">Clear filters</button>
-      <select id="tmpl" title="Report template">
-        <option value="standard">Dashboard</option>
-        <option value="lookbook">Lookbook</option>
-        <option value="data">Data sheet</option>
-      </select>
-      <button id="report" class="primary" title="Build a report HTML from the products shown">📄 Build report</button>
-      <button id="xlsx" title="Export the products shown to Excel (thumbnails included)">📊 Export Excel</button>
+      <!-- Grouped by what each control does, not by what fits on the line:
+           find it, narrow it, choose the window, order it, take it away.
+           Each group names itself on its own border, as in the panel. -->
+      <div class="fs grow"><span class="lg">Find</span>
+        <input type="search" id="q" placeholder="Search name · fabric · colour">
+      </div>
+      <div class="fs"><span class="lg">Narrow</span>
+        <select id="brand"><option value="">All brands</option></select>
+        <select id="cat"><option value="">All categories</option></select>
+        <select id="src"><option value="">All sites</option></select>
+        <select id="projf" title="Project folder">
+          <option value="">All products</option>
+        </select>
+      </div>
+      <div class="fs"><span class="lg">Period</span>
+        <select id="datebasis" title="What the period counts — first collected (when we first saw it) or published (when the shop posted it)">
+          <option value="added">By collected date</option>
+          <option value="launch">By published date</option>
+        </select>
+        <select id="period" title="Period">
+          <option value="">All time</option>
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="thisweek">This week</option>
+          <option value="lastweek">Last week</option>
+        </select>
+      </div>
+      <div class="fs"><span class="lg">Order</span>
+        <select id="sort">
+          <option value="new">Newest collected</option>
+          <option value="priceUp">Price low to high</option>
+          <option value="priceDown">Price high to low</option>
+          <option value="name">Name</option>
+          <option value="brand">Brand</option>
+          <option value="launch">Newest published</option>
+        </select>
+        <button id="reset">Clear filters</button>
+      </div>
+      <div class="fs"><span class="lg">Take away</span>
+        <select id="tmpl" title="Report template">
+          <option value="standard">Dashboard</option>
+          <option value="lookbook">Lookbook</option>
+          <option value="data">Data sheet</option>
+        </select>
+        <button id="report" class="primary" title="Build a report HTML from the products shown">Build report</button>
+        <button id="xlsx" title="Export the products shown to Excel (thumbnails included)">Export Excel</button>
+      </div>
     </div>
     <div class="selbar" id="selbar">
       <b id="selcount">0 selected</b>

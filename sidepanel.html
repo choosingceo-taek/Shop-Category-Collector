@@ -4,20 +4,18 @@
 <meta charset="utf-8">
 <title>Market Lens</title>
 <style>
-  /* Warm paper, serif display, soft cards, black pill actions.
+  /* White ground, hairlines, squared corners, uppercase micro-labels.
 
-     The reference the team supplied reads as a printed page rather than an
-     app chrome: a cream ground, a serif headline, rounded cards floating on
-     it, and one solid black control per screen. Borrowed as SENSIBILITY, not
-     as a copy — the layout stays ours, built around the one job (collecting
-     reference URLs while browsing).
+     Same language as the team's own research screen, and the same one LAB
+     uses — the panel and the workbench sit side by side all day, so they
+     cannot be two different products. Deliberately light-only: following the
+     browser theme meant a designer in dark mode got a black workbench, and
+     garment photographs are judged against white.
 
-     Why it suits this tool: the panel sits open all day beside shop pages that
-     are themselves loud and white. A warm ground separates "my workspace" from
-     "the site I'm looking at", and reserving pure black for actions makes the
-     next step obvious at a glance. */
+     Colour is spent on state, never on decoration. Solid ink marks the two
+     destinations (LAB, the run); everything else is line work. */
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
     --bg:#fff; --card:#fff; --ink:#111; --ink2:#3f3f3f; --muted:#8a8a8a;
     --line:#e5e5e5; --line2:#d8d8d8; --hard:#111; --wash:#f7f7f7;
     --overlay:rgba(0,0,0,.45);
@@ -28,13 +26,6 @@
     --cta:#111; --cta-ink:#fff; --cta-hi:#000;
     --serif: ui-serif, Georgia, "Times New Roman", "Apple SD Gothic Neo", serif;
     --r:4px;                                   /* boxes are squared, not pills */
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#121212; --card:#181818; --ink:#f2f2f2; --ink2:#c9c9c9; --muted:#8c8c8c;
-      --line:#2b2b2b; --line2:#3a3a3a; --hard:#f2f2f2; --wash:#1c1c1c;
-      --overlay:rgba(0,0,0,.65);
-      --accent:#e8a33d; --accent2:#f0c07a;
-      --cta:#f2f2f2; --cta-ink:#111; --cta-hi:#fff; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
@@ -98,8 +89,8 @@
   .now .badge.ok { border-color:var(--hard); color:var(--ink); }
   /* Capture and run are different acts, so they cannot be the same black
      block stacked twice — the eye reads two identical buttons as one control
-     it has to stop and parse. Adding is the warm, frequent one; solid ink
-     stays with the run and with LAB. */
+     it has to stop and parse. Capture is the outlined one; solid ink stays
+     with the run and with LAB. */
   #addbtn { width:100%; padding:11px; letter-spacing:.1em; text-transform:uppercase;
     font-size:10.5px; font-weight:700; background:var(--card); color:var(--ink);
     border:1.5px solid var(--hard); }
@@ -109,7 +100,6 @@
   .addrow button { flex:1; font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:6px; }
 
   .listwrap { padding:4px 14px 18px; }
-  /* soft card blocks floating on the warm ground, as in the reference */
   .panelcard { background:none; border:0; padding:0; margin:0; }
   .panelcard > .cap { display:block; color:var(--muted); margin-bottom:8px; }
   .lhead { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
@@ -140,14 +130,12 @@
   .runctl button { flex:1; font-size:10.5px; font-weight:700; letter-spacing:.06em;
     text-transform:uppercase; }
   .runctl .danger { color:#b4462f; border-color:rgba(180,70,47,.35); }
-  @media (prefers-color-scheme: dark) { .runctl .danger { color:#ff9a7a; } }
-  /* LAB — the destination. On a cream ground the strongest mark available is
-     solid ink, which is also what the reference reserves for its one action. */
+  /* LAB — the destination. On a white ground the strongest mark available is
+     solid ink, and it is spent here rather than scattered. */
   .labbtn { display:block; text-align:left; margin:12px 14px 14px;
     width:calc(100% - 28px); padding:15px 17px; border:0; border-radius:var(--r);
     background:var(--hard); color:var(--bg); }
   .labbtn:hover { background:#000; }
-  @media (prefers-color-scheme: dark) { .labbtn:hover { background:#fff; } }
   .labbtn .lbmain { display:flex; align-items:center; justify-content:space-between;
     font-family:var(--serif); font-size:23px; font-weight:600; letter-spacing:.06em; }
   .labbtn .lbgo { font-size:16px; color:var(--accent2); }
