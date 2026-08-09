@@ -15,6 +15,13 @@
       --line:rgba(255,255,255,.12); --accent:#3987e5; --wash:rgba(57,135,229,.14); --sale:#e66767; }
   }
   * { box-sizing:border-box; }
+  /* the hidden attribute must always win — .filters is display:flex, which
+     silently overrides the UA's [hidden]{display:none} and left the products
+     search bar visible (and dead) on every tab */
+  [hidden] { display:none !important; }
+  /* on the feed/brand tabs only the search is meaningful — the dropdowns and
+     export buttons act on the 상품 grid and would lie anywhere else */
+  .filters.slim > :not(#q) { display:none; }
   body { margin:0; background:var(--bg); color:var(--ink);
     font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
   button, select, input { font:inherit; border-radius:9px; border:1px solid var(--line);

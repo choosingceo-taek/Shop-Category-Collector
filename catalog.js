@@ -194,6 +194,7 @@
           ${i.fabric_composition ? `<div class="fb">${esc(i.fabric_composition)}</div>` : ""}
         </div></div>`;
     }).join("");
+    armImgFallback(grid);
     paintSel();
   }
 
@@ -369,8 +370,15 @@
   }
   $("#xlsx").addEventListener("click", exportXlsx);
 
+  // the search box serves whichever product view is open
   ["q", "brand", "cat", "src", "sort", "period", "datebasis", "projf"].forEach(id =>
-    $("#" + id).addEventListener("input", render));
+    $("#" + id).addEventListener("input", () => {
+      render();
+      if (id === "q") {
+        if (!$("#v-new").hidden) renderNew();
+        if (!$("#v-brands").hidden) renderBrands();
+      }
+    }));
   $("#reset").addEventListener("click", () => {
     ["q", "brand", "cat", "src", "period", "projf"].forEach(id => { $("#" + id).value = ""; });
     $("#sort").value = "new"; $("#datebasis").value = "added"; render();
@@ -387,8 +395,14 @@
     $("#v-brands").hidden = view !== "brands";
     $("#v-products").hidden = view !== "products";
     $("#v-lists").hidden = view !== "lists";
-    // the search/brand/period row belongs to the product grid only
-    document.querySelector(".filters").hidden = view !== "products";
+    /* The header follows the tab. 상품 = full filter row; 신상 피드/브랜드 =
+       search only (the dropdowns and export buttons act on the 상품 grid and
+       would lie here); LAB 분석/스캔 목록 = no row at all. */
+    const filters = document.querySelector(".filters");
+    filters.hidden = !(view === "products" || view === "new" || view === "brands");
+    filters.classList.toggle("slim", view === "new" || view === "brands");
+    $("#q").placeholder = view === "products"
+      ? "상품명·원단·색상 검색" : "이 화면에서 검색 — 상품명·원단·색상·브랜드";
     if (view === "lists") renderLists();
     if (view === "lab") renderLab();
     if (view === "new") renderNew();
@@ -419,6 +433,12 @@
   let curWeekStart = null, curBrand = "", curCat = "", curFeedBrand = "";
 
   const scanned = () => items.filter(i => i && i.source !== "clip" && i.addedAt);
+
+  // the same haystack the 상품 grid searches, so one query means one thing
+  const matchesQ = (i, q) => !q ||
+    [i.name, i.fabric_composition, i.colorways, i.brand, i.design]
+      .join(" ").toLowerCase().includes(q);
+  const currentQ = () => $("#q").value.trim().toLowerCase();
 
   function weekBuckets() {
     const rows = scanned();
@@ -451,6 +471,21 @@
   const EMPTY_FEED = `<div class="empty">아직 스캔한 상품이 없습니다.<br>
     사이드 패널에서 리스트를 만들어 <b>▶ Run all</b> 하면 주차별 피드가 여기에 쌓입니다.</div>`;
 
+  /* A stored URL can still be a dead image — the shop deleted the product,
+     rotated its CDN path, or refuses the request. The <img> then renders as a
+     silent grey box that reads as "broken app". Swap it for the same NO IMAGE
+     placeholder an empty value gets, so the card states the truth instead.
+     (Attached in JS — MV3 CSP forbids inline onerror handlers.) */
+  function armImgFallback(root) {
+    root.querySelectorAll("img.thumb").forEach(img =>
+      img.addEventListener("error", () => {
+        const ph = document.createElement("div");
+        ph.className = "thumb ph";
+        ph.textContent = "NO IMAGE";
+        img.replaceWith(ph);
+      }, { once: true }));
+  }
+
   function renderNew() {
     const el = $("#v-new");
     const weeks = weekBuckets().slice().reverse();          // newest first
@@ -461,11 +496,15 @@
     const chips = weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}">
       <b>${esc(w.label)}</b> · ${w.count}</button>`).join("");
 
+    // search first, so the brand chips' counts describe what is on screen
+    const q = currentQ();
+    const wkItems = wk.items.filter(i => matchesQ(i, q));
+
     // Brand filter for the week — counts shown per brand so an empty pick
     // can't happen. The filter narrows THIS view only; it never touches what
     // was collected (charter: attribute filters are post-scan, display-side).
     const brandCount = new Map();
-    wk.items.forEach(i => {
+    wkItems.forEach(i => {
       const b = i.brand || "기타";
       brandCount.set(b, (brandCount.get(b) || 0) + 1);
     });
@@ -473,14 +512,14 @@
     if (curFeedBrand && !brandCount.has(curFeedBrand)) curFeedBrand = "";
     const brandChips = feedBrands.length > 1
       ? `<div class="catchips">
-           <button data-b="" class="${curFeedBrand ? "" : "on"}">전체 · ${wk.count}</button>` +
+           <button data-b="" class="${curFeedBrand ? "" : "on"}">전체 · ${wkItems.length}</button>` +
         feedBrands.map(([b, n]) =>
           `<button data-b="${esc(b)}" class="${b === curFeedBrand ? "on" : ""}">${esc(b)} · ${n}</button>`).join("") +
         `</div>`
       : "";
     const shownItems = curFeedBrand
-      ? wk.items.filter(i => (i.brand || "기타") === curFeedBrand)
-      : wk.items;
+      ? wkItems.filter(i => (i.brand || "기타") === curFeedBrand)
+      : wkItems;
 
     /* Day (newest first) → brand (biggest first) → cards. A week of scans is
        usually several sittings, and "what came in on Tuesday" is how the team
@@ -518,7 +557,8 @@
       </div>
       <div class="weekchips">${chips}</div>
       ${brandChips}
-      ${sections}`;
+      ${sections || `<div class="none">${q ? `"${esc(q)}" 검색 결과가 이 주에 없습니다.` : "이 주에는 상품이 없습니다."}</div>`}`;
+    armImgFallback(el);
     el.querySelectorAll(".weekchips button").forEach(b =>
       b.addEventListener("click", () => { curWeekStart = +b.dataset.w; curFeedBrand = ""; renderNew(); }));
     el.querySelectorAll(".catchips button").forEach(b =>
@@ -553,7 +593,9 @@
       ? `<div class="catchips"><button data-c="" class="${curCat ? "" : "on"}">전체</button>` +
         cats.map(c => `<button data-c="${esc(c)}" class="${c === curCat ? "on" : ""}">${esc(c)}</button>`).join("") + `</div>`
       : "";
+    const q = currentQ();
     const shown = (curCat ? mine.filter(i => i.category === curCat) : mine)
+      .filter(i => matchesQ(i, q))
       .slice().sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));   // newest first
     const nw = newOf(curBrand);
 
@@ -572,9 +614,11 @@
               nw ? ` · <span class="bnew">이번 주 신규 ${nw}</span>` : ""}</div>
           </div>
           ${catChips}
-          <div class="grid">${shown.map(feedCard).join("")}</div>
+          ${shown.length ? `<div class="grid">${shown.map(feedCard).join("")}</div>`
+            : `<div class="none">${q ? `"${esc(q)}" 검색 결과가 없습니다.` : "상품이 없습니다."}</div>`}
         </div>
       </div>`;
+    armImgFallback(el);
     el.querySelectorAll(".brail button").forEach(b =>
       b.addEventListener("click", () => { curBrand = b.dataset.b; curCat = ""; renderBrands(); }));
     el.querySelectorAll(".catchips button").forEach(b =>
