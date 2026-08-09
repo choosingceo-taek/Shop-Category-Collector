@@ -344,6 +344,49 @@
     });
   }
 
+  /* Price and discount pressure, period by period.
+
+     A separate read from the share charts and worth its own section: what the
+     assortment COSTS and how hard it is being marked down is the clearest
+     read on where a brand's season is. Sale share climbing week over week
+     means end-of-season or overstock long before the products change.
+
+     Median, not just mean, because one $400 coat drags an average of $40 tees.
+     A period with no priced rows reports null rather than 0 — "we collected no
+     prices" is not "everything is free". */
+  function priceByPeriod(items, opts) {
+    opts = opts || {};
+    const num = v => {
+      const m = String(v == null ? "" : v).replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+      return m ? parseFloat(m[0]) : null;
+    };
+    const median = arr => {
+      if (!arr.length) return null;
+      const s = arr.slice().sort((a, b) => a - b), h = s.length >> 1;
+      return s.length % 2 ? s[h] : Math.round(((s[h - 1] + s[h]) / 2) * 100) / 100;
+    };
+    // buckets carry their items, so this reads the live timeline (not snapshots,
+    // which store counts only — a snapshot period reports nulls, honestly)
+    return timeline(items, opts).map(b => {
+      const priced = [], sale = [];
+      b.items.forEach(it => {
+        const p = num(it.price), was = num(it.price_was);
+        if (p != null) priced.push(p);
+        if (p != null && was != null && was > p) sale.push(Math.round(((was - p) / was) * 100));
+      });
+      return {
+        label: b.label, start: b.start, count: b.count,
+        priced: priced.length,
+        avg: priced.length ? Math.round((priced.reduce((s, v) => s + v, 0) / priced.length) * 100) / 100 : null,
+        median: median(priced),
+        min: priced.length ? Math.min(...priced) : null,
+        max: priced.length ? Math.max(...priced) : null,
+        salePct: priced.length ? Math.round((sale.length / priced.length) * 1000) / 10 : null,
+        avgDiscount: sale.length ? Math.round(sale.reduce((s, v) => s + v, 0) / sale.length) : null,
+      };
+    });
+  }
+
   // Headline numbers for the LAB header.
   function overview(items, opts) {
     opts = opts || {};
@@ -374,7 +417,7 @@
   }
 
   const API = { timeline, sharesByBucket, periodsFor, series, movers, latestChange,
-    emerging, ledger, overview, weeklySnapshots, weekId, DIMS, bucketStart };
+    emerging, ledger, priceByPeriod, overview, weeklySnapshots, weekId, DIMS, bucketStart };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.TrendCalc = API;
 })(typeof self !== "undefined" ? self : this);

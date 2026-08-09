@@ -145,6 +145,48 @@
       </tr>`).join("") + `</tbody></table>`;
   }
 
+  /* Price and discount pressure — a different question from the share charts:
+     not "what is in the assortment" but "what does it cost and how hard is it
+     being marked down". Periods with no prices say so instead of showing 0. */
+  function priceBoard(rows, unit) {
+    const withData = rows.filter(r => r.priced);
+    if (withData.length < 1) {
+      return `<div class="none">가격 정보가 있는 구간이 없습니다.</div>`;
+    }
+    const last = withData[withData.length - 1], prev = withData[withData.length - 2];
+    const delta = (a, b) => (a == null || b == null) ? null : Math.round((a - b) * 10) / 10;
+    const dMed = prev ? delta(last.median, prev.median) : null;
+    const dSale = prev ? delta(last.salePct, prev.salePct) : null;
+    const arrow = v => v == null ? "" :
+      `<span style="color:${v > 0 ? UP : v < 0 ? DOWN : MUTED}">${v > 0 ? "▲" : v < 0 ? "▼" : "–"} ${Math.abs(v)}</span>`;
+
+    const table = withData.slice().reverse().slice(0, 8).map(r => `<tr>
+      <td class="pd">${esc(r.label)}</td>
+      <td class="num">${r.priced}</td>
+      <td class="num">${r.median != null ? "$" + r.median : "—"}</td>
+      <td class="num">${r.avg != null ? "$" + r.avg : "—"}</td>
+      <td class="num">${r.min != null ? `$${r.min}–$${r.max}` : "—"}</td>
+      <td class="num">${r.salePct != null ? r.salePct + "%" : "—"}</td>
+      <td class="num">${r.avgDiscount != null ? "-" + r.avgDiscount + "%" : "—"}</td>
+    </tr>`).join("");
+
+    return `<div class="tiles">
+        <div class="tile"><div class="tl">최근 ${unit} 중앙가</div>
+          <div class="tv">${last.median != null ? "$" + last.median : "—"}</div>
+          <div class="ts">${esc(last.label)}${dMed != null ? ` · 직전 대비 ${arrow(dMed)}` : ""}</div></div>
+        <div class="tile"><div class="tl">세일 비중</div>
+          <div class="tv">${last.salePct != null ? last.salePct + "%" : "—"}</div>
+          <div class="ts">${dSale != null ? `직전 대비 ${arrow(dSale)}p` : "가격 확인 " + last.priced + "개"}</div></div>
+        <div class="tile"><div class="tl">평균 인하율</div>
+          <div class="tv">${last.avgDiscount != null ? "-" + last.avgDiscount + "%" : "—"}</div>
+          <div class="ts">세일 상품 기준</div></div>
+      </div>
+      <table class="lg2" style="margin-top:12px"><thead><tr>
+        <th>구간</th><th class="num">가격 확인</th><th class="num">중앙가</th><th class="num">평균가</th>
+        <th class="num">범위</th><th class="num">세일 비중</th><th class="num">평균 인하</th>
+      </tr></thead><tbody>${table}</tbody></table>`;
+  }
+
   // Rising / falling table with the change in percentage points.
   function moverList(rows, dir) {
     if (!rows.length) return `<div class="none">해당 없음</div>`;
@@ -222,6 +264,9 @@
         <div><h3>기간 전체 하락</h3>${moverList(m.fallers || [], "down")}</div>
       </div>
 
+      <h3>가격 · 세일 압력 <span class="sub">시즌이 어디쯤인지 읽는 지표</span></h3>
+      ${priceBoard(T.priceByPeriod(items, base), unit)}
+
       <h3>${unit}차별 기록 <span class="sub">한눈에 보기</span></h3>
       ${ledgerTable(led)}
 
@@ -235,5 +280,5 @@
         clipped ? ` 손으로 담은 상품 ${clipped}개는 표본이 한쪽으로 치우치므로 이 통계에서 제외했습니다(상품 목록과 Excel에는 포함).` : ""}</p>`;
   }
 
-  root.LabView = { render, lineChart, volumeChart, changeBoard, emergingBoard, ledgerTable };
+  root.LabView = { render, lineChart, volumeChart, changeBoard, emergingBoard, ledgerTable, priceBoard };
 })(typeof self !== "undefined" ? self : this);

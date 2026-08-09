@@ -67,16 +67,58 @@
     return { facets, text: loose.join(" ") };
   }
 
-  // Trend keywords from a product name / prose design copy. Stopwords keep the
-  // list to garment vocabulary (the words a designer actually tracks).
-  const STOP = new Set(("a,an,the,and,or,with,for,of,in,on,to,from,by,at,this,that,it,its,is,are,be," +
-    "women,womens,women's,men,mens,men's,plus,size,sizes,new,style,styles,piece,pieces," +
-    "features,featuring,crafted,made,design,designed,fabric,top,item").split(","));
+  /* Design keywords from a product name / prose copy.
+
+     What survives here should be the DESIGN vocabulary a designer tracks —
+     silhouette, detail, treatment: asymmetric, corset, balloon, smocked,
+     peplum, pleated, cropped, sheer. Three families are removed because each
+     answers a question LAB already answers better elsewhere, and leaving them
+     in drowns the real signal:
+
+       · garment nouns (dress, tee, shirt…) — that IS the category dimension.
+         Scanning a Dresses page makes "dress" 100% of names: a tautology
+         dressed up as a trend.
+       · size tokens (xs-xxxl, 2xl, medium) — Walmart writes the size range
+         into the title. Not design, and it topped the chart.
+       · colour words — the colour dimension reads real colourway data; the
+         name is a worse copy of it, and counting both double-counts.
+       · marketing filler (soft, perfect, essential…) — every brand says it.
+
+     Anything not on these lists still passes: this is a stoplist, not a
+     whitelist, so a silhouette we have never seen before still shows up. */
+  const STOP = new Set((
+    // grammar / boilerplate
+    "a,an,the,and,or,with,for,of,in,on,to,from,by,at,this,that,it,its,is,are,be,your,you," +
+    "women,womens,women's,woman,man,men,mens,men's,girls,boys,kids,unisex,adult," +
+    "plus,size,sizes,fit,fits,regular,length,piece,pieces,pack,set,item,items,style,styles," +
+    "features,featuring,crafted,made,design,designed,designs,fabric,fabrics,material," +
+    "new,now,collection,edition,line,label,zw," +
+    // garment nouns — the category dimension's job
+    "top,tops,tee,tees,shirt,shirts,tshirt,t-shirt,blouse,blouses,dress,dresses,skirt,skirts," +
+    "pant,pants,trouser,trousers,jean,jeans,short,shorts,jacket,jackets,coat,coats,blazer," +
+    "sweater,sweaters,sweatshirt,sweatshirts,hoodie,hoodies,cardigan,knit,knitwear," +
+    "jumpsuit,jumpsuits,romper,bodysuit,camisole,cami,tank,vest,gilet,parka,trench," +
+    "sleeve,sleeves,neck,neckline,collar,waist,hem,pocket,pockets,button,buttons,zip,zipper," +
+    // colours — the colour dimension's job
+    "black,white,ivory,cream,ecru,beige,tan,camel,brown,navy,blue,red,pink,green,olive," +
+    "khaki,grey,gray,charcoal,silver,gold,yellow,orange,purple,lilac,burgundy,stone,sand," +
+    "mint,teal,rose,berry,wine,natural,multi,multicolor,multicolour," +
+    // marketing filler
+    "soft,softest,perfect,essential,essentials,classic,basic,basics,favorite,favourite," +
+    "comfy,comfortable,cozy,everyday,versatile,timeless,must,have,best,super,ultra,premium"
+  ).split(","));
+
+  // "xs-xxxl", "2xl", "xxs", "s/m", "one-size" — a size range, not a design idea
+  const SIZE_WORD = /^(?:\d?x{0,4}[sml]|x{1,4}l|x{1,4}s|s\/m|m\/l|one-size|onesize|petite|tall|regular)$/i;
+  const SIZE_RANGE = /^[a-z0-9]{1,5}-[a-z0-9]{1,5}$/i;   // xs-xxxl, 0-24w
+
   function nameKeywords(text) {
     return String(text || "").toLowerCase()
       .replace(/[^a-z\s-]/g, " ").split(/\s+/)
       .map(w => w.replace(/^-+|-+$/g, ""))
-      .filter(w => w.length >= 3 && !STOP.has(w));
+      .filter(w => w.length >= 3 && !STOP.has(w))
+      // a hyphenated size range survives the word check — drop it explicitly
+      .filter(w => !SIZE_WORD.test(w) && !(SIZE_RANGE.test(w) && w.split("-").every(p => SIZE_WORD.test(p) || /^\d+w?$/.test(p))));
   }
 
   // One item -> a normalized record the aggregations read.
