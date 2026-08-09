@@ -266,6 +266,50 @@
   }
   $("#report").addEventListener("click", makeReport);
 
+  // ---- Excel export ---------------------------------------------------------
+  // The storyline ends in a spreadsheet, and a scan's own xlsx only ever covers
+  // that one scan. This exports whatever the catalog is currently showing — many
+  // brands and categories collected over weeks — through the same 12-column
+  // builder the scans use, so the sourcing rules (real value / red "정보 확인")
+  // and embedded thumbnails are identical.
+  async function exportXlsx() {
+    const rows = visible();
+    if (!rows.length) return alert("내보낼 상품이 없습니다.");
+    const btn = $("#xlsx");
+    const label = btn.textContent;
+    btn.disabled = true;
+    try {
+      const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
+        ExcelJS: window.ExcelJS,
+        // the service worker holds the host access needed to read shop CDNs
+        fetchImage: url => new Promise(res => {
+          if (!url) return res(null);
+          try {
+            chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
+              void chrome.runtime.lastError; res(r && r.ok ? r : null);
+            });
+          } catch (e) { res(null); }
+        }),
+        filters: {},
+        onProgress: (i, total) => { btn.textContent = `이미지 담는 중… ${i}/${total}`; },
+      });
+      const b = $("#brand").value, c = $("#cat").value;
+      const proj = projects.find(p => p.id === $("#projf").value);
+      const tag = (proj ? proj.name : [b, c].filter(Boolean).join("_")) || "카탈로그";
+      const name = `${tag.replace(/[^\w가-힣]+/g, "_")}_${rows.length}items_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+      alert(`Excel로 내보냈습니다.\n${rows.length}개 상품 · ${(blob.size / 1048576).toFixed(1)} MB`);
+    } catch (e) {
+      alert("내보내기 실패: " + (e && e.message || e));
+    } finally { btn.disabled = false; btn.textContent = label; }
+  }
+  $("#xlsx").addEventListener("click", exportXlsx);
+
   ["q", "brand", "cat", "src", "sort", "period", "projf"].forEach(id =>
     $("#" + id).addEventListener("input", render));
   $("#reset").addEventListener("click", () => {
@@ -273,5 +317,133 @@
     $("#sort").value = "new"; render();
   });
 
+  // ---- scan lists tab -------------------------------------------------------
+  const L = window.ScanLists;
+  let lists = [], curList = null;
+
+  function tabTo(view) {
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+    $("#v-products").hidden = view !== "products";
+    $("#v-lists").hidden = view !== "lists";
+    if (view === "lists") renderLists();
+  }
+  document.querySelectorAll(".tab").forEach(b =>
+    b.addEventListener("click", () => tabTo(b.dataset.view)));
+
+  async function loadLists() {
+    lists = await L.load();
+    if (!lists.length) {
+      lists = [{ id: "l" + Date.now(), name: "주간 리서치", entries: [], createdAt: Date.now() }];
+      await L.save(lists);
+    }
+    curList = lists.find(x => x.id === (curList && curList.id)) || lists[0];
+  }
+  function fillListSelect() {
+    const sel = $("#listsel");
+    sel.innerHTML = lists.map(l =>
+      `<option value="${esc(l.id)}">${esc(l.name)} (${(l.entries || []).length})</option>`).join("");
+    if (curList) sel.value = curList.id;
+  }
+
+  function renderLists() {
+    fillListSelect();
+    const rows = $("#urlrows");
+    const entries = (curList && curList.entries) || [];
+    if (!entries.length) {
+      rows.innerHTML = '<div class="empty">아직 등록된 URL이 없습니다.<br>' +
+        '아래에 브랜드와 카테고리 URL을 붙여넣어 추가하세요.</div>';
+    } else {
+      rows.innerHTML = entries.map((e, i) => `<div class="ur" data-i="${i}">
+        <span class="n">${i + 1}</span>
+        <span class="bd">${esc(e.brand || "—")}</span>
+        <span class="lb">${esc(e.label || "")}<small>${esc(e.url)}</small></span>
+        <button class="x" title="삭제">✕</button></div>`).join("");
+      rows.querySelectorAll(".x").forEach(b => b.addEventListener("click", async () => {
+        const i = +b.closest(".ur").dataset.i;
+        curList.entries.splice(i, 1);
+        await L.save(lists); renderLists();
+      }));
+    }
+    paintRunState();
+  }
+
+  // live progress of a list run, read from the queue the content script keeps
+  async function paintRunState() {
+    const box = $("#runstate");
+    const q = await new Promise(res => {
+      chrome.tabs.query({}, tabs => {
+        let done = false;
+        const finish = v => { if (!done) { done = true; res(v); } };
+        setTimeout(() => finish(null), 600);
+        chrome.storage.local.get("wpb_queue", o => finish(o && o.wpb_queue));
+      });
+    });
+    const running = q && q.active;
+    box.hidden = !running;
+    $("#stoplist").hidden = !running;
+    $("#runlist").disabled = !!running;
+    if (running) {
+      const cur = q.list[q.idx] || {};
+      box.innerHTML = `<b>스캔 중 · ${q.idx + 1}/${q.list.length}</b> — ` +
+        `${esc(cur.brand || "")} ${esc(cur.label || "")}<br>` +
+        `<span style="color:var(--muted);font-size:12px">스캔은 원래 탭에서 진행됩니다. 이 창은 닫아도 됩니다.</span>`;
+      document.querySelectorAll(".ur").forEach((el, i) => el.classList.toggle("cur", i === q.idx));
+    }
+  }
+  setInterval(() => { if (!$("#v-lists").hidden) paintRunState(); }, 2500);
+
+  $("#listsel").addEventListener("change", e => {
+    curList = lists.find(l => l.id === e.target.value) || curList;
+    renderLists();
+  });
+  $("#newlist").addEventListener("click", async () => {
+    const name = prompt("새 목록 이름", "주간 리서치");
+    if (!name) return;
+    curList = { id: "l" + Date.now(), name: name.trim(), entries: [], createdAt: Date.now() };
+    lists.push(curList); await L.save(lists); renderLists();
+  });
+  $("#dellist").addEventListener("click", async () => {
+    if (!curList || lists.length < 2) return alert("목록이 하나뿐이라 삭제할 수 없습니다.");
+    if (!confirm(`"${curList.name}" 목록을 삭제할까요?`)) return;
+    lists = lists.filter(l => l.id !== curList.id);
+    curList = lists[0]; await L.save(lists); renderLists();
+  });
+  $("#addbulk").addEventListener("click", async () => {
+    const text = $("#bulk").value;
+    const parsed = L.parseList(text);
+    if (!parsed.length) return alert("URL을 찾지 못했습니다. 형식을 확인해 주세요.");
+    const m = L.mergeEntries(curList.entries || [], parsed);
+    curList.entries = m.list;
+    await L.save(lists);
+    $("#bulk").value = "";
+    renderLists();
+    alert(`${m.added}개 추가했습니다.` + (m.skipped ? ` (이미 있는 ${m.skipped}개는 건너뜀)` : ""));
+  });
+
+  // Run the list: hand it to a tab's content script, which walks the URLs.
+  $("#runlist").addEventListener("click", async () => {
+    const entries = (curList && curList.entries) || [];
+    if (!entries.length) return alert("목록이 비어 있습니다.");
+    if (!confirm(`"${curList.name}"의 ${entries.length}개 URL을 순서대로 전체 스캔합니다.\n` +
+      `시간이 걸리고, 스캔하는 탭은 자동으로 이동합니다. 시작할까요?`)) return;
+    // run it in a fresh tab so the user's current tab is left alone
+    const tab = await chrome.tabs.create({ url: entries[0].url, active: true });
+    const send = () => chrome.tabs.sendMessage(tab.id,
+      { type: "runList", name: curList.name, list: entries, withSpec: true, filters: {} },
+      r => {
+        if (chrome.runtime.lastError || !r) return setTimeout(send, 900);   // content script not up yet
+        paintRunState();
+      });
+    setTimeout(send, 1500);
+  });
+  $("#stoplist").addEventListener("click", async () => {
+    await new Promise(res => chrome.storage.local.get("wpb_queue", o => {
+      const q = o && o.wpb_queue; if (q) { q.active = false; chrome.storage.local.set({ wpb_queue: q }, res); }
+      else res();
+    }));
+    paintRunState();
+  });
+
+  (async () => { await loadLists(); })();
   load();
 })();

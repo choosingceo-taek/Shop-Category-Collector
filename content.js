@@ -16,6 +16,7 @@
 */
 
 const JOB = "wpb_job";
+const QUEUE = "wpb_queue";          // batch run over a saved list of category URLs
 const MAX_PAGES = 200;              // hard safety cap
 const EMPTY_PAGE_LIMIT = 2;         // stop after this many consecutive no-new-item pages
 
@@ -92,7 +93,53 @@ function fetchImageViaBg(url) {
   });
 }
 
-async function report(msg) { const j = await g(); if (j) { j.status = msg; await s(j); } }
+async function report(msg) {
+  const j = await g();
+  if (!j) return;
+  // while running a saved list, prefix which URL of how many we're on
+  const q = await getQueue();
+  j.status = (q && q.active) ? `[${q.idx + 1}/${q.list.length}] ${msg}` : msg;
+  await s(j);
+}
+
+// ---- batch queue: run a saved list of category URLs end to end --------------
+// The user keeps a list of "brand + category URL" they revisit every week. The
+// queue walks it: each URL gets a normal full scan (the job engine below is
+// unchanged), and when that finishes we move to the next. It lives in storage
+// like the job, so the navigations between URLs can't lose it.
+const getQueue = () => new Promise(r => {
+  if (!alive()) return r(null);
+  try { chrome.storage.local.get(QUEUE, o => r(chrome.runtime.lastError ? null : (o[QUEUE] || null))); }
+  catch (e) { r(null); }
+});
+const setQueue = q => new Promise(r => {
+  if (!alive()) return r();
+  try { chrome.storage.local.set({ [QUEUE]: q }, () => r()); } catch (e) { r(); }
+});
+
+// Same collection? Compare without the page param so a scan that paginated away
+// still counts as "on the queue's current URL".
+function sameCollection(a, b) {
+  try { return collectionSig(a) === collectionSig(b); } catch (e) { return a === b; }
+}
+
+// Called when a scan finishes. Advances the queue, or ends it.
+async function queueAdvance() {
+  const q = await getQueue();
+  if (!q || !q.active) return false;
+  const me = await myTabId();
+  if (q.tabId != null && me != null && q.tabId !== me) return false;   // not this tab's queue
+  q.idx += 1;
+  if (q.idx >= q.list.length) {
+    q.active = false; q.finishedAt = Date.now();
+    await setQueue(q);
+    return false;
+  }
+  await setQueue(q);
+  const next = q.list[q.idx];
+  setTimeout(() => { try { location.href = next.url; } catch (e) {} }, 1500);
+  return true;
+}
 
 // Top-level wrapper: no matter what throws, the job never silently freezes —
 // the error is written to the status box and the tab can be re-run.
@@ -117,7 +164,9 @@ async function runStep(j) {
   // (pagination left it on a "no more pages" 404) so they watch "Collecting
   // details…" on their own page. Done once (j.returned); the reload re-enters
   // this same phase and continues from the saved progress, so nothing is lost.
-  if (j.phase !== "list" && j.startUrl && !j.returned && j.startUrl !== location.href) {
+  // (skipped during a queued run — the queue navigates to the next URL when this
+  // scan finishes, so bouncing back to this one's start would just waste a load)
+  if (j.phase !== "list" && j.startUrl && !j.returned && !j.queued && j.startUrl !== location.href) {
     j.returned = true; await s(j);
     location.href = j.startUrl;
     return;
@@ -384,6 +433,8 @@ async function runStep(j) {
     }
     const done = await g(); if (done) { done.active = false; await s(done); }
     // (the tab was already returned to startUrl when detail/build began)
+    // Running a saved list? Move on to its next URL.
+    await queueAdvance();
   }
 }
 
@@ -397,7 +448,7 @@ async function startJob(opts) {
   // run finishes (pagination usually leaves it on a "no more pages" 404).
   await s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
       totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false, tabId,
-      startUrl: location.href,
+      startUrl: location.href, queued: !!opts.queued,
       filters: opts.filters || {}, sig: collectionSig(location.href), status: "Starting…" });
   // collection always begins at the first page, wherever the user started from.
   // Adapters whose pagination isn't ?page=N (e.g. SFCC's ?start=N&sz=M) provide
@@ -444,6 +495,23 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
     return true;
   }
   if (m.type === "status") { g().then(j => send(j || {})); return true; }
+  // start a saved-list run in THIS tab: park the queue, then go to its first URL
+  if (m.type === "runList" && m.list && m.list.length) {
+    (async () => {
+      const tabId = await myTabId();
+      await clear();                              // any half-finished job is replaced
+      await setQueue({ active: true, tabId, name: m.name || "", list: m.list, idx: 0,
+        withSpec: m.withSpec !== false, filters: m.filters || {}, startedAt: Date.now() });
+      send({ ok: true, count: m.list.length });
+      setTimeout(() => { location.href = m.list[0].url; }, 60);
+    })();
+    return true;
+  }
+  if (m.type === "queueStatus") { getQueue().then(q => send(q || {})); return true; }
+  if (m.type === "queueStop") {
+    getQueue().then(async q => { if (q) { q.active = false; await setQueue(q); } send({ ok: true }); });
+    return true;
+  }
   return true;
 });
 
@@ -469,6 +537,19 @@ function ownsAndMatches(job, myTab, sig) {
 }
 (async () => {
   const j = await g();
-  if (!j || !j.active) return;
-  if (ownsAndMatches(j, await myTabId(), collectionSig(location.href))) step();
+  const me = await myTabId();
+  if (j && j.active) {
+    if (ownsAndMatches(j, me, collectionSig(location.href))) step();
+    return;
+  }
+  // No job running: if a saved-list run is in progress and we just landed on its
+  // current URL, start that URL's scan automatically. This is what makes a list
+  // walk itself — the user clicks once, not once per URL.
+  const q = await getQueue();
+  if (!q || !q.active || !q.list || !q.list.length) return;
+  if (q.tabId != null && me != null && q.tabId !== me) return;
+  const cur = q.list[q.idx];
+  if (!cur || !sameCollection(cur.url, location.href)) return;
+  if (!adapter()) return;                       // unsupported page — leave it alone
+  startJob({ withSpec: q.withSpec !== false, filters: q.filters || {}, queued: true });
 })();

@@ -53,6 +53,36 @@
   .c .pick { position:absolute; top:8px; left:8px; width:20px; height:20px; cursor:pointer; }
   .empty { text-align:center; color:var(--muted); padding:70px 20px; line-height:1.8; }
   .empty b { color:var(--ink); }
+
+  /* tabs */
+  .tabs { display:flex; gap:2px; padding:0 20px; background:var(--card); border-bottom:1px solid var(--line); }
+  .tab { border:0; border-bottom:2px solid transparent; border-radius:0; background:none;
+    padding:10px 14px; color:var(--muted); font-weight:600; }
+  .tab.on { color:var(--ink); border-bottom-color:var(--accent); }
+
+  /* scan lists */
+  .lists-head { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  .lists-head .spacer { flex:1; }
+  .lists-head select { min-width:200px; }
+  .runstate { padding:11px 13px; border-radius:9px; background:var(--wash); margin-bottom:14px;
+    font-size:13px; }
+  .urlrows { display:flex; flex-direction:column; gap:7px; margin-bottom:26px; }
+  .ur { display:grid; grid-template-columns:auto 150px 1fr auto; gap:10px; align-items:center;
+    padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:var(--card); }
+  .ur.cur { border-color:var(--accent); background:var(--wash); }
+  .ur .n { color:var(--muted); font-size:12px; min-width:22px; }
+  .ur .bd { font-weight:600; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ur .lb { font-size:12.5px; color:var(--ink2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ur .lb small { display:block; color:var(--muted); font-size:11px; }
+  .ur .x { border:0; background:none; color:var(--muted); padding:2px 6px; }
+  .paste { border-top:1px solid var(--line); padding-top:18px; max-width:760px; }
+  .paste h3 { font-size:13.5px; margin:0 0 5px; }
+  .paste p { color:var(--muted); font-size:12.5px; margin:0 0 9px; line-height:1.6; }
+  .paste code { background:var(--line); padding:1px 5px; border-radius:4px; font-size:11.5px; }
+  .paste textarea { width:100%; font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;
+    border:1px solid var(--line); border-radius:9px; padding:10px 12px; background:var(--card);
+    color:var(--ink); resize:vertical; }
+  .paste button { margin-top:9px; }
 </style>
 </head>
 <body>
@@ -90,6 +120,7 @@
         <option value="data">데이터 시트</option>
       </select>
       <button id="report" class="primary" title="지금 보이는 상품으로 리포트 HTML을 만듭니다">📄 리포트 만들기</button>
+      <button id="xlsx" title="지금 보이는 상품을 Excel로 내보냅니다 (썸네일 포함)">📊 Excel 내보내기</button>
     </div>
     <div class="selbar" id="selbar">
       <b id="selcount">0개 선택</b>
@@ -99,8 +130,43 @@
       <button id="selnone">선택 해제</button>
     </div>
   </header>
-  <main><div class="grid" id="grid"></div></main>
+  <nav class="tabs">
+    <button class="tab on" data-view="products">상품</button>
+    <button class="tab" data-view="lists">스캔 목록</button>
+  </nav>
+
+  <main>
+    <div id="v-products"><div class="grid" id="grid"></div></div>
+
+    <div id="v-lists" hidden>
+      <div class="lists-head">
+        <select id="listsel"></select>
+        <button id="newlist">＋ 새 목록</button>
+        <button id="dellist">목록 삭제</button>
+        <span class="spacer"></span>
+        <button id="runlist" class="primary">▶ 이 목록 전체 스캔</button>
+        <button id="stoplist" hidden>■ 중지</button>
+      </div>
+      <div id="runstate" class="runstate" hidden></div>
+      <div class="urlrows" id="urlrows"></div>
+      <div class="paste">
+        <h3>URL 붙여넣기로 한 번에 추가</h3>
+        <p>브랜드 이름을 한 줄에 쓰고, 그 아래에 <code>- 카테고리 : URL</code> 형식으로 나열하세요.
+           지금 쓰시는 텍스트 파일을 그대로 붙여넣어도 됩니다.</p>
+        <textarea id="bulk" rows="8" placeholder="Aritzia
+- ALL NEW : https://www.aritzia.com/intl/en/new
+- Tops &amp; Bodysuits : https://www.aritzia.com/intl/en/clothing/tops
+
+Zara
+- New : https://www.zara.com/us/en/woman-new-in-l1180.html"></textarea>
+        <button id="addbulk" class="primary">목록에 추가</button>
+      </div>
+    </div>
+  </main>
+  <script src="exceljs.min.js"></script>
+  <script src="excel.js"></script>
   <script src="store.js"></script>
+  <script src="lists.js"></script>
   <script src="report/report.js"></script>
   <script src="report/reportgen.js"></script>
   <script src="catalog.js"></script>
