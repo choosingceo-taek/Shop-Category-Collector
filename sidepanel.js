@@ -157,8 +157,12 @@
     const where = read.ctx ? [read.ctx.site, read.ctx.category].filter(Boolean).join(" · ") : "";
     // three states, never two: confirmed / we have access but the page hasn't
     // answered yet (refresh the tab) / no access at all
+    // Any web page can be scanned — access is requested when it is added and
+    // the engine is injected on demand. "Reference" is left for addresses that
+    // are not web pages at all.
+    const web = /^https?:/i.test(read.url || "");
     const badge = scannable ? `<span class="badge ok">Scannable</span>`
-      : read.access ? `<span class="badge" title="Supported site — refresh the tab to read it">Scannable?</span>`
+      : web ? `<span class="badge" title="Adding this page will ask for access to the site">Scannable?</span>`
       : `<span class="badge">Reference</span>`;
     now.innerHTML = `<span class="host">${esc(where || read.host)}</span>` + badge +
       (already ? `<span class="badge ok">In list</span>` : "");
@@ -177,22 +181,51 @@
     return await repairScannable();
   }
 
-  /* One-time repair of Ref entries written by the old rule.
+  /* Ask for the origins a set of URLs needs, in one prompt.
 
-     Until now "Add this page" wrote scannable:false whenever the page hadn't
-     answered — which happens on every supported site whose tab was open when
-     the extension reloaded. Those entries are permanently skipped by Run all,
-     which is why a 10-site list ran 7. Re-decide each false against what we can
-     actually check: a URL-identifiable adapter, or host access we hold. Only
-     entries we truly cannot reach stay Ref. Never demotes anything. */
+     Must be called straight from a click — Chrome only grants an optional
+     permission during a user gesture. Returns the number of origins we hold
+     afterwards; a refusal is not fatal, the entry stays in the list and we ask
+     again when the run reaches it. */
+  async function grantAccess(urls) {
+    const want = [];
+    for (const u of urls || []) {
+      if (!/^https?:/i.test(u || "")) continue;
+      let o = ""; try { o = new URL(u).origin + "/*"; } catch (e) { continue; }
+      if (want.includes(o)) continue;
+      if (!await hasHostAccess(u).catch(() => false)) want.push(o);
+    }
+    if (!want.length) return { needed: 0, granted: 0 };
+    const okAll = await new Promise(res => {
+      try { chrome.permissions.request({ origins: want }, g => { void chrome.runtime.lastError; res(!!g); }); }
+      catch (e) { res(false); }
+    });
+    return { needed: want.length, granted: okAll ? want.length : 0 };
+  }
+
+  /* Repair every entry the old rules stamped as Ref.
+
+     Ref is not a real category for a shop. Two separate rules used to create
+     it: "the page hasn't answered yet" (true of every supported site whose tab
+     predates an extension reload) and "we don't hold this origin's permission"
+     — but permission is grantable on request, and since the service worker can
+     now inject the engine into any permitted page, an http(s) URL is always
+     scannable in principle. So no web address stays Ref: entries we can name
+     an adapter for become Scan, the rest become Scan? (included in every run,
+     access requested when it starts). Only a non-web address — a file:// or a
+     chrome:// page, which cannot be added anyway — can still be Ref. */
   async function repairScannable() {
     const stale = [];
     lists.forEach(l => (l.entries || []).forEach(e => { if (e.scannable === false) stale.push(e); }));
     if (!stale.length) return 0;
     let fixed = 0;
     for (const e of stale) {
-      if (adapterFor(e.url)) { e.scannable = true; fixed++; continue; }
-      if (await hasHostAccess(e.url).catch(() => false)) { delete e.scannable; fixed++; }
+      if (!/^https?:/i.test(e.url || "")) continue;          // genuinely not a web page
+      // Certain when we can name the adapter or we already hold the origin
+      // (the engine goes in either way); otherwise unknown, which still runs.
+      if (adapterFor(e.url) || await hasHostAccess(e.url).catch(() => false)) e.scannable = true;
+      else delete e.scannable;
+      fixed++;
     }
     if (fixed) await L.save(lists);
     return fixed;
@@ -211,11 +244,19 @@
       label: (a && a.category) || (tab.title || "").replace(/\s*[|·—-]\s*[^|·—-]*$/, "").trim().slice(0, 60) || read.host,
       url: tab.url,
     };
-    // Only ever write a definite answer. Unknown stays unwritten (Scan?) so the
-    // run includes it — a page that simply hadn't answered yet must not be
-    // demoted to Ref and silently skipped for good.
+    /* Everything the user adds is meant to be scanned — that is the whole
+       point of adding it — so a web address is never filed as Reference. If we
+       don't hold this origin yet, ask for it now: this call is inside the
+       click, which is the gesture Chrome requires, and the service worker
+       injects the engine into any page we're allowed to touch. A refusal still
+       leaves the entry as Scan? rather than Ref, and the run asks again. */
     if (a || ad) entry.scannable = true;
-    else if (!read.access) entry.scannable = false;
+    else if (read.access) delete entry.scannable;
+    else {
+      const g = await grantAccess([tab.url]).catch(() => ({ granted: 0 }));
+      if (g.granted) { entry.scannable = true; read.access = true; }
+      else delete entry.scannable;
+    }
     const m = L.mergeEntries(curList.entries || [], [entry]);
     if (!m.added) return toast("Already in this list");
     curList.entries = m.list;
@@ -596,6 +637,11 @@
     const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
     if (!entries.length) return toast("No scannable sites in this list");
     if (!await confirmIn(`Scan ${entries.length} sites one after another. Start?`)) return;
+    // Ask for every origin the run will visit, in one prompt, while we still
+    // have the click. Without the permission the worker cannot inject the
+    // engine into a site the manifest doesn't cover, and that URL collects
+    // nothing. Declining is allowed — the run just skips what it can't reach.
+    await grantAccess(entries.map(e => e.url)).catch(() => {});
     // Foreground on purpose: Chrome throttles timers and fetches in hidden tabs
     // (down to roughly once a minute after a few minutes), which stalls a run.
     const t = await chrome.tabs.create({ url: entries[0].url, active: true });
@@ -610,8 +656,12 @@
         withSpec: true, filters: {} },
       r => {
         if (chrome.runtime.lastError || !r) {
+          // No engine in that page: on a site the manifest doesn't cover there
+          // never will be one on its own, so ask the worker to inject it.
+          if (tries === 3) chrome.runtime.sendMessage({ type: "ensureEngine", tabId: t.id },
+            () => void chrome.runtime.lastError);
           if (++tries < 14) return setTimeout(send, 900);
-          return toast(`Could not open the first site — check access to ${hostOf(entries[0].url)}`);
+          return toast(`Could not start on ${hostOf(entries[0].url)} — open that page and allow access, then try again`);
         }
         toast("Scan started");
       });

@@ -70,7 +70,69 @@ async function refreshUpdate(force) {
 }
 refreshUpdate(false);
 
+/* ---- on-demand engine injection -------------------------------------------
+
+   The manifest injects the engine into the sites we ship support for. Anything
+   else — a shop the designer finds this week — had no engine at all, so adding
+   it to a list produced a row that could never be scanned no matter what the
+   panel labelled it. That is the real reason "Reference" existed.
+
+   With a granted host permission we can inject the same files ourselves, so
+   ANY http(s) shop becomes scannable: the panel asks for the origin at the
+   moment the user clicks (that click is the gesture Chrome requires), and this
+   puts the engine in the page. Ping before injecting — a static content script
+   is already there on supported sites, and injecting twice would run the
+   queue-resume logic twice. */
+const ENGINE_FILES = ["exceljs.min.js", "excel.js", "sites.js", "content.js", "fab.js"];
+
+function pingTab(tabId, ms) {
+  return new Promise(res => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; res(v); } };
+    setTimeout(() => finish(false), ms || 700);
+    try {
+      chrome.tabs.sendMessage(tabId, { type: "context" }, r => {
+        void chrome.runtime.lastError; finish(!!r);
+      });
+    } catch (e) { finish(false); }
+  });
+}
+
+async function ensureEngine(tabId) {
+  let url = "";
+  try { url = (await chrome.tabs.get(tabId)).url || ""; } catch (e) { return { ok: false, reason: "no-tab" }; }
+  if (!/^https?:/i.test(url)) return { ok: false, reason: "not-a-web-page" };
+  if (await pingTab(tabId)) return { ok: true, already: true };
+  const origin = (() => { try { return new URL(url).origin + "/*"; } catch (e) { return ""; } })();
+  const granted = origin && await new Promise(r => {
+    try { chrome.permissions.contains({ origins: [origin] }, v => { void chrome.runtime.lastError; r(!!v); }); }
+    catch (e) { r(false); }
+  });
+  if (!granted) return { ok: false, reason: "no-access", origin };
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ENGINE_FILES });
+  } catch (e) { return { ok: false, reason: String((e && e.message) || e) }; }
+  return { ok: await pingTab(tabId, 1500), injected: true };
+}
+
+/* A list run navigates one tab through every URL. On sites without a static
+   content script nothing would come back to life after each navigation, so the
+   run would stop at the first such URL — re-inject as each page finishes
+   loading, but only for the tab that owns the active run. */
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status !== "complete") return;
+  chrome.storage.local.get("wpb_queue", o => {
+    const q = o && o.wpb_queue;
+    if (!q || !q.active || q.tabId !== tabId) return;
+    ensureEngine(tabId).catch(() => {});
+  });
+});
+
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
+  if (msg && msg.type === "ensureEngine" && msg.tabId != null) {
+    ensureEngine(msg.tabId).then(send).catch(e => send({ ok: false, reason: String(e) }));
+    return true;
+  }
   if (msg && msg.type === "updateStatus") {
     refreshUpdate(!!msg.force).then(send).catch(() => send(null));
     return true;
