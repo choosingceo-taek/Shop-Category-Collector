@@ -436,7 +436,70 @@
     curList.entries = m.list;
     await L.save(lists); $("#bulk").value = "";
     fillListSelect(); renderList(); paintNow();
-    toast(`${m.added}개 추가` + (m.skipped ? ` · ${m.skipped}개 중복` : ""));
+    toast(`${m.added}개 추가` + (m.updated ? ` · ${m.updated}개 갱신` : "") +
+      (m.skipped ? ` · ${m.skipped}개 그대로` : ""));
+  });
+
+  /* ---- export the list to a file -------------------------------------------
+
+     The other half of Import. Take the list out, add a brand's category in
+     Excel or Notepad, bring it back — the collector updates rather than
+     duplicating, because the URL is the identity and brand/category are
+     editable text. Both formats are written in exactly the shape the importer
+     reads (lists.js toText / toGrid). */
+  function saveFile(filename, blob, mime) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64 = String(reader.result || "").split(",")[1] || "";
+      try {
+        chrome.runtime.sendMessage({ type: "downloadFile", filename, b64, mime }, r => {
+          void chrome.runtime.lastError;
+          if (r && r.ok) return toast(`${filename} 저장됨`);
+          // the worker path can be refused; the anchor still works here
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = filename;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          toast(`${filename} 저장됨`);
+        });
+      } catch (e) { toast("저장 실패"); }
+    };
+    reader.readAsDataURL(blob);
+  }
+  const listTag = () =>
+    ((curList && curList.name) || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 40);
+
+  $("#explisttxt").addEventListener("click", () => {
+    const entries = (curList && curList.entries) || [];
+    if (!entries.length) return toast("목록이 비어 있습니다");
+    saveFile(`${listTag()}_목록.txt`,
+      new Blob([L.toText(entries)], { type: "text/plain;charset=utf-8" }),
+      "text/plain");
+  });
+
+  $("#explistxlsx").addEventListener("click", async () => {
+    const entries = (curList && curList.entries) || [];
+    if (!entries.length) return toast("목록이 비어 있습니다");
+    const btn = $("#explistxlsx");
+    btn.disabled = true;
+    try {
+      const wb = new window.ExcelJS.Workbook();
+      const ws = wb.addWorksheet("List", { views: [{ state: "frozen", ySplit: 1 }] });
+      const grid = L.toGrid(entries);
+      ws.columns = grid[0].map((h, i) => ({ header: h, width: [18, 26, 70][i] || 20 }));
+      ws.getRow(1).eachCell(c => {
+        c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2A2A2A" } };
+      });
+      grid.slice(1).forEach(r => ws.addRow(r));
+      const bytes = await wb.xlsx.writeBuffer();
+      saveFile(`${listTag()}_목록.xlsx`,
+        new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    } catch (e) {
+      toast("Excel 저장 실패: " + (e && e.message || e));
+    } finally { btn.disabled = false; }
   });
 
   // ---- import a list from a file -------------------------------------------
@@ -477,7 +540,8 @@
     curList.entries = m.list;
     await L.save(lists);
     fillListSelect(); renderList(); paintNow(); paintListResult();
-    toast(`${m.added}개 가져옴` + (m.skipped ? ` · ${m.skipped}개 중복` : ""));
+    toast(`${m.added}개 추가` + (m.updated ? ` · ${m.updated}개 갱신` : "") +
+      (m.skipped ? ` · ${m.skipped}개 그대로` : ""));
   });
 
   $("#runlist").addEventListener("click", async () => {

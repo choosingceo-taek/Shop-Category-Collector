@@ -64,6 +64,9 @@
   .iconbtn { width:30px; height:30px; padding:0; display:inline-flex; align-items:center;
     justify-content:center; flex:none; font-size:13px; }
   .runrow { display:flex; gap:6px; margin-bottom:8px; }
+  .explist { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
+  .explist .cap { color:var(--muted); flex:1; }
+  .explist button { font-size:10.5px; padding:4px 9px; letter-spacing:.05em; }
   .runctl { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
   .runctl button { flex:1 1 auto; font-size:10.5px; font-weight:700; letter-spacing:.06em; }
   .runctl .danger { color:#ff8a8a; border-color:rgba(255,92,92,.3); }
@@ -198,6 +201,11 @@
           <button class="iconbtn" id="newlist" title="새 리스트">＋</button>
           <button class="iconbtn" id="renlist" title="리스트 이름 변경">✎</button>
           <button class="iconbtn" id="dellist" title="리스트 삭제">🗑</button>
+        </div>
+        <div class="explist">
+          <span class="cap">목록 내보내기</span>
+          <button id="explisttxt" title="메모장에서 편집하고 다시 Import하면 목록이 갱신됩니다">.txt</button>
+          <button id="explistxlsx" title="Excel에서 편집하고 다시 Import하면 목록이 갱신됩니다">.xlsx</button>
         </div>
         <div class="qstate" id="qstate" hidden></div>
         <div class="runrow">

@@ -439,6 +439,11 @@ async function runStep(j) {
             // the shop's own publish date, where the shop states one (Shopify's
             // published_at). Never inferred — a missing date stays missing.
             if (d.launched_at && !it.launched_at) it.launched_at = d.launched_at;
+            // A lazy-loading grid can hand back a tile with no photo at all
+            // (Zara's images only resolve as you scroll past). The PDP's own
+            // structured-data image fills that hole; it never overwrites a
+            // photo the listing already gave us.
+            if (d.image_url && !it.image_url) it.image_url = d.image_url;
             // a PDP markdown (both current + original present) is authoritative
             // for this product — the listing tile often shows only the regular
             // price, so reflect the on-page sale in Current Price.

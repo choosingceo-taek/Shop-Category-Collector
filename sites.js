@@ -867,14 +867,62 @@
       return false;
     }
 
+    /* The tile's real photo URL.
+
+       Lazy-loading grids (Zara, COS, Massimo Dutti) do not put the photo in
+       `src` until the tile scrolls into view — before that `src` is a 1x1
+       transparent GIF, a blurred data: URI, or absent entirely, and the real
+       URL sits in a data-* attribute or in a <picture><source srcset>. Reading
+       `src` alone is why a whole Zara export came back with no thumbnails.
+
+       So: collect every candidate the markup offers, drop the placeholders,
+       and take the LARGEST srcset entry (the widest `w` descriptor) — a
+       thumbnail in a spreadsheet is downscaled anyway, and the small candidate
+       is often a blur-up preview. */
+    const PLACEHOLDER = /^data:|(?:^|\/)(?:blank|placeholder|spacer|transparent|1x1|pixel)\.(?:gif|png|svg)(?:[?#]|$)/i;
+
+    function widestFromSrcset(srcset) {
+      let best = "", bestW = -1;
+      // Drop data: URIs before splitting — they are placeholders anyway, and a
+      // base64 payload contains commas that would shatter one candidate into
+      // several, leaving a fragment that looks like a valid URL.
+      String(srcset || "").replace(/data:\S*/gi, " ").split(",").forEach(part => {
+        const bits = part.trim().split(/\s+/);
+        const url = bits[0];
+        if (!url || PLACEHOLDER.test(url)) return;
+        const d = bits[1] || "";
+        const w = /(\d+)w$/.test(d) ? parseInt(d, 10)
+          : /(\d+(?:\.\d+)?)x$/.test(d) ? parseFloat(d) * 1000
+          : 0;
+        if (w > bestW) { bestW = w; best = url; }
+      });
+      return best;
+    }
+
     function bestImage(el) {
-      const img = el.querySelector && el.querySelector("img");
-      if (!img) return "";
-      const src = img.getAttribute("src") || img.getAttribute("data-src") || "";
-      if (src && !/^data:/i.test(src)) return src;
-      const srcset = img.getAttribute("data-srcset") || img.getAttribute("srcset") || "";
-      const m = srcset.match(/(\S+)\s*(?:\d|,|$)/);
-      return m ? m[1] : (src || "");
+      if (!el || !el.querySelector) return "";
+      const img = el.querySelector("img");
+      const cands = [];
+      if (img) {
+        // widest first, then the plain attributes lazy loaders populate
+        cands.push(widestFromSrcset(img.getAttribute("srcset")));
+        cands.push(widestFromSrcset(img.getAttribute("data-srcset")));
+        ["src", "data-src", "data-lazy-src", "data-original", "data-image",
+         "data-echo", "data-hi-res-src"].forEach(a => cands.push(img.getAttribute(a) || ""));
+      }
+      // <picture><source srcset> — the <img> inside may never get a usable src
+      (el.querySelectorAll("picture source, source") || []).forEach(s => {
+        cands.push(widestFromSrcset(s.getAttribute("srcset") || s.getAttribute("data-srcset")));
+      });
+      // last resort: an inline background-image on the tile itself
+      const styled = el.querySelector('[style*="background-image"]') ||
+        (el.getAttribute && /background-image/.test(el.getAttribute("style") || "") ? el : null);
+      if (styled) {
+        const m = (styled.getAttribute("style") || "").match(/background-image\s*:\s*url\(["']?([^"')]+)/i);
+        if (m) cands.push(m[1]);
+      }
+      const hit = cands.find(c => c && !PLACEHOLDER.test(c));
+      return hit || "";
     }
 
     function bestUrl(el, base) {
@@ -1117,6 +1165,7 @@
       // fetchDetail intentionally omitted — content.js skips detail collection
       // gracefully when an adapter doesn't implement it.
       _tileAncestor: tileAncestor, _signature: signature, _bestName: bestName,
+      _bestImage: bestImage, _widestFromSrcset: widestFromSrcset,
       _jsonLdProducts: jsonLdProducts, _inRecommendation: inRecommendation,
     };
   })();
@@ -1692,7 +1741,7 @@
     }
 
     function parseDetailDoc(doc, rawHtml, url) {
-      let brand = "", name = "";
+      let brand = "", name = "", image = "";
       const colors = [], sizes = [];
       const addTo = (arr, v) => {
         const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
@@ -1705,6 +1754,13 @@
           if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
           if (!name && n.name) name = String(n.name);
           if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+          // the PDP's own photo — a backstop for tiles whose lazy-loaded grid
+          // image never resolved (structured data, not a guessed CDN path)
+          if (!image) {
+            const im = [].concat(n.image || [])[0];
+            const u = im && (im.url || im.contentUrl || im);
+            if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+          }
           [].concat(n.color || []).forEach(c => addTo(colors, c));
           [].concat(n.size || []).forEach(z => addTo(sizes, z));
           [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
@@ -1764,7 +1820,7 @@
       const category = breadcrumbCategory(doc, productName);
       const pp = priceFromDoc(doc, rawHtml);
       return {
-        composition, colorways: colors.join("; "), color_count: colorCount || "",
+        composition, colorways: colors.join("; "), color_count: colorCount || "", image_url: image,
         design, category, brand, sizes: sizes.join("; "),
         price: pp.price, price_was: pp.price_was,
         reason: composition ? "" : "not_found",
@@ -1985,7 +2041,7 @@
     }
 
     function parseDetailDoc(doc, rawHtml) {
-      let brand = "", name = "";
+      let brand = "", name = "", image = "";
       const colors = [], sizes = [];
       const addTo = (arr, v) => {
         const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
@@ -1998,6 +2054,13 @@
           if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
           if (!name && n.name) name = String(n.name);
           if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+          // the PDP's own photo — a backstop for tiles whose lazy-loaded grid
+          // image never resolved (structured data, not a guessed CDN path)
+          if (!image) {
+            const im = [].concat(n.image || [])[0];
+            const u = im && (im.url || im.contentUrl || im);
+            if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+          }
           [].concat(n.color || []).forEach(c => addTo(colors, c));
           [].concat(n.size || []).forEach(z => addTo(sizes, z));
           [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
@@ -2037,7 +2100,7 @@
         parts.push(`${cat}: ${v}`);
       }
       return {
-        composition, colorways: colors.join("; "), design: parts.join("\n").slice(0, 400),
+        composition, colorways: colors.join("; "), design: parts.join("\n").slice(0, 400), image_url: image,
         brand, sizes: sizes.join("; "),
         reason: composition ? "" : "not_found",
       };
@@ -2170,7 +2233,7 @@
     }
 
     function parseDetailDoc(doc, rawHtml, url) {
-      let brand = "", name = "";
+      let brand = "", name = "", image = "";
       const colors = [], sizes = [];
       const addTo = (arr, v) => {
         const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
@@ -2182,6 +2245,13 @@
           if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
           if (!name && n.name) name = String(n.name);
           if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+          // the PDP's own photo — a backstop for tiles whose lazy-loaded grid
+          // image never resolved (structured data, not a guessed CDN path)
+          if (!image) {
+            const im = [].concat(n.image || [])[0];
+            const u = im && (im.url || im.contentUrl || im);
+            if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+          }
           [].concat(n.color || []).forEach(c => addTo(colors, c));
           [].concat(n.size || []).forEach(z => addTo(sizes, z));
           [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
@@ -2194,7 +2264,7 @@
       const composition = compositionFromText(liText) || compositionFromText(rawHtml || "");
       return {
         composition, colorways: colors.join("; "), design: "",
-        brand: brand || "ZARA", sizes: sizes.join("; "),
+        brand: brand || "ZARA", sizes: sizes.join("; "), image_url: image,
         reason: composition ? "" : "not_found",
       };
     }
@@ -2605,7 +2675,7 @@
     }
 
     function parseDetailDoc(doc, rawHtml, url) {
-      let brand = "", name = "";
+      let brand = "", name = "", image = "";
       const colors = [], sizes = [];
       const addTo = (arr, v) => {
         const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
@@ -2617,6 +2687,13 @@
           if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
           if (!name && n.name) name = String(n.name);
           if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+          // the PDP's own photo — a backstop for tiles whose lazy-loaded grid
+          // image never resolved (structured data, not a guessed CDN path)
+          if (!image) {
+            const im = [].concat(n.image || [])[0];
+            const u = im && (im.url || im.contentUrl || im);
+            if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+          }
           [].concat(n.color || []).forEach(c => addTo(colors, c));
           [].concat(n.size || []).forEach(z => addTo(sizes, z));
           [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
@@ -2629,7 +2706,7 @@
         || compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
       return {
         composition, colorways: colors.join("; "), color_count: colors.length || "",
-        design: "", brand: brand || cfg.brand, sizes: sizes.join("; "),
+        design: "", brand: brand || cfg.brand, sizes: sizes.join("; "), image_url: image,
         reason: composition ? "" : "not_found",
       };
     }

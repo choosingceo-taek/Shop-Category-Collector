@@ -287,25 +287,22 @@
 
     const { kept: unsorted, dropped } = filterKept(items, ctx.filters);
 
-    /* One file, grouped by BRAND only. A list run collects several brands, and
-       a spreadsheet that interleaves them is unreadable — the designer wants
-       Cotton On's rows together, then Zara's.
+    /* One file, grouped by brand and then by category. A list run collects
+       several brands and several categories each, and a spreadsheet that
+       interleaves them is unreadable — the designer wants Cotton On's tops
+       together, then Cotton On's dresses, then Zara's.
 
-       Brand alone, not brand-then-category: splitting again by category slices
-       the sheet into too many small blocks to read, and each scan already
-       covers one category, so a brand's categories land together anyway.
-       Array#sort is stable, so inside a brand the shop's own order survives —
-       that order is the merchandiser's ranking and re-sorting by name would
-       throw the information away. Rows with no brand sink to the bottom —
-       spelled out rather than done with a high sentinel character, because a
-       U+FFFF sentinel makes the file invalid UTF-8 and Chrome then refuses to
-       load the whole extension. */
-    const brandOf = r => String(r.brand || "").toLowerCase();
-    const kept = unsorted.slice().sort((a, b) => {
-      const x = brandOf(a), y = brandOf(b);
-      if (!x || !y) return (!x && !y) ? 0 : (x ? -1 : 1);
-      return x.localeCompare(y);
-    });
+       Array#sort is stable, so inside one brand+category the shop's own order
+       survives. That order is the merchandiser's ranking; re-sorting by name
+       would throw the information away.
+
+       Empty values sort last via an explicit branch, NOT a high sentinel
+       character — a U+FFFF sentinel makes the file invalid UTF-8 and Chrome
+       then refuses to load the whole extension. */
+    const cmp = (a, b) => (!a || !b) ? ((!a && !b) ? 0 : (a ? -1 : 1)) : a.localeCompare(b);
+    const low = v => String(v || "").toLowerCase();
+    const kept = unsorted.slice().sort((a, b) =>
+      cmp(low(a.brand), low(b.brand)) || cmp(low(a.category), low(b.category)));
 
     // colour-variant families: how many kept rows share each product slug
     const family = new Map();

@@ -158,16 +158,73 @@
     return rows;
   }
 
-  // Merge new entries into a list, skipping URLs it already has.
-  function mergeEntries(existing, incoming) {
-    const seen = new Set((existing || []).map(e => normUrl(e.url)));
-    const add = [];
-    (incoming || []).forEach(e => {
-      const k = normUrl(e.url);
-      if (!k || seen.has(k)) return;
-      seen.add(k); add.push(e);
+  /* ---- export: hand the list back in the shape it came from ---------------
+
+     The point is a round trip. The designer takes the list out as a file, adds
+     a brand's category in Excel or Notepad, brings it back, and the collector
+     updates. So what comes out must be exactly what parseList / parseGrid read
+     back in — the pairs below are covered by a round-trip test, because a
+     format that only ALMOST parses is worse than none. */
+
+  // parseList's own shape: a brand heading, then "- Category : URL" under it.
+  function toText(entries) {
+    const byBrand = new Map();
+    (entries || []).forEach(e => {
+      if (!e || !e.url) return;
+      const b = String(e.brand || "").trim();
+      if (!byBrand.has(b)) byBrand.set(b, []);
+      byBrand.get(b).push(e);
     });
-    return { list: (existing || []).concat(add), added: add.length, skipped: (incoming || []).length - add.length };
+    const out = [];
+    byBrand.forEach((rows, brand) => {
+      if (out.length) out.push("");
+      if (brand) out.push(brand);
+      rows.forEach(e => {
+        const label = String(e.label || "").trim();
+        out.push(label ? `- ${label} : ${e.url}` : `- ${e.url}`);
+      });
+    });
+    return out.join("\n") + "\n";
+  }
+
+  // parseGrid's header shape. Header words are the ones HDR already matches, so
+  // a file exported here re-imports without the user renaming anything.
+  const GRID_HEADER = ["브랜드", "카테고리", "URL"];
+  function toGrid(entries) {
+    return [GRID_HEADER.slice()].concat((entries || [])
+      .filter(e => e && e.url)
+      .map(e => [String(e.brand || ""), String(e.label || ""), String(e.url)]));
+  }
+
+  /* Merge an imported list back in.
+
+     Adding a category is the common case, but the file is also where someone
+     fixes a brand name or renames a category — so a URL already in the list has
+     its brand/label UPDATED rather than being skipped outright. The URL is the
+     identity; everything else is editable text. Entries the file doesn't
+     mention are left alone, so importing one brand's sheet never wipes the
+     rest of the list. */
+  function mergeEntries(existing, incoming) {
+    const list = (existing || []).slice();
+    const index = new Map();
+    list.forEach((e, i) => { const k = normUrl(e.url); if (k) index.set(k, i); });
+    let added = 0, updated = 0, skipped = 0;
+    (incoming || []).forEach(e => {
+      const k = normUrl(e && e.url);
+      if (!k) { skipped++; return; }
+      if (!index.has(k)) {
+        index.set(k, list.length); list.push(e); added++; return;
+      }
+      const cur = list[index.get(k)];
+      const nb = String(e.brand || "").trim(), nl = String(e.label || "").trim();
+      const changed = (nb && nb !== cur.brand) || (nl && nl !== cur.label);
+      if (changed) {
+        if (nb) cur.brand = nb;
+        if (nl) cur.label = nl;
+        updated++;
+      } else skipped++;
+    });
+    return { list, added, updated, skipped };
   }
   function normUrl(u) {
     try { const x = new URL(u); return (x.origin + x.pathname).replace(/\/$/, "").toLowerCase(); }
@@ -182,7 +239,8 @@
     try { chrome.storage.local.set({ [KEY]: lists }, () => r()); } catch (e) { r(); }
   });
 
-  const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl, load, save, KEY };
+  const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl,
+    toText, toGrid, GRID_HEADER, load, save, KEY };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.ScanLists = API;
 })(typeof self !== "undefined" ? self : this);
