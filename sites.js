@@ -148,6 +148,69 @@
   // run "95% Polyester 5% Spandex"; validated by a fiber/percentage check so
   // "Material: Imported" style noise never passes.
   const FIBER_RE = /\d\s*%|\b(cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide|jersey|fleece)\b/i;
+
+  // Every fibre we will name. Used to REBUILD the composition from the
+  // "<pct>% <fibre>" pairs actually present, instead of returning a raw slice of
+  // page text — a slice can drag markup or JSON along with it (Zara states the
+  // composition inside JSON-LD, where a naive label match captured
+  // '","name":"OUTER SHELL","value":"97% polyester').
+  // Longer names first so "triacetate" isn't clipped to "acetate".
+  const FIBER_LIST = "metallised fibre|metallic fibre|triacetate|polyamide|polyester|elastane|" +
+    "cashmere|viscose|acrylic|acetate|lyocell|spandex|alpaca|angora|bamboo|cotton|feather|" +
+    "leather|mohair|tencel|linen|modal|nylon|rayon|ramie|cupro|hemp|jute|silk|wool|down";
+  const titleFibre = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim()
+    .replace(/\b\w/g, c => c.toUpperCase());
+
+  // All "<pct>% [qualifier] <fibre>" pairs, in document order. One optional
+  // qualifier word is allowed ("100% Organic cotton"); promo wording ("50% off")
+  // is excluded because the pair must end on a real fibre name.
+  function fiberPairs(text) {
+    // The tail guard is "not followed by a letter" rather than \b: sites run the
+    // pairs together with no separator ("95% cotton5% elastane"), and \b fails
+    // between a letter and a digit, which silently dropped the first fibres.
+    const re = new RegExp(
+      "(\\d{1,3})\\s?%\\s?(?:(?!off|sale|discount|extra|savings?)([A-Za-z]+)\\s+)?(" + FIBER_LIST + ")(?![A-Za-z])",
+      "gi");
+    const out = [];
+    let m;
+    while ((m = re.exec(String(text || "")))) {
+      const pct = parseInt(m[1], 10);
+      if (!(pct > 0 && pct <= 100)) continue;
+      const qual = m[2] && /^(organic|recycled|virgin|merino|pima|supima|bci)$/i.test(m[2]) ? m[2] + " " : "";
+      out.push({ pct, fiber: titleFibre(qual + m[3]) });
+    }
+    return out;
+  }
+
+  /* Rebuild a clean composition string from those pairs.
+
+     Garments state several parts (OUTER SHELL / LINING / LACE) and the
+     percentages inside one part sum to 100, so a running total that reaches 100
+     — or a fibre repeating — means the next part started. Parts join with "; ",
+     which is the same shape the Inditex adapter already emits. */
+  function normalizeComposition(text) {
+    const pairs = fiberPairs(text);
+    if (!pairs.length) return "";
+    const parts = [];
+    let cur = [], sum = 0;
+    for (const p of pairs) {
+      if (sum >= 100 || cur.some(x => x.fiber === p.fiber)) {
+        if (cur.length) parts.push(cur);
+        cur = []; sum = 0;
+      }
+      cur.push(p); sum += p.pct;
+    }
+    if (cur.length) parts.push(cur);
+    // drop a duplicated part (the same blend restated elsewhere on the page)
+    const seen = new Set();
+    return parts.map(part => part.map(p => p.pct + "% " + p.fiber).join(", "))
+      .filter(s => { const k = s.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .join("; ");
+  }
+  // A candidate that still carries markup or JSON punctuation is not a value the
+  // site displayed — never pass it through as-is.
+  const looksStructural = s => /["{}\[\]<>]|@type|propertyID|additionalProperty/i.test(String(s || ""));
+
   function compositionFromText(text) {
     // closing tags become newlines so list-item boundaries survive stripping —
     // otherwise "Material: 95% ...</li><li>Ruched sides" runs together.
@@ -160,8 +223,18 @@
       .replace(/\s*[—–|·].*$/, "")                                        // "… — Machine wash cold"
       .replace(/\s*\b(machine wash|hand wash|care|country of origin)\b.*$/i, "")
       .trim();
-    const lab = t.match(/(?:fabric material|material|fabric content|fabric composition|composition|fabric)\s*[:\-]?\s*([^.;\n]{3,140})/i);
-    if (lab && FIBER_RE.test(lab[1])) return trimTail(lab[1]);
+    // Labelled region. Read a WIDER window than we return: the pairs get rebuilt
+    // from it, so a blend split across the label ("95% cotton … 5% elastane")
+    // survives, while markup that shared the window is discarded by the rebuild.
+    const lab = t.match(/(?:fabric material|material|fabric content|fabric composition|composition|fabric)\s*[:\-]?\s*([^\n]{3,300})/i);
+    if (lab) {
+      const built = normalizeComposition(lab[1]);
+      if (built) return built;
+      // no percentages (e.g. "Material: Cotton blend") — only usable when the
+      // captured text is plain, displayed wording rather than markup/JSON
+      const plain = trimTail(lab[1].slice(0, 140));
+      if (FIBER_RE.test(plain) && !looksStructural(plain)) return plain;
+    }
     // bare percentage runs — scan ALL of them and take the first that NAMES a
     // fiber, so promo text like "20% off" earlier on the page can't shadow the
     // real "95% Cotton 5% Elastane" later on
@@ -177,17 +250,18 @@
     const QUAL = new RegExp(SEG + "(?:[ ,/&+]+" + SEG + ")*", "i");
     for (const line of t.split(/\n/)) {
       const m = line.match(QUAL);
-      if (m) return m[0].trim();
+      if (m) return normalizeComposition(m[0]) || m[0].trim();
     }
     // last resort — any %-run that happens to contain a fiber word somewhere
     const runs = t.match(/\d{1,3}\s?%\s?[A-Za-z]+(?:[ ,/&+]+\d{1,3}\s?%\s?[A-Za-z]+)*/g) || [];
     const hit = runs.find(r => FIBER_WORD.test(r));
-    return hit ? hit.trim() : "";
+    return hit ? (normalizeComposition(hit) || hit.trim()) : "";
   }
 
   // Expose shared helpers so adapters (and tests) can reuse them.
   const shared = { jsonBlobs, sliceBalanced, looksProduct, collectProductArrays,
-    findKeyedValue, findNumber, uniqBy, compositionFromText, FIBER_RE };
+    findKeyedValue, findNumber, uniqBy, compositionFromText, FIBER_RE,
+    normalizeComposition, fiberPairs };
 
   // ---------------------------------------------------------------------------
   // Walmart adapter
