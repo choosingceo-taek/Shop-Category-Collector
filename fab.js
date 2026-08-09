@@ -1,8 +1,8 @@
 /* On-page floating scan button (FAB) — dark frosted-glass control panel.
    Injected bottom-left on every supported page. Clicking the icon opens a
    control panel (not an instant scan): detail-collection + filters, plus a live
-   progress gauge, the current brand/category, and 작업 시작 / 일시정지·재개 /
-   초기화 — always present. The panel STAYS open while a run is going so progress
+   progress gauge, the current brand/category, and start / pause-resume /
+   reset — always present. The panel STAYS open while a run is going so progress
    is visible in place; the icon itself turns frosted glass while active. Because
    pagination reloads the page, this script re-injects per page and re-renders
    from the stored job, re-opening the panel automatically during a run.
@@ -183,7 +183,7 @@
         <div id="progText">Ready — press Scan</div>
         <div id="ctx" style="display:none"></div>
       </div>
-      <div id="note">No dedicated support for this site — only basic info (thumbnail, name, price, URL) is collected. Color / fabric / design stay as "정보 확인".</div>
+      <div id="note">No dedicated support for this site — only basic info (thumbnail, name, price, URL) is collected. Colour / fabric / design stay as "정보 확인".</div>
       <details id="filters">
         <summary><span id="fsum">Filters (optional)</span><span class="chev">▾</span></summary>
         <div class="f"><label>Name includes</label>
@@ -204,7 +204,7 @@
   </div>
   <div id="fab" class="idle">
     <span id="spin"></span>
-    <button id="main" title="상품 정보 수집 — 옵션 / 작업 제어 열기">
+    <button id="main" title="Collect products — open options and run controls">
       <svg viewBox="0 0 24 24" fill="none">
         <!-- product grid being scanned + collected -->
         <rect x="3" y="3.5" width="7" height="7" rx="1.6" fill="#fff"/>

@@ -20,7 +20,7 @@
      search bar visible (and dead) on every tab */
   [hidden] { display:none !important; }
   /* on the feed/brand tabs only the search is meaningful — the dropdowns and
-     export buttons act on the 상품 grid and would lie anywhere else */
+     export buttons act on the PRODUCTS grid and would lie anywhere else */
   .filters.slim > :not(#q) { display:none; }
   body { margin:0; background:var(--bg); color:var(--ink);
     font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
@@ -197,80 +197,80 @@
   <header>
     <div class="top">
       <h1>LAB</h1>
-      <span class="stats" id="stats">불러오는 중…</span>
+      <span class="stats" id="stats">Loading…</span>
     </div>
     <div class="filters">
-      <input type="search" id="q" placeholder="상품명·원단·색상 검색">
-      <select id="brand"><option value="">모든 브랜드</option></select>
-      <select id="cat"><option value="">모든 카테고리</option></select>
-      <select id="src"><option value="">모든 사이트</option></select>
-      <select id="datebasis" title="기간을 무엇으로 셀지 — 수집일(우리가 처음 본 날) 또는 업로드일(쇼핑몰이 올린 날)">
-        <option value="added">수집일 기준</option>
-        <option value="launch">업로드일 기준</option>
+      <input type="search" id="q" placeholder="Search name · fabric · colour">
+      <select id="brand"><option value="">All brands</option></select>
+      <select id="cat"><option value="">All categories</option></select>
+      <select id="src"><option value="">All sites</option></select>
+      <select id="datebasis" title="What the period counts — first collected (when we first saw it) or published (when the shop posted it)">
+        <option value="added">By collected date</option>
+        <option value="launch">By published date</option>
       </select>
-      <select id="period" title="기간">
-        <option value="">전체 기간</option>
-        <option value="7">최근 7일</option>
-        <option value="14">최근 14일</option>
-        <option value="30">최근 30일</option>
-        <option value="thisweek">이번 주</option>
-        <option value="lastweek">지난 주</option>
+      <select id="period" title="Period">
+        <option value="">All time</option>
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="thisweek">This week</option>
+        <option value="lastweek">Last week</option>
       </select>
-      <select id="projf" title="프로젝트 폴더">
-        <option value="">모든 상품</option>
+      <select id="projf" title="Project folder">
+        <option value="">All products</option>
       </select>
       <select id="sort">
-        <option value="new">최근 수집순</option>
-        <option value="priceUp">가격 낮은순</option>
-        <option value="priceDown">가격 높은순</option>
-        <option value="name">이름순</option>
-        <option value="brand">브랜드순</option>
-        <option value="launch">업로드일 최신순</option>
+        <option value="new">Newest collected</option>
+        <option value="priceUp">Price low to high</option>
+        <option value="priceDown">Price high to low</option>
+        <option value="name">Name</option>
+        <option value="brand">Brand</option>
+        <option value="launch">Newest published</option>
       </select>
-      <button id="reset">필터 해제</button>
-      <select id="tmpl" title="리포트 템플릿">
-        <option value="standard">기본 리포트</option>
-        <option value="lookbook">비주얼 룩북</option>
-        <option value="data">데이터 시트</option>
+      <button id="reset">Clear filters</button>
+      <select id="tmpl" title="Report template">
+        <option value="standard">Dashboard</option>
+        <option value="lookbook">Lookbook</option>
+        <option value="data">Data sheet</option>
       </select>
-      <button id="report" class="primary" title="지금 보이는 상품으로 리포트 HTML을 만듭니다">📄 리포트 만들기</button>
-      <button id="xlsx" title="지금 보이는 상품을 Excel로 내보냅니다 (썸네일 포함)">📊 Excel 내보내기</button>
+      <button id="report" class="primary" title="Build a report HTML from the products shown">📄 Build report</button>
+      <button id="xlsx" title="Export the products shown to Excel (thumbnails included)">📊 Export Excel</button>
     </div>
     <div class="selbar" id="selbar">
-      <b id="selcount">0개 선택</b>
+      <b id="selcount">0 selected</b>
       <select id="proj"></select>
-      <button class="primary" id="addproj">프로젝트에 담기</button>
-      <button id="newproj">＋ 새 프로젝트</button>
-      <button id="selnone">선택 해제</button>
+      <button class="primary" id="addproj">Add to project</button>
+      <button id="newproj">＋ New project</button>
+      <button id="selnone">Clear selection</button>
     </div>
   </header>
   <nav class="tabs">
     <button class="tab on" data-view="lab">LAB</button>
-    <button class="tab" data-view="new">신상 피드</button>
-    <button class="tab" data-view="brands">브랜드</button>
-    <button class="tab" data-view="products">상품</button>
-    <button class="tab" data-view="lists">스캔 목록</button>
+    <button class="tab" data-view="new">New In</button>
+    <button class="tab" data-view="brands">By Brand</button>
+    <button class="tab" data-view="products">Products</button>
+    <button class="tab" data-view="lists">Scan lists</button>
   </nav>
 
   <main>
     <div id="v-lab">
       <div class="labbar">
-        <div class="selwrap"><span class="cap">기간</span>
+        <div class="selwrap"><span class="cap">Period</span>
           <select id="labmonths">
-            <option value="2">최근 8주</option>
-            <option value="3">최근 3개월</option>
-            <option value="6" selected>최근 6개월</option>
-            <option value="12">최근 12개월</option>
+            <option value="2">Last 8 weeks</option>
+            <option value="3">Last 3 months</option>
+            <option value="6" selected>Last 6 months</option>
+            <option value="12">Last 12 months</option>
           </select></div>
-        <div class="selwrap"><span class="cap">단위</span>
-          <select id="labgran"><option value="week" selected>주별</option><option value="month">월별</option></select></div>
-        <div class="selwrap"><span class="cap">기준</span>
+        <div class="selwrap"><span class="cap">Interval</span>
+          <select id="labgran"><option value="week" selected>Weekly</option><option value="month">Monthly</option></select></div>
+        <div class="selwrap"><span class="cap">Measure</span>
           <select id="labdim">
-            <option value="fabric" selected>원단</option>
-            <option value="color">색상</option>
-            <option value="keyword">디자인 키워드</option>
-            <option value="brand">브랜드</option>
-            <option value="category">카테고리</option>
+            <option value="fabric" selected>Fabric</option>
+            <option value="color">Colour</option>
+            <option value="keyword">Design keyword</option>
+            <option value="brand">Brand</option>
+            <option value="category">Category</option>
           </select></div>
       </div>
       <div id="labbody"></div>
@@ -283,25 +283,25 @@
     <div id="v-lists" hidden>
       <div class="lists-head">
         <select id="listsel"></select>
-        <button id="newlist">＋ 새 목록</button>
-        <button id="dellist">목록 삭제</button>
+        <button id="newlist">＋ New list</button>
+        <button id="dellist">Delete list</button>
         <span class="spacer"></span>
-        <button id="runlist" class="primary">▶ 이 목록 전체 스캔</button>
-        <button id="stoplist" hidden>■ 중지</button>
+        <button id="runlist" class="primary">▶ Scan this list</button>
+        <button id="stoplist" hidden>■ Stop</button>
       </div>
       <div id="runstate" class="runstate" hidden></div>
       <div class="urlrows" id="urlrows"></div>
       <div class="paste">
-        <h3>URL 붙여넣기로 한 번에 추가</h3>
-        <p>브랜드 이름을 한 줄에 쓰고, 그 아래에 <code>- 카테고리 : URL</code> 형식으로 나열하세요.
-           지금 쓰시는 텍스트 파일을 그대로 붙여넣어도 됩니다.</p>
+        <h3>Paste URLs to add in bulk</h3>
+        <p>Put a brand on its own line, then list <code>- Category : URL</code> underneath.
+           You can paste the text file you already keep, as it is.</p>
         <textarea id="bulk" rows="8" placeholder="Aritzia
 - ALL NEW : https://www.aritzia.com/intl/en/new
 - Tops &amp; Bodysuits : https://www.aritzia.com/intl/en/clothing/tops
 
 Zara
 - New : https://www.zara.com/us/en/woman-new-in-l1180.html"></textarea>
-        <button id="addbulk" class="primary">목록에 추가</button>
+        <button id="addbulk" class="primary">Add to list</button>
       </div>
     </div>
   </main>

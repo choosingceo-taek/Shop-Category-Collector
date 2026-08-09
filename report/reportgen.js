@@ -92,7 +92,7 @@
       return `<rect x="${bx + 1}" y="${by}" width="${Math.max(1, bw - 3)}" height="${h}" rx="4" fill="${SERIES[0]}"/>
         <text x="${bx + bw / 2}" y="${H - padB + 13}" text-anchor="middle" font-size="10" fill="${MUTED}">$${Math.round(x.lo)}</text>`;
     }).join("");
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="가격 분포">
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Price distribution">
       ${gridLines}${cols}
       <line x1="${padL}" y1="${H - padB}" x2="${W - 8}" y2="${H - padB}" stroke="#c3c2b7" stroke-width="1"/></svg>`;
   }
@@ -143,7 +143,7 @@
     meta = meta || {}; images = images || {};
     const agg = Calc.aggregate(items);
     const norm = (items || []).map(Calc.normItem);
-    const title = meta.title || "마켓 리서치 리포트";
+    const title = meta.title || "Market research report";
     const when = meta.generatedAt || new Date().toISOString().slice(0, 10);
 
     const fibers = agg.fiberPresence.slice(0, 10)
@@ -166,7 +166,7 @@
         ${img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`}
         <figcaption>
           ${p.brand ? `<span class="pb">${esc(p.brand)}</span>` : ""}
-          <span class="pn">${esc(p.name || "(이름 없음)")}</span>
+          <span class="pn">${esc(p.name || "(untitled)")}</span>
           ${p.price != null ? `<span class="pp${sale ? " sale" : ""}">${money(p.price)}${
             sale ? ` <s>${money(p.priceWas)}</s>` : ""}</span>` : ""}
           ${p.fibers.length ? `<span class="pf">${esc(p.fibers.map(f => (f.pct != null ? f.pct + "% " : "") + f.fiber).join(", "))}</span>` : ""}
@@ -175,8 +175,8 @@
 
     // Data-sheet table: every collected field, compact, for close analysis.
     const table = `<table class="tb"><thead><tr>
-        <th></th><th>브랜드</th><th>상품명</th><th>카테고리</th><th>현재가</th><th>정가</th>
-        <th>원단</th><th>색상</th><th>사이즈</th></tr></thead><tbody>` +
+        <th></th><th>Brand</th><th>Product</th><th>Category</th><th>Price</th><th>Was</th>
+        <th>Fabric</th><th>Colours</th><th>Sizes</th></tr></thead><tbody>` +
       norm.map(p => {
         const img = images[p.product_url] || "";
         const raw = (items || []).find(x => (x.product_url || "") === p.product_url) || {};
@@ -207,22 +207,22 @@
     const scopeBits = [];
     if (meta.period) scopeBits.push(meta.period);
     if (meta.scope) scopeBits.push(meta.scope);
-    if (agg.brandShare.length) scopeBits.push(`브랜드 ${agg.brandShare.length}`);
-    if (agg.categoryShare.length) scopeBits.push(`카테고리 ${agg.categoryShare.length}`);
+    if (agg.brandShare.length) scopeBits.push(`${agg.brandShare.length} brands`);
+    if (agg.categoryShare.length) scopeBits.push(`${agg.categoryShare.length} categories`);
 
     // Templates change PRESENTATION only — the figures above are identical in
     // all three, so two teams reading different layouts never see different
     // numbers. standard = stats+charts+grid, lookbook = images lead,
     // data = full table for close analysis.
     const tmpl = meta.template || "standard";
-    const summary = `<h2>요약</h2>
+    const summary = `<h2>Summary</h2>
 <div class="tiles">
-  ${statTile("수집 상품", agg.count.toLocaleString() + "개")}
-  ${statTile("평균가", money(agg.avgPrice), agg.medianPrice != null ? "중앙값 " + money(agg.medianPrice) : "")}
-  ${statTile("가격대", agg.minPrice != null ? money(agg.minPrice) + " – " + money(agg.maxPrice) : "—")}
-  ${statTile("세일 중", agg.onSalePct + "%", agg.avgDiscountPct != null ? "평균 " + Math.round(agg.avgDiscountPct) + "% 인하" : "")}
-  ${statTile("원단 확인", agg.compositionKnownPct + "%", "조성 수집된 비율")}
-  ${statTile("색상 종류", agg.distinctColors + "종")}
+  ${statTile("Products", agg.count.toLocaleString())}
+  ${statTile("Average price", money(agg.avgPrice), agg.medianPrice != null ? "median " + money(agg.medianPrice) : "")}
+  ${statTile("Price range", agg.minPrice != null ? money(agg.minPrice) + " – " + money(agg.maxPrice) : "—")}
+  ${statTile("On sale", agg.onSalePct + "%", agg.avgDiscountPct != null ? Math.round(agg.avgDiscountPct) + "% average markdown" : "")}
+  ${statTile("Fabric known", agg.compositionKnownPct + "%", "composition collected")}
+  ${statTile("Distinct colours", String(agg.distinctColors))}
 </div>`;
 
     // arrivals per collection day — the shape behind the headline count
@@ -242,30 +242,30 @@
       return [...m.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]).slice(-14);
     })();
     const kpis = `<div class="kpis">
-      ${kpi("k1", "수집 상품", agg.count.toLocaleString(),
-        dayCounts.length > 1 ? `수집일 ${dayCounts.length}일` : "",
+      ${kpi("k1", "Products", agg.count.toLocaleString(),
+        dayCounts.length > 1 ? `${dayCounts.length} collection days` : "",
         sparkBars(dayCounts, SERIES[0]))}
-      ${kpi("k2", "브랜드 · 카테고리", `${agg.brandShare.length} · ${agg.categoryShare.length}`,
-        agg.brandShare.length ? `최다 ${agg.brandShare[0].key}` : "",
+      ${kpi("k2", "Brands · Categories", `${agg.brandShare.length} · ${agg.categoryShare.length}`,
+        agg.brandShare.length ? `most: ${agg.brandShare[0].key}` : "",
         sparkBars(agg.brandShare.slice(0, 8).map(b => b.value), SERIES[6]))}
-      ${kpi("k3", "중앙가", agg.medianPrice != null ? money(agg.medianPrice) : "—",
+      ${kpi("k3", "Median price", agg.medianPrice != null ? money(agg.medianPrice) : "—",
         agg.minPrice != null ? `${money(agg.minPrice)} – ${money(agg.maxPrice)}` : "",
         sparkLine((agg.priceHistogram.buckets || []).map(b => b.count), SERIES[7]))}
-      ${kpi("k4", "세일 비중", agg.onSalePct + "%",
-        agg.avgDiscountPct != null ? `평균 ${Math.round(agg.avgDiscountPct)}% 인하` : "세일 상품 없음",
+      ${kpi("k4", "On sale", agg.onSalePct + "%",
+        agg.avgDiscountPct != null ? `${Math.round(agg.avgDiscountPct)}% average markdown` : "nothing discounted",
         sparkBars([agg.onSalePct, 100 - agg.onSalePct], SERIES[1]))}
     </div>`;
 
     const card = (title, inner) => `<section class="card"><h3>${esc(title)}</h3>${inner}</section>`;
     const charts = kpis +
-      card("가격 분포", histogram(agg.priceHistogram) || `<p class="sub">가격 정보가 없습니다.</p>`) +
+      card("Price distribution", histogram(agg.priceHistogram) || `<p class="sub">No price data.</p>`) +
       `<div class="two">
-        ${card("원단 (상품 중 사용 비율)", fibers.length ? barsH(fibers, { alt: "원단별 사용 비율", labelW: 140 }) : `<p class="sub">조성 정보가 없습니다.</p>`)}
-        ${card("색상 빈도", colors.length ? barsH(colors, { alt: "색상 빈도", labelW: 140 }) : `<p class="sub">색상 정보가 없습니다.</p>`)}
+        ${card("Fabric (share of products using it)", fibers.length ? barsH(fibers, { alt: "Fabric usage", labelW: 140 }) : `<p class="sub">No composition data.</p>`)}
+        ${card("Colour frequency", colors.length ? barsH(colors, { alt: "Colour frequency", labelW: 140 }) : `<p class="sub">No colour data.</p>`)}
       </div>
       <div class="two">
-        ${card("브랜드", brands.length ? barsH(brands, { alt: "브랜드별 상품 수", labelW: 140 }) : `<p class="sub">브랜드 정보가 없습니다.</p>`)}
-        ${card("카테고리", cats.length ? barsH(cats, { alt: "카테고리별 상품 수", labelW: 140 }) : `<p class="sub">카테고리 정보가 없습니다.</p>`)}
+        ${card("Brands", brands.length ? barsH(brands, { alt: "Products per brand", labelW: 140 }) : `<p class="sub">No brand data.</p>`)}
+        ${card("Categories", cats.length ? barsH(cats, { alt: "Products per category", labelW: 140 }) : `<p class="sub">No category data.</p>`)}
       </div>`;
 
     /* ---- the pulse layout (default) ---------------------------------------
@@ -277,14 +277,14 @@
         ${img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`}
         <figcaption>
           ${p.brand ? `<span class="pb">${esc(p.brand)}</span>` : ""}
-          <span class="pn">${esc(p.name || "(이름 없음)")}</span>
+          <span class="pn">${esc(p.name || "(untitled)")}</span>
           ${p.price != null ? `<span class="pp${p.onSale ? " sale" : ""}">${money(p.price)}${
             p.onSale ? ` <s>${money(p.priceWas)}</s>` : ""}</span>` : ""}
           ${p.fibers.length ? `<span class="pf">${esc(p.fibers.map(f => (f.pct != null ? f.pct + "% " : "") + f.fiber).join(", "))}</span>` : ""}
         </figcaption></figure>`;
     });
     const raws = items || [];
-    const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+    const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dayKey = ts => { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
     const dayLabel = ts => { const d = new Date(ts); return `${d.getMonth() + 1}/${d.getDate()} (${DOW[d.getDay()]})`; };
 
@@ -299,7 +299,7 @@
     const newIn = [...byDay.entries()].sort((a, b) => b[0] - a[0]).map(([k, idxs]) => {
       const byBrand = new Map();
       idxs.forEach(i => {
-        const b = raws[i].brand || "기타";
+        const b = raws[i].brand || "Other";
         if (!byBrand.has(b)) byBrand.set(b, []);
         byBrand.get(b).push(i);
       });
@@ -308,19 +308,19 @@
         .map(([brand, ii]) => `<div class="bgrp" data-brand="${esc(brand)}">
           <div class="bsub">${esc(brand)} <span>${ii.length}</span></div>
           <div class="grid">${ii.map(i => cardArr[i]).join("")}</div></div>`).join("");
-      return `<div class="day"><div class="dh"><b>${k ? esc(dayLabel(k)) : "수집일 미상"}</b>
-        <span class="dcount" data-all="${idxs.length}">${idxs.length}개</span></div>${groups}</div>`;
+      return `<div class="day"><div class="dh"><b>${k ? esc(dayLabel(k)) : "Date unknown"}</b>
+        <span class="dcount" data-all="${idxs.length}">${idxs.length}</span></div>${groups}</div>`;
     }).join("");
 
     // brand chips over the whole feed — counts included so no chip can lead to
     // an empty screen, and the filter narrows the view only
     const feedBrands = (() => {
       const m = new Map();
-      raws.forEach(r => { const b = (r && r.brand) || "기타"; m.set(b, (m.get(b) || 0) + 1); });
+      raws.forEach(r => { const b = (r && r.brand) || "Other"; m.set(b, (m.get(b) || 0) + 1); });
       return [...m.entries()].sort((a, b) => b[1] - a[1]);
     })();
     const feedChips = feedBrands.length > 1
-      ? `<div class="fchips"><button class="fch on" data-b="">전체 <span>${raws.length}</span></button>` +
+      ? `<div class="fchips"><button class="fch on" data-b="">All <span>${raws.length}</span></button>` +
         feedBrands.map(([b, n]) => `<button class="fch" data-b="${esc(b)}">${esc(b)} <span>${n}</span></button>`).join("") +
         `</div>`
       : "";
@@ -328,7 +328,7 @@
     // BY BRAND: brand (biggest first) → category → cards, with anchor chips.
     const byBrandAll = new Map();
     raws.forEach((r, i) => {
-      const b = r.brand || "기타";
+      const b = r.brand || "Other";
       if (!byBrandAll.has(b)) byBrandAll.set(b, []);
       byBrandAll.get(b).push(i);
     });
@@ -346,7 +346,7 @@
         .map(([cat, jj]) => `${cat ? `<div class="bsub">${esc(cat)} <span>${jj.length}</span></div>` : ""}
           <div class="grid">${jj.map(i => cardArr[i]).join("")}</div>`).join("");
       return `<div class="bsec" id="b${n}">
-        <div class="bhero"><h3>${esc(b)}</h3><span>상품 ${ii.length}개 · 카테고리 ${byCat.size}개</span></div>
+        <div class="bhero"><h3>${esc(b)}</h3><span>${ii.length} products · ${byCat.size} categories</span></div>
         ${inner}</div>`;
     }).join("");
 
@@ -367,9 +367,9 @@
   </aside>
   <div class="content">
     <section data-sec="new">
-      ${secHead(`${agg.count.toLocaleString()} new arrivals · 처음 수집된 날짜 기준`, "New In")}
+      ${secHead(`${agg.count.toLocaleString()} new arrivals · by first collected date`, "New In")}
       ${feedChips}
-      ${newIn || `<p class="sub">상품이 없습니다.</p>`}
+      ${newIn || `<p class="sub">No products.</p>`}
     </section>
     <section data-sec="brand">
       ${secHead(`${brandOrder.length} brand profiles`, "By Brand")}
@@ -377,13 +377,14 @@
       ${brandSecs}
     </section>
     <section data-sec="lab">
-      ${secHead("result analysis · 모든 수치는 수집 데이터에서 계산", "LAB")}
+      ${secHead("result analysis · every figure computed from collected data", "LAB")}
       ${charts}
     </section>
     <footer>
-      이 파일은 생성 시점의 정보를 그대로 담고 있습니다. 이미지와 수치가 파일 안에 저장되어
-      있어 인터넷 연결이나 원본 쇼핑몰 없이도 언제든 동일하게 열립니다.<br>
-      생성: ${esc(when)}${meta.source ? " · 출처: " + esc(meta.source) : ""}${
+      This file holds the information exactly as it was when generated. Images and figures
+      are stored inside it, so it opens the same with no internet and after the original shop
+      is gone.<br>
+      Generated ${esc(when)}${meta.source ? " · source: " + esc(meta.source) : ""}${
         meta.subtitle ? " · " + esc(meta.subtitle) : ""}
     </footer>
   </div>
@@ -412,7 +413,7 @@
       }
       days[d].style.display = shown ? "" : "none";
       var c = days[d].querySelector(".dcount");
-      if (c) c.textContent = (b ? n : c.dataset.all) + "개";
+      if (c) c.textContent = String(b ? n : c.dataset.all);
     }
   }
   for (var k = 0; k < chips.length; k++)
@@ -429,9 +430,9 @@
     const bodyByTemplate = {
       standard: pulse,
       lookbook: `<div class="lbgrid">${plates}</div>` + summary +
-        `<div class="two"><div><h2>원단</h2>${fibers.length ? barsH(fibers, { labelW: 140 }) : ""}</div>` +
-        `<div><h2>색상</h2>${colors.length ? barsH(colors, { labelW: 140 }) : ""}</div></div>`,
-      data: summary + `<h2>상품 상세 (${agg.count.toLocaleString()})</h2>${table}` + charts,
+        `<div class="two"><div><h2>Fabric</h2>${fibers.length ? barsH(fibers, { labelW: 140 }) : ""}</div>` +
+        `<div><h2>Colours</h2>${colors.length ? barsH(colors, { labelW: 140 }) : ""}</div></div>`,
+      data: summary + `<h2>Product detail (${agg.count.toLocaleString()})</h2>${table}` + charts,
     };
     const body = bodyByTemplate[tmpl] || bodyByTemplate.standard;
     const isPulse = body === pulse;
@@ -569,16 +570,17 @@
 <header>
   <h1>${esc(title)}</h1>
   ${meta.subtitle ? `<div class="sub">${esc(meta.subtitle)}</div>` : ""}
-  <div class="meta">${esc(when)} 기준 · 상품 ${agg.count.toLocaleString()}개${
+  <div class="meta">as of ${esc(when)} · ${agg.count.toLocaleString()} products${
     scopeBits.length ? " · " + esc(scopeBits.join(" · ")) : ""}</div>
 </header>
 
 ${body}
 
 <footer>
-  이 파일은 생성 시점의 정보를 그대로 담고 있습니다. 이미지와 수치가 파일 안에 저장되어
-  있어 인터넷 연결이나 원본 쇼핑몰 없이도 언제든 동일하게 열립니다.<br>
-  생성: ${esc(when)}${meta.source ? " · 출처: " + esc(meta.source) : ""}
+  This file holds the information exactly as it was when generated. Images and figures
+  are stored inside it, so it opens the same with no internet and after the original shop
+  is gone.<br>
+  Generated ${esc(when)}${meta.source ? " · source: " + esc(meta.source) : ""}
 </footer>
 </div>`}</body></html>`;
   }

@@ -65,7 +65,7 @@
   .view.on { display:flex; }
 
   /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
-  .adder { padding:13px 14px 4px; }
+  .adder { margin:2px 0 10px; }
   .now { font-size:11.5px; color:var(--ink2); margin-bottom:10px; line-height:1.5; }
   .now .host { font-weight:700; color:var(--ink); }
   .now .badge { display:inline-block; margin-left:6px; padding:1px 6px; font-size:9px;
@@ -237,21 +237,19 @@
   <main>
     <!-- COLLECTOR — add whatever page you're on, then curate the list -->
     <section class="view on" id="v-collector">
-      <div class="adder">
-        <div class="upnote" id="upnote" hidden>
-          <div><b>새 버전 <span id="upver"></span></b>이 나왔습니다 (현재 <span id="upcur"></span>)</div>
-          <div class="uphow">ZIP을 받아 기존 폴더에 덮어쓰고, 확장 ↻ 리로드 → 탭 F5 하면 됩니다.</div>
-          <button id="upget">⬇ 새 버전 ZIP 받기</button>
-        </div>
-        <div class="now" id="now">페이지를 읽는 중…</div>
-        <button id="addbtn" class="solid">＋ Add this page</button>
+      <!-- Order follows the work, not the chronology of building it:
+           LAB first (where the collected work turns into an answer), then the
+           list you are curating, then adding the page you happen to be on —
+           which is an action ON that list, so it sits with it. -->
+      <div class="upnote" id="upnote" hidden>
+        <div><b>Version <span id="upver"></span></b> is available (you have <span id="upcur"></span>)</div>
+        <div class="uphow">Download the ZIP, overwrite your folder, reload the extension, then refresh the tab.</div>
+        <button id="upget">⬇ Get the new ZIP</button>
       </div>
 
-      <!-- LAB is where the collected work becomes an answer, so it is the
-           loudest thing on the panel, not a button among buttons -->
       <button id="catalog" class="labbtn">
         <span class="lbmain">LAB<span class="lbgo">→</span></span>
-        <span class="lbsub">주차별 신상 · 브랜드별 · 트렌드 분석</span>
+        <span class="lbsub">Weekly new-in · By brand · Trends</span>
       </button>
 
       <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
@@ -260,15 +258,15 @@
         <!-- list + its controls read as one card floating on the warm ground -->
         <div class="panelcard">
         <div class="lhead">
-          <select id="listsel" title="리스트 선택"></select>
-          <button class="iconbtn" id="newlist" title="새 리스트">＋</button>
-          <button class="iconbtn" id="renlist" title="리스트 이름 변경">✎</button>
-          <button class="iconbtn" id="dellist" title="리스트 삭제">🗑</button>
+          <select id="listsel" title="Choose a list"></select>
+          <button class="iconbtn" id="newlist" title="New list">＋</button>
+          <button class="iconbtn" id="renlist" title="Rename list">✎</button>
+          <button class="iconbtn" id="dellist" title="Delete list">🗑</button>
         </div>
         <div class="explist">
-          <span class="cap">목록 내보내기</span>
-          <button id="explisttxt" title="메모장에서 편집하고 다시 Import하면 목록이 갱신됩니다">.txt</button>
-          <button id="explistxlsx" title="Excel에서 편집하고 다시 Import하면 목록이 갱신됩니다">.xlsx</button>
+          <span class="cap">Export list</span>
+          <button id="explisttxt" title="Edit in a text editor and import again to update the list">.txt</button>
+          <button id="explistxlsx" title="Edit in Excel and import again to update the list">.xlsx</button>
         </div>
         <div class="qstate" id="qstate" hidden></div>
         <!-- one fixed set of controls, always in the same place: the state
@@ -278,18 +276,19 @@
         </div>
         <div class="runctl">
           <button id="jpause">⏸ Pause</button>
-          <button id="jreset" class="danger" title="실행을 중지하고 목록 실행 상태를 초기화합니다">↺ Reset</button>
+          <button id="jreset" class="danger" title="Stop the run and clear its state">↺ Reset</button>
         </div>
-        <label class="capline" for="maxitems">URL당 최대 상품 수
-          <select id="maxitems" title="한 URL에서 가져올 상품 수 상한">
-            <option value="30">30개</option>
-            <option value="60" selected>60개 (기본)</option>
-            <option value="100">100개</option>
-            <option value="200">200개</option>
-            <option value="0">제한 없음</option>
+        <label class="capline" for="maxitems">Max products per URL
+          <select id="maxitems" title="Upper limit of products taken from one URL">
+            <option value="30">30</option>
+            <option value="60" selected>60 (default)</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="0">No limit</option>
           </select>
         </label>
         </div>
+
         <div class="result" id="listresult" hidden>
           <span id="resulttext"></span>
           <div class="row" style="margin-top:7px">
@@ -297,15 +296,22 @@
             <button id="listview" class="grow">View</button>
           </div>
         </div>
+
+        <!-- adding the current page is an action on the list above it -->
+        <div class="adder">
+          <div class="now" id="now">Reading the page…</div>
+          <button id="addbtn" class="solid">＋ Add this page</button>
+        </div>
+
         <div id="listbody"></div>
       </div>
 
       <div class="paste">
         <span class="cap">Import</span>
-        <button id="importbtn">파일에서 가져오기 (.xlsx · .csv · .txt)</button>
+        <button id="importbtn">Import from file (.xlsx · .csv · .txt)</button>
         <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
-        <div class="hint">브랜드 · 카테고리 · URL 열이 있으면 알아서 인식합니다.
-          열 이름이 없어도 URL이 있는 줄은 모두 읽습니다.</div>
+        <div class="hint">Brand · Category · URL columns are detected automatically.
+          Without headers, every line containing a URL is still read.</div>
         <span class="cap" style="margin-top:12px">Paste URLs</span>
         <textarea id="bulk" rows="4" placeholder="Zara
 - Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
@@ -318,7 +324,7 @@
       <div class="filters">
         <div class="scopebar" id="scopebar" hidden>
           <span id="scopetext"></span>
-          <button id="scopeclear" title="전체 보기">✕</button>
+          <button id="scopeclear" title="Show all">✕</button>
         </div>
         <input id="psearch" type="search" placeholder="Search products">
         <div class="row">
@@ -335,9 +341,9 @@
   <div class="selbar" id="selbar">
     <span class="cnt" id="selcount">Selected 0</span>
     <span style="flex:1"></span>
-    <button class="cir txt" id="selall" title="보이는 상품 전체 선택">ALL</button>
-    <button class="cir" id="selreset" title="선택 해제">↺</button>
-    <button class="cir" id="selexport" title="선택한 상품 Excel 내보내기">⬆</button>
+    <button class="cir txt" id="selall" title="Select everything shown">ALL</button>
+    <button class="cir" id="selreset" title="Clear selection">↺</button>
+    <button class="cir" id="selexport" title="Export selected to Excel">⬆</button>
   </div>
 
   <!-- Chrome side panels do not display window.confirm/prompt/alert, so asking
@@ -347,8 +353,8 @@
       <div class="asktext" id="asktext"></div>
       <input id="askinput" type="text" hidden>
       <div class="askrow">
-        <button id="askcancel">취소</button>
-        <button id="askok" class="solid">확인</button>
+        <button id="askcancel">Cancel</button>
+        <button id="askok" class="solid">OK</button>
       </div>
     </div>
   </div>

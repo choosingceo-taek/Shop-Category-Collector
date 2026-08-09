@@ -57,10 +57,10 @@
     const brands = new Set(items.map(i => i.brand).filter(Boolean)).size;
     const dated = items.filter(i => i.launched_at).length;
     $("#stats").textContent = items.length
-      ? `상품 ${items.length.toLocaleString()}개 · 브랜드 ${brands}` +
-        (merged ? ` · 중복 ${merged}개 합침` : "") +
-        (dated ? ` · 업로드일 확인 ${dated}개` : "")
-      : "아직 비어 있습니다";
+      ? `${items.length.toLocaleString()} products · ${brands} brands` +
+        (merged ? ` · ${merged} duplicates merged` : "") +
+        (dated ? ` · ${dated} with a published date` : "")
+      : "Nothing collected yet";
   }
 
   function fillFilters() {
@@ -70,19 +70,19 @@
         [...values].sort((a, b) => a.localeCompare(b)).map(v => `<option>${esc(v)}</option>`).join("");
       sel.value = cur;
     };
-    fill($("#brand"), new Set(items.map(i => i.brand).filter(Boolean)), "모든 브랜드");
-    fill($("#cat"), new Set(items.map(i => i.category).filter(Boolean)), "모든 카테고리");
-    fill($("#src"), new Set(items.map(i => i.site || i.source).filter(Boolean)), "모든 사이트");
+    fill($("#brand"), new Set(items.map(i => i.brand).filter(Boolean)), "All brands");
+    fill($("#cat"), new Set(items.map(i => i.category).filter(Boolean)), "All categories");
+    fill($("#src"), new Set(items.map(i => i.site || i.source).filter(Boolean)), "All sites");
   }
   function fillProjects() {
     const sel = $("#proj"), cur = sel.value;
     sel.innerHTML = projects.length
       ? projects.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (${(p.keys || []).length})</option>`).join("")
-      : `<option value="">프로젝트 없음</option>`;
+      : `<option value="">No projects</option>`;
     if (cur) sel.value = cur;
     // the same list also filters the catalog down to one project's contents
     const f = $("#projf"), curF = f.value;
-    f.innerHTML = `<option value="">모든 상품</option>` +
+    f.innerHTML = `<option value="">All products</option>` +
       projects.map(p => `<option value="${esc(p.id)}">📁 ${esc(p.name)} (${(p.keys || []).length})</option>`).join("");
     f.value = curF;
   }
@@ -170,12 +170,12 @@
     if (!items.length) {
       grid.innerHTML = "";
       grid.insertAdjacentHTML("beforeend",
-        '<div class="empty" style="grid-column:1/-1">카탈로그가 비어 있습니다.<br>' +
-        '쇼핑몰에서 <b>전체 스캔</b>을 한 번 돌리면 수집한 상품이 여기에 쌓입니다.</div>');
+        '<div class="empty" style="grid-column:1/-1">The catalog is empty.<br>' +
+        'Run <b>Scan all</b> once on a shop and everything collected lands here.</div>');
       return;
     }
     if (!rows.length) {
-      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">조건에 맞는 상품이 없습니다.</div>';
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">No products match these filters.</div>';
       return;
     }
     grid.innerHTML = rows.map(i => {
@@ -185,11 +185,11 @@
         : `<div class="thumb"></div>`;
       const link = i.product_url ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">` : "";
       return `<div class="c${picked.has(i.key) ? " sel" : ""}" data-k="${esc(i.key)}">
-        <input class="pick" type="checkbox" ${picked.has(i.key) ? "checked" : ""} title="선택">
+        <input class="pick" type="checkbox" ${picked.has(i.key) ? "checked" : ""} title="Select">
         ${link}${img}${link ? "</a>" : ""}
         <div class="body">
           ${i.brand ? `<div class="bd">${esc(i.brand)}</div>` : ""}
-          <div class="nm">${link}${esc(i.name || "(이름 없음)")}${link ? "</a>" : ""}</div>
+          <div class="nm">${link}${esc(i.name || "(untitled)")}${link ? "</a>" : ""}</div>
           ${i.price ? `<div class="pr${onSale ? " sale" : ""}">${esc(i.price)}${onSale ? `<s>${esc(i.price_was)}</s>` : ""}</div>` : ""}
           ${i.fabric_composition ? `<div class="fb">${esc(i.fabric_composition)}</div>` : ""}
         </div></div>`;
@@ -200,7 +200,7 @@
 
   function paintSel() {
     $("#selbar").classList.toggle("on", picked.size > 0);
-    $("#selcount").textContent = `${picked.size}개 선택`;
+    $("#selcount").textContent = `${picked.size} selected`;
   }
 
   // ---- selection + projects ------------------------------------------------
@@ -217,7 +217,7 @@
     picked.clear(); render();
   });
   $("#newproj").addEventListener("click", async () => {
-    const name = prompt("새 프로젝트 이름", "26SS 리서치");
+    const name = prompt("New project name", "26SS research");
     if (!name) return;
     const p = await S.saveProject({ name: name.trim(), keys: [] });
     projects = await S.allProjects();
@@ -226,7 +226,7 @@
   });
   $("#addproj").addEventListener("click", async () => {
     const id = $("#proj").value;
-    if (!id) return alert("먼저 프로젝트를 만들어 주세요.");
+    if (!id) return alert("Create a project first.");
     const p = projects.find(x => x.id === id);
     if (!p) return;
     const before = (p.keys || []).length;
@@ -235,7 +235,7 @@
     projects = await S.allProjects();
     fillProjects();
     const added = p.keys.length - before;
-    alert(`"${p.name}"에 ${added}개를 담았습니다. (총 ${p.keys.length}개)`);
+    alert(`Added ${added} to "${p.name}". (${p.keys.length} total)`);
     picked.clear(); render();
   });
 
@@ -278,7 +278,7 @@
 
   async function makeReport() {
     const rows = visible();
-    if (!rows.length) return alert("리포트에 담을 상품이 없습니다.");
+    if (!rows.length) return alert("No products to put in a report.");
     const btn = $("#report");
     const label = btn.textContent;
     btn.disabled = true;
@@ -286,7 +286,7 @@
     const images = {};
     let done = 0, ok = 0;
     for (const r of rows) {
-      btn.textContent = `이미지 담는 중… ${++done}/${rows.length}`;
+      btn.textContent = `Embedding images… ${++done}/${rows.length}`;
       if (!r.image_url || !r.product_url) continue;
       const got = await fetchImage(r.image_url);
       if (!got) continue;
@@ -294,18 +294,18 @@
       if (small) { images[r.product_url] = small; ok++; }
     }
 
-    btn.textContent = "리포트 만드는 중…";
+    btn.textContent = "Building the report…";
     const b = $("#brand").value, c = $("#cat").value, s = $("#src").value;
     const scope = [b, c, s].filter(Boolean).join(" · ");
     // say plainly which slice this is, so the file still explains itself later
-    const basis = $("#datebasis").value === "launch" ? "업로드" : "수집";
-    const periodLabel = ({ "7": `최근 7일 ${basis}`, "14": `최근 14일 ${basis}`, "30": `최근 30일 ${basis}`,
-      thisweek: `이번 주 ${basis}`, lastweek: `지난 주 ${basis}` })[$("#period").value] || "";
+    const basis = $("#datebasis").value === "launch" ? "published" : "collected";
+    const periodLabel = ({ "7": `last 7 days ${basis}`, "14": `last 14 days ${basis}`, "30": `last 30 days ${basis}`,
+      thisweek: `this week ${basis}`, lastweek: `last week ${basis}` })[$("#period").value] || "";
     const proj = projects.find(p => p.id === $("#projf").value);
     const today = new Date().toISOString().slice(0, 10);
     const html = window.ReportGen.build(rows, images, {
-      title: proj ? proj.name : (scope ? `${scope} 마켓 리서치` : "마켓 리서치 리포트"),
-      subtitle: [periodLabel, proj ? scope : ""].filter(Boolean).join(" · ") || (scope ? "" : "카탈로그 전체"),
+      title: proj ? proj.name : (scope ? `${scope} market research` : "Market research report"),
+      subtitle: [periodLabel, proj ? scope : ""].filter(Boolean).join(" · ") || (scope ? "" : "Whole catalog"),
       scope, period: periodLabel, generatedAt: today,
       template: $("#tmpl").value,
       source: [...new Set(rows.map(r => r.site || r.source).filter(Boolean))].join(", "),
@@ -315,14 +315,14 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `리서치_${scope ? scope.replace(/[^\w가-힣]+/g, "_") + "_" : ""}${today}.html`;
+    a.download = `research_${scope ? scope.replace(/[^\w가-힣]+/g, "_") + "_" : ""}${today}.html`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 8000);
 
     btn.disabled = false; btn.textContent = label;
     const mb = (blob.size / 1048576).toFixed(1);
-    alert(`리포트를 저장했습니다.\n상품 ${rows.length}개 · 이미지 ${ok}개 내장 · ${mb} MB\n\n` +
-      `이미지와 수치가 파일 안에 들어 있어 인터넷 없이도, 원본 쇼핑몰이 사라져도 그대로 열립니다.`);
+    alert(`Report saved.\n${rows.length} products · ${ok} images embedded · ${mb} MB\n\n` +
+      `Images and figures live inside the file, so it opens the same with no internet, even after the shop removes the products.`);
   }
   $("#report").addEventListener("click", makeReport);
 
@@ -334,7 +334,7 @@
   // and embedded thumbnails are identical.
   async function exportXlsx() {
     const rows = visible();
-    if (!rows.length) return alert("내보낼 상품이 없습니다.");
+    if (!rows.length) return alert("Nothing to export.");
     const btn = $("#xlsx");
     const label = btn.textContent;
     btn.disabled = true;
@@ -351,11 +351,11 @@
           } catch (e) { res(null); }
         }),
         filters: {},
-        onProgress: (i, total) => { btn.textContent = `이미지 담는 중… ${i}/${total}`; },
+        onProgress: (i, total) => { btn.textContent = `Embedding images… ${i}/${total}`; },
       });
       const b = $("#brand").value, c = $("#cat").value;
       const proj = projects.find(p => p.id === $("#projf").value);
-      const tag = (proj ? proj.name : [b, c].filter(Boolean).join("_")) || "카탈로그";
+      const tag = (proj ? proj.name : [b, c].filter(Boolean).join("_")) || "catalog";
       const name = `${tag.replace(/[^\w가-힣]+/g, "_")}_${rows.length}items_${new Date().toISOString().slice(0, 10)}.xlsx`;
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
@@ -363,9 +363,9 @@
       a.href = url; a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 8000);
-      alert(`Excel로 내보냈습니다.\n${rows.length}개 상품 · ${(blob.size / 1048576).toFixed(1)} MB`);
+      alert(`Exported to Excel.\n${rows.length} products · ${(blob.size / 1048576).toFixed(1)} MB`);
     } catch (e) {
-      alert("내보내기 실패: " + (e && e.message || e));
+      alert("Export failed: " + (e && e.message || e));
     } finally { btn.disabled = false; btn.textContent = label; }
   }
   $("#xlsx").addEventListener("click", exportXlsx);
@@ -396,13 +396,13 @@
     $("#v-products").hidden = view !== "products";
     $("#v-lists").hidden = view !== "lists";
     /* The header follows the tab. 상품 = full filter row; 신상 피드/브랜드 =
-       search only (the dropdowns and export buttons act on the 상품 grid and
-       would lie here); LAB 분석/스캔 목록 = no row at all. */
+       search only (the dropdowns and export buttons act on the PRODUCTS grid and
+       would lie here); LAB / Scan lists = no row at all. */
     const filters = document.querySelector(".filters");
     filters.hidden = !(view === "products" || view === "new" || view === "brands");
     filters.classList.toggle("slim", view === "new" || view === "brands");
     $("#q").placeholder = view === "products"
-      ? "상품명·원단·색상 검색" : "이 화면에서 검색 — 상품명·원단·색상·브랜드";
+      ? "Search name · fabric · colour" : "Search this view — name, fabric, colour, brand";
     if (view === "lists") renderLists();
     if (view === "lab") renderLab();
     if (view === "new") renderNew();
@@ -426,7 +426,7 @@
      The same catalog rows, framed the way the team's weekly edit reads: a
      week's new arrivals as a browsable feed, and a brand rail with each
      brand's assortment. Nothing is fetched or computed beyond what the scans
-     already hold — "신상" here means first seen that week (addedAt), which is
+     already hold — "new" here means first seen that week (addedAt), which is
      honest for every shop; a shop-stated launch date exists only on Shopify
      and is shown on the card when we have it. Clips are excluded, as in LAB:
      hand-picked items are not arrivals. */
@@ -456,20 +456,20 @@
       : `<div class="thumb ph">NO IMAGE</div>`;
     const link = i.product_url ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">` : "";
     const launched = i.launched_at && isFinite(Date.parse(i.launched_at))
-      ? `<div class="fb">업로드 ${new Date(Date.parse(i.launched_at)).toISOString().slice(0, 10)}</div>` : "";
+      ? `<div class="fb">Published ${new Date(Date.parse(i.launched_at)).toISOString().slice(0, 10)}</div>` : "";
     return `<div class="c">
       ${link}${img}${link ? "</a>" : ""}
       <div class="body">
         ${i.brand ? `<div class="bd">${esc(i.brand)}</div>` : ""}
-        <div class="nm">${link}${esc(i.name || "(이름 없음)")}${link ? "</a>" : ""}</div>
+        <div class="nm">${link}${esc(i.name || "(untitled)")}${link ? "</a>" : ""}</div>
         ${i.price ? `<div class="pr${onSale ? " sale" : ""}">${esc(i.price)}${onSale ? `<s>${esc(i.price_was)}</s>` : ""}</div>` : ""}
         ${i.fabric_composition ? `<div class="fb">${esc(i.fabric_composition)}</div>` : ""}
         ${launched}
       </div></div>`;
   }
 
-  const EMPTY_FEED = `<div class="empty">아직 스캔한 상품이 없습니다.<br>
-    사이드 패널에서 리스트를 만들어 <b>▶ Run all</b> 하면 주차별 피드가 여기에 쌓입니다.</div>`;
+  const EMPTY_FEED = `<div class="empty">Nothing scanned yet.<br>
+    Build a list in the side panel and press <b>▶ Scan all</b> — the weekly feed fills in here.</div>`;
 
   /* A stored URL can still be a dead image — the shop deleted the product,
      rotated its CDN path, or refuses the request. The <img> then renders as a
@@ -505,27 +505,27 @@
     // was collected (charter: attribute filters are post-scan, display-side).
     const brandCount = new Map();
     wkItems.forEach(i => {
-      const b = i.brand || "기타";
+      const b = i.brand || "Other";
       brandCount.set(b, (brandCount.get(b) || 0) + 1);
     });
     const feedBrands = [...brandCount.entries()].sort((a, b) => b[1] - a[1]);
     if (curFeedBrand && !brandCount.has(curFeedBrand)) curFeedBrand = "";
     const brandChips = feedBrands.length > 1
       ? `<div class="catchips">
-           <button data-b="" class="${curFeedBrand ? "" : "on"}">전체 · ${wkItems.length}</button>` +
+           <button data-b="" class="${curFeedBrand ? "" : "on"}">All · ${wkItems.length}</button>` +
         feedBrands.map(([b, n]) =>
           `<button data-b="${esc(b)}" class="${b === curFeedBrand ? "on" : ""}">${esc(b)} · ${n}</button>`).join("") +
         `</div>`
       : "";
     const shownItems = curFeedBrand
-      ? wkItems.filter(i => (i.brand || "기타") === curFeedBrand)
+      ? wkItems.filter(i => (i.brand || "Other") === curFeedBrand)
       : wkItems;
 
     /* Day (newest first) → brand (biggest first) → cards. A week of scans is
        usually several sittings, and "what came in on Tuesday" is how the team
        talks about it — one undifferentiated week-pile hides that. The shop's
        own order survives inside each brand group. */
-    const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+    const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const byDay = new Map();
     shownItems.forEach(i => {
       const d = new Date(i.addedAt);
@@ -537,27 +537,27 @@
       const d = new Date(k);
       const groups = new Map();
       rows.forEach(i => {
-        const b = i.brand || "기타";
+        const b = i.brand || "Other";
         if (!groups.has(b)) groups.set(b, []);
         groups.get(b).push(i);
       });
       const inner = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
         .map(([brand, ii]) =>
-          `<div class="brandsec"><b>${esc(brand)}</b><span>${ii.length}개</span></div>
+          `<div class="brandsec"><b>${esc(brand)}</b><span>${ii.length}</span></div>
            <div class="grid">${ii.map(feedCard).join("")}</div>`).join("");
       return `<div class="dayhead"><b>${d.getMonth() + 1}/${d.getDate()} (${DOW[d.getDay()]})</b>
-        <span>${rows.length}개</span></div>${inner}`;
+        <span>${rows.length}</span></div>${inner}`;
     }).join("");
 
     el.innerHTML = `
       <div class="edhead">
-        <div><span class="kicker">${wk.count} new arrivals · 이 주에 처음 수집된 상품</span>
-          <h2>신상 피드</h2></div>
+        <div><span class="kicker">${wk.count} new arrivals · first collected this week</span>
+          <h2>New In</h2></div>
         <span class="weektag">WEEK ${esc(window.TrendCalc.weekId(wk.start))}</span>
       </div>
       <div class="weekchips">${chips}</div>
       ${brandChips}
-      ${sections || `<div class="none">${q ? `"${esc(q)}" 검색 결과가 이 주에 없습니다.` : "이 주에는 상품이 없습니다."}</div>`}`;
+      ${sections || `<div class="none">${q ? `Nothing matches "${esc(q)}" in this week.` : "No products in this week."}</div>`}`;
     armImgFallback(el);
     el.querySelectorAll(".weekchips button").forEach(b =>
       b.addEventListener("click", () => { curWeekStart = +b.dataset.w; curFeedBrand = ""; renderNew(); }));
@@ -572,7 +572,7 @@
 
     const byBrand = new Map();
     rows.forEach(i => {
-      const b = i.brand || "기타";
+      const b = i.brand || "Other";
       if (!byBrand.has(b)) byBrand.set(b, []);
       byBrand.get(b).push(i);
     });
@@ -581,7 +581,7 @@
 
     const weeks = weekBuckets();
     const latest = weeks[weeks.length - 1];
-    const newOf = b => latest ? latest.items.filter(i => (i.brand || "기타") === b).length : 0;
+    const newOf = b => latest ? latest.items.filter(i => (i.brand || "Other") === b).length : 0;
 
     const rail = brands.map(b => `<button data-b="${esc(b)}" class="${b === curBrand ? "on" : ""}">
       <span>${esc(b)}</span><span class="n">${byBrand.get(b).length}</span></button>`).join("");
@@ -590,7 +590,7 @@
     const cats = [...new Set(mine.map(i => i.category).filter(Boolean))];
     if (curCat && !cats.includes(curCat)) curCat = "";
     const catChips = cats.length > 1
-      ? `<div class="catchips"><button data-c="" class="${curCat ? "" : "on"}">전체</button>` +
+      ? `<div class="catchips"><button data-c="" class="${curCat ? "" : "on"}">All</button>` +
         cats.map(c => `<button data-c="${esc(c)}" class="${c === curCat ? "on" : ""}">${esc(c)}</button>`).join("") + `</div>`
       : "";
     const q = currentQ();
@@ -601,8 +601,8 @@
 
     el.innerHTML = `
       <div class="edhead">
-        <div><span class="kicker">${brands.length} brand profiles · 스캔에서 집계</span>
-          <h2>브랜드</h2></div>
+        <div><span class="kicker">${brands.length} brand profiles · counted from scans</span>
+          <h2>By Brand</h2></div>
         ${latest ? `<span class="weektag">WEEK ${esc(window.TrendCalc.weekId(latest.start))}</span>` : ""}
       </div>
       <div class="brandwrap">
@@ -610,12 +610,12 @@
         <div>
           <div class="bhero">
             <h2>${esc(curBrand)}</h2>
-            <div class="bmeta">상품 ${mine.length}개 · 카테고리 ${cats.length || 1}개${
-              nw ? ` · <span class="bnew">이번 주 신규 ${nw}</span>` : ""}</div>
+            <div class="bmeta">${mine.length} products · ${cats.length || 1} categories${
+              nw ? ` · <span class="bnew">${nw} new this week</span>` : ""}</div>
           </div>
           ${catChips}
           ${shown.length ? `<div class="grid">${shown.map(feedCard).join("")}</div>`
-            : `<div class="none">${q ? `"${esc(q)}" 검색 결과가 없습니다.` : "상품이 없습니다."}</div>`}
+            : `<div class="none">${q ? `Nothing matches "${esc(q)}".` : "No products."}</div>`}
         </div>
       </div>`;
     armImgFallback(el);
@@ -630,7 +630,7 @@
   async function loadLists() {
     lists = await L.load();
     if (!lists.length) {
-      lists = [{ id: "l" + Date.now(), name: "주간 리서치", entries: [], createdAt: Date.now() }];
+      lists = [{ id: "l" + Date.now(), name: "Weekly research", entries: [], createdAt: Date.now() }];
       await L.save(lists);
     }
     curList = lists.find(x => x.id === (curList && curList.id)) || lists[0];
@@ -647,14 +647,14 @@
     const rows = $("#urlrows");
     const entries = (curList && curList.entries) || [];
     if (!entries.length) {
-      rows.innerHTML = '<div class="empty">아직 등록된 URL이 없습니다.<br>' +
-        '아래에 브랜드와 카테고리 URL을 붙여넣어 추가하세요.</div>';
+      rows.innerHTML = '<div class="empty">No URLs in this list yet.<br>' +
+        'Paste brand and category URLs below to add them.</div>';
     } else {
       rows.innerHTML = entries.map((e, i) => `<div class="ur" data-i="${i}">
         <span class="n">${i + 1}</span>
         <span class="bd">${esc(e.brand || "—")}</span>
         <span class="lb">${esc(e.label || "")}<small>${esc(e.url)}</small></span>
-        <button class="x" title="삭제">✕</button></div>`).join("");
+        <button class="x" title="Remove">✕</button></div>`).join("");
       rows.querySelectorAll(".x").forEach(b => b.addEventListener("click", async () => {
         const i = +b.closest(".ur").dataset.i;
         curList.entries.splice(i, 1);
@@ -681,9 +681,9 @@
     $("#runlist").disabled = !!running;
     if (running) {
       const cur = q.list[q.idx] || {};
-      box.innerHTML = `<b>스캔 중 · ${q.idx + 1}/${q.list.length}</b> — ` +
+      box.innerHTML = `<b>Scanning · ${q.idx + 1}/${q.list.length}</b> — ` +
         `${esc(cur.brand || "")} ${esc(cur.label || "")}<br>` +
-        `<span style="color:var(--muted);font-size:12px">스캔은 원래 탭에서 진행됩니다. 이 창은 닫아도 됩니다.</span>`;
+        `<span style="color:var(--muted);font-size:12px">The scan runs in its own tab. You can close this window.</span>`;
       document.querySelectorAll(".ur").forEach((el, i) => el.classList.toggle("cur", i === q.idx));
     }
   }
@@ -694,35 +694,35 @@
     renderLists();
   });
   $("#newlist").addEventListener("click", async () => {
-    const name = prompt("새 목록 이름", "주간 리서치");
+    const name = prompt("New list name", "Weekly research");
     if (!name) return;
     curList = { id: "l" + Date.now(), name: name.trim(), entries: [], createdAt: Date.now() };
     lists.push(curList); await L.save(lists); renderLists();
   });
   $("#dellist").addEventListener("click", async () => {
-    if (!curList || lists.length < 2) return alert("목록이 하나뿐이라 삭제할 수 없습니다.");
-    if (!confirm(`"${curList.name}" 목록을 삭제할까요?`)) return;
+    if (!curList || lists.length < 2) return alert("This is your only list.");
+    if (!confirm(`Delete the list "${curList.name}"?`)) return;
     lists = lists.filter(l => l.id !== curList.id);
     curList = lists[0]; await L.save(lists); renderLists();
   });
   $("#addbulk").addEventListener("click", async () => {
     const text = $("#bulk").value;
     const parsed = L.parseList(text);
-    if (!parsed.length) return alert("URL을 찾지 못했습니다. 형식을 확인해 주세요.");
+    if (!parsed.length) return alert("No URLs found — check the format.");
     const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
     await L.save(lists);
     $("#bulk").value = "";
     renderLists();
-    alert(`${m.added}개 추가했습니다.` + (m.skipped ? ` (이미 있는 ${m.skipped}개는 건너뜀)` : ""));
+    alert(`Added ${m.added}.` + (m.skipped ? ` (${m.skipped} already there, skipped)` : ""));
   });
 
   // Run the list: hand it to a tab's content script, which walks the URLs.
   $("#runlist").addEventListener("click", async () => {
     const entries = (curList && curList.entries) || [];
-    if (!entries.length) return alert("목록이 비어 있습니다.");
-    if (!confirm(`"${curList.name}"의 ${entries.length}개 URL을 순서대로 전체 스캔합니다.\n` +
-      `시간이 걸리고, 스캔하는 탭은 자동으로 이동합니다. 시작할까요?`)) return;
+    if (!entries.length) return alert("This list is empty.");
+    if (!confirm(`Scan all ${entries.length} URLs in "${curList.name}", one after another.\n` +
+      `It takes a while and the scanning tab navigates on its own. Start?`)) return;
     // run it in a fresh tab so the user's current tab is left alone
     const tab = await chrome.tabs.create({ url: entries[0].url, active: true });
     const send = () => chrome.tabs.sendMessage(tab.id,

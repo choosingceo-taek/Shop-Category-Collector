@@ -107,9 +107,9 @@
     const now = $("#now"), add = $("#addbtn"), dot = $("#dot");
     // the lens IS the status light — toggle, never rewrite the class list
     dot.classList.toggle("busy", !!(job && job.active && !job.paused));
-    if (!read) { now.textContent = "페이지를 읽는 중…"; add.disabled = true; return; }
+    if (!read) { now.textContent = "Reading the page…"; add.disabled = true; return; }
     if (read.kind === "internal") {
-      now.innerHTML = "브라우저 내부 페이지입니다. <span class='badge'>담을 수 없음</span>";
+      now.innerHTML = "Browser page — <span class='badge'>can't be added</span>";
       // reset the label too — otherwise it keeps whatever the last real page said
       add.textContent = "＋ Add this page";
       add.disabled = true; return;
@@ -150,11 +150,11 @@
       scannable: !!(a || ad),
     };
     const m = L.mergeEntries(curList.entries || [], [entry]);
-    if (!m.added) return toast("이미 리스트에 있습니다");
+    if (!m.added) return toast("Already in this list");
     curList.entries = m.list;
     await L.save(lists);
     renderList(); paintNow();
-    toast(`추가됨 — ${entry.brand} · ${entry.label}`);
+    toast(`Added — ${entry.brand} · ${entry.label}`);
   }
 
   function renderList() {
@@ -168,14 +168,14 @@
       ? `▶ Scan all (${scannableCount})` : "▶ Scan all";
 
     if (!entries.length) {
-      body.innerHTML = '<div class="lempty">아직 담은 사이트가 없습니다.<br>' +
-        '참고하고 싶은 페이지에서 <b>＋ Add this page</b>를 누르세요.</div>';
+      body.innerHTML = '<div class="lempty">No sites in this list yet.<br>' +
+        'On any page worth revisiting, press <b>＋ Add this page</b>.</div>';
       return;
     }
     const qIdx = e => running ? queue.list.findIndex(x => L.normUrl(x.url) === L.normUrl(e.url)) : -1;
     const groups = new Map();
     entries.forEach((e, i) => {
-      const b = e.brand || hostOf(e.url) || "기타";
+      const b = e.brand || hostOf(e.url) || "Other";
       if (!groups.has(b)) groups.set(b, []);
       groups.get(b).push({ e, i });
     });
@@ -191,10 +191,10 @@
           </div>
           ${e.scannable === false ? '<span class="tag">Ref</span>'
             : e.scannable ? '<span class="tag">Scan</span>'
-            : '<span class="tag" title="열어 봐야 알 수 있는 사이트 — 실행에는 포함됩니다">Scan?</span>'}
-          <button class="act go" title="열기">↗</button>
-          <button class="act ren" title="이름 변경">✎</button>
-          <button class="act del" title="빼기">✕</button>
+            : '<span class="tag" title="Only the page itself can tell — included in the run">Scan?</span>'}
+          <button class="act go" title="Open">↗</button>
+          <button class="act ren" title="Rename">✎</button>
+          <button class="act del" title="Remove">✕</button>
         </div>`;
       }).join("")}</div>`).join("");
 
@@ -207,9 +207,9 @@
       });
       el.querySelector(".ren").addEventListener("click", async () => {
         const e = curList.entries[i];
-        const label = await promptIn("이름", e.label || "");
+        const label = await promptIn("Category name", e.label || "");
         if (label == null) return;
-        const brand = await promptIn("브랜드 / 그룹", e.brand || "");
+        const brand = await promptIn("Brand / group", e.brand || "");
         if (brand == null) return;
         e.label = label.trim(); e.brand = brand.trim();
         await L.save(lists); renderList();
@@ -236,13 +236,13 @@
     if (!rows.length) return;
     const brands = new Set(rows.map(r => r.brand).filter(Boolean));
     $("#resulttext").innerHTML =
-      `이 리스트로 수집한 상품 <b>${rows.length.toLocaleString()}</b>개` +
-      (brands.size ? ` · 브랜드 ${brands.size}` : "");
+      `<b>${rows.length.toLocaleString()}</b> products collected by this list` +
+      (brands.size ? ` · ${brands.size} brands` : "");
   }
 
   // Excel of exactly this list's results, through the same 12-column builder.
   async function exportRows(rows, filename, btn) {
-    if (!rows.length) return toast("내보낼 상품이 없습니다");
+    if (!rows.length) return toast("Nothing to export");
     const label = btn.textContent; btn.disabled = true;
     try {
       const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
@@ -261,8 +261,8 @@
       chrome.runtime.sendMessage({
         type: "downloadFile", filename, b64: btoa(b64),
         mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }, r => toast(r && r.ok ? `Excel 저장 — ${rows.length}개` : "내보내기 실패"));
-    } catch (e) { toast("내보내기 실패"); }
+      }, r => toast(r && r.ok ? `Saved ${rows.length} rows to Excel` : "Export failed"));
+    } catch (e) { toast("Export failed"); }
     finally { btn.disabled = false; btn.textContent = label; }
   }
 
@@ -302,7 +302,7 @@
     $("#live").classList.toggle("on", on);
     // clear it when the run ends — a leftover "저장됨…" line with a progress bar
     // reads as "still working" long after the scan is done
-    $("#livetext").textContent = on ? (job.status || "작업 중…") : "";
+    $("#livetext").textContent = on ? (job.status || "Working…") : "";
     $("#dot").classList.toggle("busy", on && !job.paused);
     /* The controls never move or vanish — a button that disappears makes the
        user hunt for it mid-run. State shows as enabled/disabled instead. */
@@ -352,9 +352,9 @@
     if (scoped) $("#scopetext").textContent = "List · " + scoped.name;
     const rows = visibleProducts(), grid = $("#pgrid");
     if (!products.length) {
-      grid.innerHTML = '<div class="pempty">아직 수집된 상품이 없습니다.<br>COLLECTOR에서 사이트를 담고 ▶ Run all 하세요.</div>';
+      grid.innerHTML = '<div class="pempty">Nothing collected yet.<br>Add sites in COLLECTOR, then press ▶ Scan all.</div>';
     } else if (!rows.length) {
-      grid.innerHTML = '<div class="pempty">조건에 맞는 상품이 없습니다.</div>';
+      grid.innerHTML = '<div class="pempty">No products match these filters.</div>';
     } else {
       grid.innerHTML = rows.slice(0, 400).map(p => {
         const sale = p.price_was && priceN(p.price_was) > priceN(p.price);
@@ -390,20 +390,20 @@
     renderList(); paintNow(); paintListResult();
   });
   $("#newlist").addEventListener("click", async () => {
-    const name = await promptIn("새 리스트 이름", "My references");
+    const name = await promptIn("New list name", "My references");
     if (!name) return;
     curList = { id: "l" + Date.now(), name: name.trim(), entries: [], createdAt: Date.now() };
     lists.push(curList); await L.save(lists); fillListSelect(); renderList(); paintNow();
   });
   $("#renlist").addEventListener("click", async () => {
     if (!curList) return;
-    const name = await promptIn("리스트 이름", curList.name);
+    const name = await promptIn("List name", curList.name);
     if (!name) return;
     curList.name = name.trim(); await L.save(lists); fillListSelect();
   });
   $("#dellist").addEventListener("click", async () => {
-    if (!curList || lists.length < 2) return toast("리스트가 하나뿐입니다");
-    if (!await confirmIn(`"${curList.name}" 리스트를 삭제할까요? 담긴 사이트도 함께 사라집니다.`)) return;
+    if (!curList || lists.length < 2) return toast("This is your only list");
+    if (!await confirmIn(`Delete the list "${curList.name}"? The sites in it go with it.`)) return;
     lists = lists.filter(l => l.id !== curList.id);
     curList = lists[0]; await L.save(lists); fillListSelect(); renderList(); paintNow();
   });
@@ -412,13 +412,13 @@
       // adapterFor can't see platform-detected shops from a URL, so a miss is
       // "unknown" (undefined) rather than false — the page itself decides later
       .map(e => Object.assign(e, adapterFor(e.url) ? { scannable: true } : {}));
-    if (!parsed.length) return toast("URL을 찾지 못했습니다");
+    if (!parsed.length) return toast("No URLs found");
     const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
     await L.save(lists); $("#bulk").value = "";
     fillListSelect(); renderList(); paintNow();
-    toast(`${m.added}개 추가` + (m.updated ? ` · ${m.updated}개 갱신` : "") +
-      (m.skipped ? ` · ${m.skipped}개 그대로` : ""));
+    toast(`${m.added} added` + (m.updated ? ` · ${m.updated} updated` : "") +
+      (m.skipped ? ` · ${m.skipped} unchanged` : ""));
   });
 
   /* ---- export the list to a file -------------------------------------------
@@ -435,16 +435,16 @@
       try {
         chrome.runtime.sendMessage({ type: "downloadFile", filename, b64, mime }, r => {
           void chrome.runtime.lastError;
-          if (r && r.ok) return toast(`${filename} 저장됨`);
+          if (r && r.ok) return toast(`Saved ${filename}`);
           // the worker path can be refused; the anchor still works here
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url; a.download = filename;
           document.body.appendChild(a); a.click(); a.remove();
           setTimeout(() => URL.revokeObjectURL(url), 5000);
-          toast(`${filename} 저장됨`);
+          toast(`Saved ${filename}`);
         });
-      } catch (e) { toast("저장 실패"); }
+      } catch (e) { toast("Save failed"); }
     };
     reader.readAsDataURL(blob);
   }
@@ -453,15 +453,15 @@
 
   $("#explisttxt").addEventListener("click", () => {
     const entries = (curList && curList.entries) || [];
-    if (!entries.length) return toast("목록이 비어 있습니다");
-    saveFile(`${listTag()}_목록.txt`,
+    if (!entries.length) return toast("This list is empty");
+    saveFile(`${listTag()}_list.txt`,
       new Blob([L.toText(entries)], { type: "text/plain;charset=utf-8" }),
       "text/plain");
   });
 
   $("#explistxlsx").addEventListener("click", async () => {
     const entries = (curList && curList.entries) || [];
-    if (!entries.length) return toast("목록이 비어 있습니다");
+    if (!entries.length) return toast("This list is empty");
     const btn = $("#explistxlsx");
     btn.disabled = true;
     try {
@@ -475,11 +475,11 @@
       });
       grid.slice(1).forEach(r => ws.addRow(r));
       const bytes = await wb.xlsx.writeBuffer();
-      saveFile(`${listTag()}_목록.xlsx`,
+      saveFile(`${listTag()}_list.xlsx`,
         new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     } catch (e) {
-      toast("Excel 저장 실패: " + (e && e.message || e));
+      toast("Excel export failed: " + (e && e.message || e));
     } finally { btn.disabled = false; }
   });
 
@@ -514,21 +514,21 @@
     if (!file) return;
     let parsed;
     try { parsed = await gridFromFile(file); }
-    catch (err) { return toast("파일을 읽지 못했습니다"); }
-    if (!parsed || !parsed.length) return toast("URL을 찾지 못했습니다");
+    catch (err) { return toast("Could not read that file"); }
+    if (!parsed || !parsed.length) return toast("No URLs found");
     parsed = parsed.map(en => Object.assign(en, adapterFor(en.url) ? { scannable: true } : {}));
     const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
     await L.save(lists);
     fillListSelect(); renderList(); paintNow(); paintListResult();
-    toast(`${m.added}개 추가` + (m.updated ? ` · ${m.updated}개 갱신` : "") +
-      (m.skipped ? ` · ${m.skipped}개 그대로` : ""));
+    toast(`${m.added} added` + (m.updated ? ` · ${m.updated} updated` : "") +
+      (m.skipped ? ` · ${m.skipped} unchanged` : ""));
   });
 
   $("#runlist").addEventListener("click", async () => {
     const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
-    if (!entries.length) return toast("스캔 가능한 사이트가 없습니다");
-    if (!await confirmIn(`${entries.length}개 사이트를 순서대로 스캔합니다. 시작할까요?`)) return;
+    if (!entries.length) return toast("No scannable sites in this list");
+    if (!await confirmIn(`Scan ${entries.length} sites one after another. Start?`)) return;
     // Foreground on purpose: Chrome throttles timers and fetches in hidden tabs
     // (down to roughly once a minute after a few minutes), which stalls a run.
     const t = await chrome.tabs.create({ url: entries[0].url, active: true });
@@ -544,16 +544,16 @@
       r => {
         if (chrome.runtime.lastError || !r) {
           if (++tries < 14) return setTimeout(send, 900);
-          return toast(`첫 사이트를 열지 못했습니다 — ${hostOf(entries[0].url)} 접속을 확인하세요`);
+          return toast(`Could not open the first site — check access to ${hostOf(entries[0].url)}`);
         }
-        toast("스캔을 시작했습니다");
+        toast("Scan started");
       });
     setTimeout(send, 1500);
   });
   // One toggle. The scan keeps its place, so resuming never re-scrapes a page.
   $("#jpause").addEventListener("click", () => {
     if (job && job.paused) return sendEngine("resume");
-    sendEngine("pause", () => toast("일시정지 — Resume을 누르면 이어서 진행합니다"));
+    sendEngine("pause", () => toast("Paused — press Resume to continue"));
   });
 
   /* Reset — stop the run and clear its state.
@@ -568,8 +568,8 @@
     const running = !!(queue && queue.active);
     const rows = (queue && (queue.rows || []).length) || 0;
     const ok = await confirmIn(running && rows
-      ? `실행을 중지할까요?\n여기까지 수집한 ${rows}개는 Excel로 저장됩니다.`
-      : "실행 상태를 초기화할까요?\n이미 카탈로그에 저장된 상품은 그대로 남습니다.");
+      ? `Stop the run?\nThe ${rows} products collected so far will be saved to Excel.`
+      : "Reset the run state?\nProducts already in the catalog are kept.");
     if (!ok) return;
     const clearStorage = () => chrome.storage.local.get(QUEUE, o => {
       const q = o && o[QUEUE];
@@ -577,12 +577,12 @@
     });
     if (running && rows) {
       return sendEngine("queueStop", r => {
-        if (!r) { clearStorage(); return toast("중지했습니다 (탭이 닫혀 저장은 건너뜀)"); }
-        toast("중지 — 여기까지 수집한 상품을 Excel로 저장합니다");
+        if (!r) { clearStorage(); return toast("Stopped (tab was gone — nothing saved)"); }
+        toast("Stopping — saving what was collected to Excel");
       });
     }
     clearStorage();
-    sendEngine("reset", () => toast("초기화했습니다"));
+    sendEngine("reset", () => toast("Reset"));
   });
 
   $("#listxlsx").addEventListener("click", () => {
@@ -614,7 +614,7 @@
   $("#scopeclear").addEventListener("click", () => { listFilter = ""; renderProducts(); });
   $("#selexport").addEventListener("click", async () => {
     const rows = products.filter(p => picked.has(p.key));
-    if (!rows.length) return toast("선택한 상품이 없습니다");
+    if (!rows.length) return toast("Nothing selected");
     const btn = $("#selexport"); btn.disabled = true;
     try {
       const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
@@ -635,8 +635,8 @@
         filename: `selection_${rows.length}items_${new Date().toISOString().slice(0, 10)}.xlsx`,
         b64: btoa(b64),
         mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }, r => toast(r && r.ok ? `Excel 저장 — ${rows.length}개` : "내보내기 실패"));
-    } catch (e) { toast("내보내기 실패"); }
+      }, r => toast(r && r.ok ? `Saved ${rows.length} rows to Excel` : "Export failed"));
+    } catch (e) { toast("Export failed"); }
     finally { btn.disabled = false; $("#selcount").textContent = "Selected " + picked.size; }
   });
 

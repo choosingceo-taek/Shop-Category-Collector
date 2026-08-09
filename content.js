@@ -104,7 +104,7 @@ function fetchImageViaBg(url) {
    Only ever writes over a job that is still running. report() is a
    read-modify-write of the whole job record, so a late message — a background
    fetch that resolves after the run closed — used to write the OLD object back
-   and set active:true again. The panel then showed "카탈로그에 저장됨…" with a
+   and set active:true again. The panel then showed "Saved to catalog…" with a
    live progress bar forever, on a scan that had already finished. */
 async function report(msg) {
   const j = await g();
@@ -179,13 +179,13 @@ async function catalogSave(j, a, kept, total, queue) {
       });
     } catch (e) { res(null); }
   });
-  if (saved && !inList) await report(`카탈로그에 저장됨 — 새 상품 ${saved.added}, 갱신 ${saved.updated}`);
+  if (saved && !inList) await report(`Saved to catalog — ${saved.added} new, ${saved.updated} updated`);
   return scan;
 }
 
 /* Save the whole list run as ONE workbook.
 
-   A list is "26SS 상의" — four brands' top categories that belong in one
+   A list is "26SS tops" — four brands' top categories that belong in one
    spreadsheet, not four downloads the user then has to merge by hand. So a
    queued scan writes its rows into the queue instead of downloading, and the
    file is built once here, at the end, with every brand in it (excel.js groups
@@ -199,12 +199,12 @@ async function queueExport(q) {
   const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);
   const stamp = new Date().toISOString().slice(0, 10);
   try {
-    await report(`리스트 Excel 만드는 중… ${rows.length}개`);
+    await report(`Building the list Excel… ${rows.length} rows`);
     const { bytes, kept } = await a.buildWorkbook(rows, {
       ExcelJS: self.ExcelJS,
       fetchImage: fetchImageViaBg,
       filters: q.filters || {},
-      onProgress: (i, total) => report(`리스트 Excel… 이미지 ${i}/${total}`),
+      onProgress: (i, total) => report(`List Excel… images ${i}/${total}`),
     });
     const total = Object.values(kept).reduce((n, v) => n + (v.length || 0), 0);
     const filename = `${tag}_${total}items_${stamp}.xlsx`;
@@ -227,9 +227,9 @@ async function queueExport(q) {
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
     const brands = [...new Set(rows.map(r => r.brand).filter(Boolean))];
-    await report(`리스트 완료 — ${total}개, 브랜드 ${brands.length}개를 Excel 한 파일로 저장했습니다`);
+    await report(`List done — ${total} products from ${brands.length} brands saved as one Excel file`);
   } catch (e) {
-    await report("리스트 Excel 실패: " + (e && e.message || e) + " (패널의 ⬇ Excel로 다시 받을 수 있습니다)");
+    await report("List Excel failed: " + (e && e.message || e) + " (use ⬇ Excel in the panel to retry)");
   }
 }
 
@@ -267,7 +267,7 @@ async function step() {
     await runStep(j);
   } catch (e) {
     const cur = await g();
-    if (cur) { cur.status = "오류: " + (e && e.message || e) + " (다시 실행하면 재시도)"; await s(cur); }
+    if (cur) { cur.status = "Error: " + (e && e.message || e) + " (run again to retry)"; await s(cur); }
   }
 }
 
@@ -339,7 +339,7 @@ async function runStep(j) {
         // without it a single Zara category unrolls into several hundred rows
         // and buries the list the user actually assembled.
         if (j.maxItems && n >= j.maxItems) {
-          await report(`${n}개까지 불러왔습니다 (상한 ${j.maxItems}개)`);
+          await report(`Loaded ${n} (cap ${j.maxItems})`);
           break;
         }
         await report(`Loading all items… ${n} rendered`);
@@ -369,7 +369,7 @@ async function runStep(j) {
     const target = j.resultCount ? "/" + j.resultCount : "";
     await report(j.singlePage === false
       ? `Collecting… ${page}${j.totalPages ? "/" + j.totalPages + "p" : "p"} · ${j.items.length}${target} items (+${added} this page)`
-      : `이 페이지에서 ${j.items.length}${target}개 수집${hitCap ? ` (상한 ${j.maxItems}개)` : ""}`);
+      : `Collected ${j.items.length}${target} from this page${hitCap ? ` (cap ${j.maxItems})` : ""}`);
 
     // Current page only (the default). Walking a whole category returns far more
     // products than a research pass can use, and the point is a curated list of
@@ -522,7 +522,7 @@ async function runStep(j) {
         queue.rows = (queue.rows || []).concat(keptRows);
         await setQueue(queue);
         await catalogSave(j, a, kept, total, queue);
-        await report(`${total}개 수집 — 리스트가 끝나면 Excel 한 파일로 저장합니다`);
+        await report(`${total} collected — one Excel file when the list finishes`);
         // the job stays active until queueAdvance closes it, so the final
         // "Excel 만드는 중…" lines still reach the panel
         await queueAdvance();
