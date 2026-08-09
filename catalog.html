@@ -54,6 +54,38 @@
   .empty { text-align:center; color:var(--muted); padding:70px 20px; line-height:1.8; }
   .empty b { color:var(--ink); }
 
+  /* LAB */
+  .labbar { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+  .labbar .selwrap { min-width:140px; }
+  .labbar .cap { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--muted); margin-bottom:3px; }
+  #v-lab h3 { font-size:13px; margin:26px 0 10px; padding-bottom:6px;
+    border-bottom:1px solid var(--line); font-weight:650; }
+  #v-lab h3 .sub { font-weight:400; color:var(--muted); font-size:11.5px; margin-left:7px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:11px; }
+  .tile { border:1px solid var(--line); border-radius:10px; padding:12px 13px; background:var(--card); }
+  .tile .tl { font-size:11px; color:var(--muted); }
+  .tile .tv { font-size:22px; font-weight:650; letter-spacing:-.02em; margin-top:2px; }
+  .tile .ts { font-size:11px; color:var(--muted); margin-top:1px; }
+  .legend { display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; }
+  .legend .lg { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--ink2); }
+  .legend .lg i { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  .movers { display:grid; grid-template-columns:1fr 1fr; gap:26px; }
+  @media (max-width:720px) { .movers { grid-template-columns:1fr; } }
+  .mv { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:baseline;
+    padding:7px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
+  .mv .mk { font-weight:600; }
+  .mv .mk .new { font-style:normal; font-size:9px; letter-spacing:.08em; margin-left:6px;
+    padding:1px 4px; border:1px solid var(--line); color:var(--muted); }
+  .mv .mb { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
+  .mv .md { font-weight:650; font-variant-numeric:tabular-nums; }
+  .none { color:var(--muted); font-size:12px; padding:10px 0; }
+  .notice { padding:10px 12px; background:var(--wash); border-radius:8px; font-size:12.5px;
+    margin-top:16px; }
+  .labempty { text-align:center; color:var(--muted); padding:70px 20px; line-height:1.9; }
+  .foot { color:var(--muted); font-size:11.5px; line-height:1.7; margin-top:22px;
+    padding-top:12px; border-top:1px solid var(--line); }
+
   /* tabs */
   .tabs { display:flex; gap:2px; padding:0 20px; background:var(--card); border-bottom:1px solid var(--line); }
   .tab { border:0; border-bottom:2px solid transparent; border-radius:0; background:none;
@@ -131,12 +163,35 @@
     </div>
   </header>
   <nav class="tabs">
-    <button class="tab on" data-view="products">상품</button>
+    <button class="tab on" data-view="lab">LAB</button>
+    <button class="tab" data-view="products">상품</button>
     <button class="tab" data-view="lists">스캔 목록</button>
   </nav>
 
   <main>
-    <div id="v-products"><div class="grid" id="grid"></div></div>
+    <div id="v-lab">
+      <div class="labbar">
+        <div class="selwrap"><span class="cap">기간</span>
+          <select id="labmonths">
+            <option value="3">최근 3개월</option>
+            <option value="6" selected>최근 6개월</option>
+            <option value="12">최근 12개월</option>
+          </select></div>
+        <div class="selwrap"><span class="cap">단위</span>
+          <select id="labgran"><option value="month" selected>월별</option><option value="week">주별</option></select></div>
+        <div class="selwrap"><span class="cap">기준</span>
+          <select id="labdim">
+            <option value="fabric" selected>원단</option>
+            <option value="color">색상</option>
+            <option value="keyword">키워드</option>
+            <option value="brand">브랜드</option>
+            <option value="category">카테고리</option>
+          </select></div>
+      </div>
+      <div id="labbody"></div>
+    </div>
+
+    <div id="v-products" hidden><div class="grid" id="grid"></div></div>
 
     <div id="v-lists" hidden>
       <div class="lists-head">
@@ -168,6 +223,8 @@ Zara
   <script src="store.js"></script>
   <script src="lists.js"></script>
   <script src="report/report.js"></script>
+  <script src="report/trend.js"></script>
+  <script src="lab.js"></script>
   <script src="report/reportgen.js"></script>
   <script src="catalog.js"></script>
 </body>

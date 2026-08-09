@@ -26,6 +26,7 @@
     fillFilters();
     fillProjects();
     render();
+    if (!$("#v-lab").hidden) renderLab();
     const st = await S.stats();
     $("#stats").textContent = st.products
       ? `상품 ${st.products.toLocaleString()}개 · 브랜드 ${st.brands} · 카테고리 ${st.categories} · 사이트 ${st.sources}`
@@ -323,10 +324,25 @@
 
   function tabTo(view) {
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+    $("#v-lab").hidden = view !== "lab";
     $("#v-products").hidden = view !== "products";
     $("#v-lists").hidden = view !== "lists";
+    // the search/brand/period row belongs to the product grid only
+    document.querySelector(".filters").hidden = view !== "products";
     if (view === "lists") renderLists();
+    if (view === "lab") renderLab();
   }
+
+  // LAB — change over time, computed from what we collected (no external service)
+  function renderLab() {
+    window.LabView.render($("#labbody"), items, {
+      months: parseInt($("#labmonths").value, 10) || 6,
+      granularity: $("#labgran").value,
+      dim: $("#labdim").value,
+    });
+  }
+  ["labmonths", "labgran", "labdim"].forEach(id =>
+    $("#" + id).addEventListener("change", renderLab));
   document.querySelectorAll(".tab").forEach(b =>
     b.addEventListener("click", () => tabTo(b.dataset.view)));
 
@@ -445,5 +461,6 @@
   });
 
   (async () => { await loadLists(); })();
+  tabTo("lab");                 // LAB is the default view; hides the product filters
   load();
 })();
