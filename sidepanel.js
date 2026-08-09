@@ -193,6 +193,126 @@
     $("#dot").className = "dot" + (on && !job.paused ? " busy" : (read && read.kind !== "internal" ? "" : " idle"));
   }
 
+  // ---- MARKET RESEARCH tab: browse the catalog, select, export -------------
+  // The catalog (IndexedDB) is readable from any extension page, so the panel
+  // can browse everything collected without opening the full tab: filter by
+  // brand/category, tick products, and export the ticked set to Excel.
+  let products = [];
+  const picked = new Set();          // product keys ticked in the grid
+
+  function tabTo(view) {
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+    $("#v-research").classList.toggle("on", view === "research");
+    $("#v-scanner").classList.toggle("on", view === "scanner");
+    $("#selbar").hidden = view !== "research";
+    if (view === "research") refreshProducts();
+  }
+  document.querySelectorAll(".tab").forEach(b =>
+    b.addEventListener("click", () => tabTo(b.dataset.view)));
+
+  async function refreshProducts() {
+    try { products = await window.CatalogStore.allProducts(); } catch (e) { products = []; }
+    fillProductFilters();
+    renderProducts();
+  }
+  function fillProductFilters() {
+    const fill = (sel, values) => {
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">All</option>' +
+        [...values].sort((a, b) => a.localeCompare(b)).map(v => `<option>${esc(v)}</option>`).join("");
+      sel.value = cur;
+    };
+    fill($("#pbrand"), new Set(products.map(p => p.brand).filter(Boolean)));
+    fill($("#pcat"), new Set(products.map(p => p.category).filter(Boolean)));
+  }
+  const priceN = v => { const m = String(v || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
+  function visibleProducts() {
+    const q = $("#psearch").value.trim().toLowerCase();
+    const b = $("#pbrand").value, c = $("#pcat").value;
+    return products.filter(p => {
+      if (b && p.brand !== b) return false;
+      if (c && p.category !== c) return false;
+      if (q && ![p.name, p.brand, p.fabric_composition, p.colorways].join(" ").toLowerCase().includes(q)) return false;
+      return true;
+    }).sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));
+  }
+  function renderProducts() {
+    const rows = visibleProducts();
+    const grid = $("#pgrid");
+    if (!products.length) {
+      grid.innerHTML = '<div class="pempty">아직 수집된 상품이 없습니다.<br>SCANNER 탭에서 카테고리를 담고 ▶ Run All 하세요.</div>';
+      paintSel(); return;
+    }
+    if (!rows.length) {
+      grid.innerHTML = '<div class="pempty">조건에 맞는 상품이 없습니다.</div>';
+      paintSel(); return;
+    }
+    grid.innerHTML = rows.slice(0, 400).map(p => {
+      const sale = p.price_was && priceN(p.price_was) > priceN(p.price);
+      const img = p.image_url ? `<img src="${esc(p.image_url)}" alt="" loading="lazy">` : '<div class="ph"></div>';
+      return `<figure class="pc${picked.has(p.key) ? " sel" : ""}" data-k="${esc(p.key)}" style="margin:0">
+        ${img}
+        <input class="ck" type="checkbox" ${picked.has(p.key) ? "checked" : ""}>
+        <figcaption class="cap-o">
+          ${p.brand ? `<span class="b">${esc(p.brand)}</span>` : ""}
+          <span class="n">${esc(p.name || "")}</span>
+          ${p.price ? `<span class="p">${esc(p.price)}${sale ? `<s>${esc(p.price_was)}</s>` : ""}</span>` : ""}
+        </figcaption></figure>`;
+    }).join("");
+    paintSel();
+  }
+  function paintSel() { $("#selcount2").textContent = "Selected " + picked.size; }
+
+  $("#pgrid").addEventListener("change", e => {
+    const ck = e.target.closest(".ck"); if (!ck) return;
+    const card = e.target.closest(".pc"); const k = card.getAttribute("data-k");
+    if (ck.checked) picked.add(k); else picked.delete(k);
+    card.classList.toggle("sel", ck.checked);
+    paintSel();
+  });
+  ["psearch", "pbrand", "pcat"].forEach(id => $("#" + id).addEventListener("input", renderProducts));
+  $("#prefresh").addEventListener("click", refreshProducts);
+  $("#selall").addEventListener("click", () => {
+    const rows = visibleProducts();
+    const allOn = rows.length && rows.every(p => picked.has(p.key));
+    rows.forEach(p => allOn ? picked.delete(p.key) : picked.add(p.key));
+    renderProducts();
+  });
+  $("#selreset").addEventListener("click", () => { picked.clear(); renderProducts(); });
+
+  // export the ticked products through the same 12-column builder the scans use
+  $("#selexport").addEventListener("click", async () => {
+    const rows = products.filter(p => picked.has(p.key));
+    if (!rows.length) return toast("선택한 상품이 없습니다");
+    const btn = $("#selexport");
+    btn.disabled = true;
+    try {
+      const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
+        ExcelJS: window.ExcelJS,
+        fetchImage: url => new Promise(res => {
+          if (!url) return res(null);
+          try {
+            chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
+              void chrome.runtime.lastError; res(r && r.ok ? r : null);
+            });
+          } catch (e) { res(null); }
+        }),
+        filters: {},
+        onProgress: (i, total) => { $("#selcount2").textContent = `Images ${i}/${total}`; },
+      });
+      let b64 = "";
+      for (let i = 0; i < bytes.length; i += 0x8000)
+        b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      b64 = btoa(b64);
+      const name = `selection_${rows.length}items_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      chrome.runtime.sendMessage({
+        type: "downloadFile", filename: name, b64,
+        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }, r => toast(r && r.ok ? `Excel 저장 — ${rows.length}개` : "내보내기 실패"));
+    } catch (e) { toast("내보내기 실패: " + (e.message || e)); }
+    finally { btn.disabled = false; paintSel(); }
+  });
+
   // ---- the scan list: curated brand categories, managed visually -----------
   const L = window.ScanLists;
 
@@ -383,7 +503,11 @@
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== "local") return;
     if (ch[RC]) { store = ch[RC].newValue || store; renderTray(); }
-    if (ch[JOB]) { job = ch[JOB].newValue || null; paintLive(); }
+    if (ch[JOB]) {
+      const was = job; job = ch[JOB].newValue || null; paintLive();
+      // a scan just finished -> new products are in the catalog; refresh the grid
+      if (was && was.active && (!job || !job.active)) refreshProducts();
+    }
     if (ch[QUEUE]) { queue = ch[QUEUE].newValue || null; paintQueue(); }
     if (ch[L.KEY]) {   // list edited elsewhere (catalog tab) — stay in sync
       lists = ch[L.KEY].newValue || lists;
@@ -399,6 +523,7 @@
     await loadLists();
     ensureCollection(); save();
     renderTray(); paintLive(); paintQueue(); paint();
+    refreshProducts();
     observe();
   })();
 })();

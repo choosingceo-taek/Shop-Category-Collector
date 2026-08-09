@@ -2,139 +2,216 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>리서치 컴패니언</title>
+<title>Market Lens</title>
 <style>
+  /* Editorial, monochrome — modeled on the team's Market Lens app: uppercase
+     micro-labels, hairline rules, square corners, black on white. */
   :root {
     color-scheme: light dark;
-    --bg:#f9f9f7; --card:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
-    --line:rgba(11,11,11,.11); --accent:#2a78d6; --accent-ink:#fff;
-    --good:#0ca30c; --wash:rgba(42,120,214,.07);
+    --bg:#ffffff; --ink:#111111; --ink2:#444444; --muted:#8a8a8a;
+    --line:#e4e2de; --hard:#111111; --wash:#f5f4f1; --overlay:rgba(20,20,20,.55);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#0d0d0d; --card:#1a1a19; --ink:#fff; --ink2:#c3c2b7; --muted:#898781;
-      --line:rgba(255,255,255,.12); --accent:#3987e5; --wash:rgba(57,135,229,.12); }
+    :root { --bg:#121212; --ink:#f2f0ec; --ink2:#c9c7c2; --muted:#8f8d88;
+      --line:#2b2b29; --hard:#f2f0ec; --wash:#1c1c1a; --overlay:rgba(0,0,0,.62); }
   }
   * { box-sizing:border-box; }
-  body {
-    margin:0; background:var(--bg); color:var(--ink);
-    font:13.5px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
-    display:flex; flex-direction:column; height:100vh; overflow:hidden;
-  }
-  button, select, input { font:inherit; border-radius:9px; border:1px solid var(--line);
-    background:var(--card); color:var(--ink); padding:8px 11px; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:13px/1.5 system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;
+    display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+  button, select, input, textarea { font:inherit; color:var(--ink); background:var(--bg);
+    border:1px solid var(--line); border-radius:0; padding:7px 10px; }
   button { cursor:pointer; }
-  button:hover:not(:disabled) { border-color:var(--muted); }
-  button:disabled { opacity:.45; cursor:default; }
-  .primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+  button:hover:not(:disabled) { border-color:var(--hard); }
+  button:disabled { opacity:.4; cursor:default; }
+  .solid { background:var(--hard); color:var(--bg); border-color:var(--hard);
+    font-weight:600; letter-spacing:.02em; }
+  .cap { text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
   .row { display:flex; gap:6px; align-items:center; }
   .grow { flex:1; min-width:0; }
 
-  header { padding:11px 13px; border-bottom:1px solid var(--line); background:var(--card); }
-  .brandline { display:flex; align-items:center; gap:7px; margin-bottom:9px; }
-  .dot { width:7px; height:7px; border-radius:50%; background:var(--good); flex:none; }
-  .dot.busy { background:var(--accent); animation:pulse 1.1s ease-in-out infinite; }
-  .dot.idle { background:var(--muted); }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
-  h1 { font-size:13.5px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  header { padding:13px 14px 0; background:var(--bg); border-bottom:1px solid var(--hard); }
+  .brandline { display:flex; align-items:center; gap:8px; }
+  .dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex:none; }
+  .dot.busy { background:var(--ink); animation:pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+  h1 { font-size:14px; margin:0; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+  .tabs { display:flex; gap:18px; margin-top:11px; }
+  .tab { border:0; background:none; padding:0 0 9px; font-size:11px; font-weight:700;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--muted);
+    border-bottom:2px solid transparent; }
+  .tab.on { color:var(--ink); border-bottom-color:var(--hard); }
 
-  /* the agent's read of the page + what it suggests doing */
-  .say { padding:12px 13px; border-bottom:1px solid var(--line); background:var(--wash); }
+  main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+  .view { flex:1; overflow-y:auto; display:none; flex-direction:column; }
+  .view.on { display:flex; }
+
+  /* ---- MARKET RESEARCH: browse the catalog, select, export ---- */
+  .filters { padding:12px 14px; border-bottom:1px solid var(--line); display:flex;
+    flex-direction:column; gap:9px; }
+  .search { position:relative; }
+  .search input { width:100%; padding:9px 11px; letter-spacing:.06em;
+    text-transform:uppercase; font-size:11px; }
+  .search input::placeholder { color:var(--muted); }
+  .selwrap { flex:1; min-width:0; }
+  .selwrap .cap { display:block; color:var(--muted); margin-bottom:3px; }
+  .selwrap select { width:100%; text-transform:uppercase; font-size:11px; letter-spacing:.05em; }
+  .iconbtn { width:34px; height:34px; padding:0; display:inline-flex; align-items:center;
+    justify-content:center; flex:none; font-size:13px; }
+
+  .pgrid { display:grid; grid-template-columns:1fr 1fr; gap:2px; padding:2px; }
+  .pc { position:relative; background:var(--wash); }
+  .pc img, .pc .ph { width:100%; aspect-ratio:3/4; object-fit:cover; display:block; background:var(--wash); }
+  .pc .cap-o { position:absolute; left:0; right:0; bottom:0; padding:22px 9px 8px;
+    background:linear-gradient(transparent, var(--overlay)); color:#fff;
+    display:flex; flex-direction:column; gap:1px; }
+  .pc .b { font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+  .pc .n { font-size:10.5px; line-height:1.3; overflow:hidden; display:-webkit-box;
+    -webkit-line-clamp:1; -webkit-box-orient:vertical; }
+  .pc .p { font-size:11.5px; font-weight:700; }
+  .pc .p s { font-weight:400; opacity:.75; margin-left:4px; }
+  .pc .ck { position:absolute; top:8px; right:8px; width:17px; height:17px; margin:0;
+    appearance:none; background:#fff; border:1px solid #111; cursor:pointer; }
+  .pc .ck:checked { background:#111; }
+  .pc .ck:checked::after { content:"✓"; color:#fff; font-size:11px; display:flex;
+    align-items:center; justify-content:center; height:100%; }
+  .pc.sel { outline:2px solid var(--hard); outline-offset:-2px; }
+  .pempty { grid-column:1/-1; text-align:center; color:var(--muted); padding:44px 18px;
+    font-size:12px; line-height:1.8; }
+
+  .selbar { border-top:1px solid var(--hard); background:var(--bg); padding:9px 14px;
+    display:flex; align-items:center; gap:8px; }
+  .selbar .cnt { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+  .selbar .sp { flex:1; }
+  .cir { width:36px; height:36px; border-radius:50%; padding:0; display:inline-flex;
+    align-items:center; justify-content:center; font-size:12px; border:1px solid var(--hard); }
+  .cir.txt { font-size:9.5px; font-weight:700; letter-spacing:.06em; }
+
+  /* ---- SCANNER: context, scan list, progress, clips ---- */
+  .say { padding:12px 14px; border-bottom:1px solid var(--line); }
   .say .obs { font-size:12.5px; color:var(--ink2); margin-bottom:9px; }
-  .say .obs b { color:var(--ink); font-weight:600; }
+  .say .obs b { color:var(--ink); font-weight:700; }
   .say .sub { display:block; color:var(--muted); font-size:11.5px; margin-top:3px; }
   .say .cta { width:100%; }
   .say .alt { margin-top:6px; width:100%; }
-
-  .live { padding:9px 13px; border-bottom:1px solid var(--line); background:var(--card);
-    font-size:12px; color:var(--ink2); display:none; }
+  .live { padding:9px 14px; border-bottom:1px solid var(--line); font-size:12px;
+    color:var(--ink2); display:none; }
   .live.on { display:block; }
-  .bar { height:3px; border-radius:2px; background:var(--line); margin-top:7px; overflow:hidden; }
-  .bar i { display:block; height:100%; background:var(--accent); width:30%;
+  .bar { height:2px; background:var(--line); margin-top:7px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--hard); width:30%;
     animation:slide 1.3s ease-in-out infinite; }
   @keyframes slide { 0%{margin-left:-30%} 100%{margin-left:100%} }
 
-  /* scan list — the visual list of curated brand categories */
-  .listsec { border-bottom:1px solid var(--line); background:var(--card); padding:10px 13px 12px; }
-  .lhead { display:flex; align-items:center; gap:7px; font-size:12.5px; margin-bottom:8px; }
-  .lcount { color:var(--muted); font-size:11.5px; }
-  .mini { padding:4px 9px; font-size:11.5px; border-radius:7px; }
-  .qstate { padding:8px 10px; border-radius:8px; background:var(--wash); font-size:12px; margin-bottom:8px; }
-  .listbody { display:flex; flex-direction:column; gap:8px; max-height:34vh; overflow-y:auto; }
-  .bgroup .bname { font-size:11px; color:var(--muted); text-transform:uppercase;
-    letter-spacing:.04em; margin-bottom:4px; }
-  .chips { display:flex; flex-wrap:wrap; gap:5px; }
+  .listsec { border-bottom:1px solid var(--line); padding:11px 14px 13px; }
+  .lhead { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+  .lhead b { font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+  .lcount { color:var(--muted); font-size:11px; }
+  .mini { padding:4px 10px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; }
+  .qstate { padding:8px 10px; background:var(--wash); font-size:12px; margin-bottom:9px; }
+  .listbody { display:flex; flex-direction:column; gap:9px; max-height:32vh; overflow-y:auto; }
+  .bgroup .bname { font-size:9.5px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.12em; margin-bottom:4px; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; }
   .chip { display:inline-flex; align-items:center; gap:5px; max-width:100%;
-    border:1px solid var(--line); border-radius:999px; padding:3px 9px;
-    font-size:11.5px; background:var(--bg); }
-  .chip.cur { border-color:var(--accent); background:var(--wash); }
-  .chip.done { opacity:.55; }
+    border:1px solid var(--line); padding:3px 8px; font-size:11px; background:var(--bg); }
+  .chip.cur { border-color:var(--hard); background:var(--wash); }
+  .chip.done { opacity:.45; }
   .chip a { color:inherit; text-decoration:none; overflow:hidden; text-overflow:ellipsis;
     white-space:nowrap; max-width:150px; }
   .chip a:hover { text-decoration:underline; }
   .chip .cx { border:0; background:none; color:var(--muted); padding:0 1px; cursor:pointer; font-size:11px; }
   .lempty { color:var(--muted); font-size:12px; line-height:1.6; }
 
-  .tools { padding:9px 13px; border-bottom:1px solid var(--line); background:var(--card); }
-  .colrow { margin-bottom:0; }
-  #tray { flex:1; overflow-y:auto; padding:10px 13px 22px; }
-  .count { font-size:11.5px; color:var(--muted); padding:9px 13px 0; }
-  .it { display:grid; grid-template-columns:44px 1fr auto; gap:9px; align-items:start;
-    padding:8px; border:1px solid var(--line); border-radius:9px; background:var(--card); margin-bottom:7px; }
-  .it img, .it .ph { width:44px; height:58px; object-fit:cover; border-radius:5px; background:var(--line); display:block; }
-  .it .n { font-size:12.5px; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-  .it .m { font-size:11px; color:var(--muted); margin-top:2px; }
-  .it .f { font-size:11px; color:var(--ink2); margin-top:2px; }
+  .colrow { padding:10px 14px; border-bottom:1px solid var(--line); }
+  .tools { padding:10px 14px; border-bottom:1px solid var(--line); }
+  .count { font-size:11px; color:var(--muted); padding:9px 14px 0; letter-spacing:.06em; }
+  #tray { padding:10px 14px 22px; }
+  .it { display:grid; grid-template-columns:42px 1fr auto; gap:9px; align-items:start;
+    padding:8px 0; border-bottom:1px solid var(--line); }
+  .it img, .it .ph { width:42px; height:56px; object-fit:cover; background:var(--wash); display:block; }
+  .it .n { font-size:12px; line-height:1.35; overflow:hidden; display:-webkit-box;
+    -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .it .m { font-size:10.5px; color:var(--muted); margin-top:2px; }
+  .it .f { font-size:10.5px; color:var(--ink2); margin-top:2px; }
   .it .x { border:0; background:none; color:var(--muted); padding:2px 5px; }
   .it a { color:inherit; text-decoration:none; }
-  .it a:hover .n { text-decoration:underline; }
-  .empty { color:var(--muted); text-align:center; padding:30px 14px; font-size:12.5px; line-height:1.7; }
-  .tag { font-size:10.5px; padding:1px 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
-  .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:14px; background:var(--ink);
-    color:var(--bg); padding:7px 14px; border-radius:999px; font-size:12px; opacity:0;
-    transition:opacity .18s; pointer-events:none; z-index:9; }
-  .toast.on { opacity:.95; }
+  .empty { color:var(--muted); text-align:center; padding:28px 14px; font-size:12px; line-height:1.7; }
+  .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:14px;
+    background:var(--hard); color:var(--bg); padding:7px 14px; font-size:11.5px;
+    letter-spacing:.04em; opacity:0; transition:opacity .18s; pointer-events:none; z-index:9; }
+  .toast.on { opacity:.97; }
 </style>
 </head>
 <body>
   <header>
-    <div class="brandline"><span class="dot idle" id="dot"></span><h1>리서치 컴패니언</h1></div>
-    <div class="row colrow">
-      <select id="col" class="grow" title="컬렉션"></select>
-      <button id="newcol" title="새 컬렉션">＋</button>
+    <div class="brandline"><span class="dot" id="dot"></span><h1>Market Lens</h1></div>
+    <div class="tabs">
+      <button class="tab on" data-view="research">Market Research</button>
+      <button class="tab" data-view="scanner">Scanner</button>
     </div>
   </header>
 
-  <!-- what the agent sees, and the one thing it suggests -->
-  <section class="say">
-    <div class="obs" id="obs">페이지를 읽는 중…</div>
-    <button class="primary cta" id="cta" disabled>확인 중</button>
-    <button class="alt" id="alt" hidden></button>
-  </section>
+  <main>
+    <!-- MARKET RESEARCH: everything collected, filterable & selectable -->
+    <section class="view on" id="v-research">
+      <div class="filters">
+        <div class="search"><input id="psearch" type="search" placeholder="Search products"></div>
+        <div class="row">
+          <div class="selwrap"><span class="cap">Brand</span>
+            <select id="pbrand"><option value="">All</option></select></div>
+          <div class="selwrap"><span class="cap">Category</span>
+            <select id="pcat"><option value="">All</option></select></div>
+          <button class="iconbtn" id="prefresh" title="새로고침" style="align-self:flex-end">↻</button>
+        </div>
+      </div>
+      <div class="pgrid" id="pgrid"></div>
+    </section>
 
-  <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
+    <!-- SCANNER: the companion — reads the page, curates the scan list -->
+    <section class="view" id="v-scanner">
+      <div class="say">
+        <div class="obs" id="obs">페이지를 읽는 중…</div>
+        <button class="solid cta" id="cta" disabled>확인 중</button>
+        <button class="alt" id="alt" hidden></button>
+      </div>
+      <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
+      <section class="listsec">
+        <div class="lhead">
+          <b>Scan List</b><span class="lcount" id="lcount"></span>
+          <span style="flex:1"></span>
+          <button id="runlist" class="mini solid">▶ Run All</button>
+          <button id="stoplist" class="mini" hidden>■ Stop</button>
+        </div>
+        <div class="qstate" id="qstate" hidden></div>
+        <div id="listbody" class="listbody"></div>
+      </section>
+      <div class="colrow row">
+        <select id="col" class="grow" title="컬렉션"></select>
+        <button id="newcol" class="iconbtn" title="새 컬렉션">＋</button>
+      </div>
+      <div class="tools row">
+        <button id="catalog" class="solid grow cap" style="letter-spacing:.08em">Catalog</button>
+        <button id="export" class="cap" title="이 컬렉션 내보내기">Export</button>
+        <button id="clear" class="cap" title="이 컬렉션 비우기">Clear</button>
+      </div>
+      <div class="count" id="count"></div>
+      <div id="tray"></div>
+    </section>
+  </main>
 
-  <!-- the scan list: the brand/category URLs this user curates and re-runs -->
-  <section class="listsec">
-    <div class="lhead">
-      <b>내 스캔 목록</b>
-      <span class="lcount" id="lcount"></span>
-      <span style="flex:1"></span>
-      <button id="runlist" class="mini primary" title="목록의 모든 카테고리를 순서대로 전체 스캔">▶ 전체 스캔</button>
-      <button id="stoplist" class="mini" hidden>■ 중지</button>
-    </div>
-    <div class="qstate" id="qstate" hidden></div>
-    <div id="listbody" class="listbody"></div>
-  </section>
-
-  <div class="tools row">
-    <button id="catalog" class="primary grow">📁 카탈로그 열기</button>
-    <button id="export" title="이 컬렉션 내보내기">내보내기</button>
-    <button id="clear" title="이 컬렉션 비우기">비우기</button>
+  <!-- selection bar for MARKET RESEARCH -->
+  <div class="selbar" id="selbar">
+    <span class="cnt" id="selcount2">Selected 0</span>
+    <span class="sp"></span>
+    <button class="cir txt" id="selall" title="보이는 상품 전체 선택">ALL</button>
+    <button class="cir" id="selreset" title="선택 해제">↺</button>
+    <button class="cir" id="selexport" title="선택한 상품 Excel 내보내기">⬆</button>
   </div>
 
-  <div class="count" id="count"></div>
-  <div id="tray"></div>
   <div class="toast" id="toast"></div>
+  <script src="exceljs.min.js"></script>
+  <script src="excel.js"></script>
+  <script src="store.js"></script>
   <script src="lists.js"></script>
   <script src="sidepanel.js"></script>
 </body>
