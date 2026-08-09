@@ -11,10 +11,14 @@
     color-scheme: light dark;
     --bg:#ffffff; --ink:#111111; --ink2:#454545; --muted:#8c8c8c;
     --line:#e5e3df; --hard:#111111; --wash:#f6f5f2; --overlay:rgba(18,18,18,.55);
+    /* the panel is deliberately monochrome; this accent is spent on ONE thing —
+       the LAB entry — so the only colour on screen also means one thing */
+    --accent:#4a3aa7; --accent2:#7b4ae0;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#121212; --ink:#f2f0ec; --ink2:#c8c6c1; --muted:#8f8d88;
-      --line:#2b2b29; --hard:#f2f0ec; --wash:#1c1c1a; --overlay:rgba(0,0,0,.6); }
+      --line:#2b2b29; --hard:#f2f0ec; --wash:#1c1c1a; --overlay:rgba(0,0,0,.6);
+      --accent:#6f5ce0; --accent2:#9a7bf0; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
@@ -71,9 +75,19 @@
   .explist { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
   .explist .cap { color:var(--muted); flex:1; }
   .explist button { font-size:10.5px; padding:4px 9px; letter-spacing:.05em; }
-  .runctl { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
-  .runctl button { flex:1 1 auto; font-size:10.5px; font-weight:700; letter-spacing:.06em; }
+  .runctl { display:flex; gap:6px; margin-bottom:10px; }
+  .runctl button { flex:1; font-size:10.5px; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; }
   .runctl .danger { color:#ff8a8a; border-color:rgba(255,92,92,.3); }
+  /* LAB — the panel's brightest element; everything else is a step toward it */
+  .labbtn { display:block; width:100%; text-align:left; margin:12px 0 4px;
+    padding:13px 15px; border:0; border-radius:12px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; }
+  .labbtn:hover { filter:brightness(1.08); }
+  .labbtn .lbmain { display:flex; align-items:center; justify-content:space-between;
+    font-size:19px; font-weight:800; letter-spacing:.14em; }
+  .labbtn .lbgo { font-size:15px; opacity:.85; letter-spacing:0; }
+  .labbtn .lbsub { display:block; font-size:11px; opacity:.9; margin-top:2px; letter-spacing:.01em; }
   .capline { display:flex; align-items:center; justify-content:space-between; gap:8px;
     font-size:11px; color:var(--muted); margin-bottom:12px; }
   .capline select { width:auto; flex:0 0 auto; font-size:11px; padding:3px 6px; }
@@ -196,11 +210,14 @@
         </div>
         <div class="now" id="now">페이지를 읽는 중…</div>
         <button id="addbtn" class="solid">＋ Add this page</button>
-        <div class="addrow">
-          <button id="clipbtn">＋ Clip product</button>
-          <button id="catalog">LAB</button>
-        </div>
       </div>
+
+      <!-- LAB is where the collected work becomes an answer, so it is the
+           loudest thing on the panel, not a button among buttons -->
+      <button id="catalog" class="labbtn">
+        <span class="lbmain">LAB<span class="lbgo">→</span></span>
+        <span class="lbsub">주차별 신상 · 브랜드별 · 트렌드 분석</span>
+      </button>
 
       <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
 
@@ -217,15 +234,14 @@
           <button id="explistxlsx" title="Excel에서 편집하고 다시 Import하면 목록이 갱신됩니다">.xlsx</button>
         </div>
         <div class="qstate" id="qstate" hidden></div>
+        <!-- one fixed set of controls, always in the same place: the state
+             lives in enabled/disabled, not in buttons appearing and vanishing -->
         <div class="runrow">
-          <button id="runlist" class="solid">▶ Run all</button>
+          <button id="runlist" class="solid">▶ Scan all</button>
         </div>
-        <!-- shown only while something is actually running -->
-        <div class="runctl" id="runctl" hidden>
-          <button id="jpause">⏸ 일시정지</button>
-          <button id="jresume" hidden>▶ 계속</button>
-          <button id="stoplist">■ 중지 후 저장</button>
-          <button id="jreset" class="danger" title="지금까지 모은 것을 버리고 처음으로">↺ 초기화</button>
+        <div class="runctl">
+          <button id="jpause">⏸ Pause</button>
+          <button id="jreset" class="danger" title="실행을 중지하고 목록 실행 상태를 초기화합니다">↺ Reset</button>
         </div>
         <label class="capline" for="maxitems">URL당 최대 상품 수
           <select id="maxitems" title="한 URL에서 가져올 상품 수 상한">

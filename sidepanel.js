@@ -13,12 +13,10 @@
 (function () {
   "use strict";
   const $ = s => document.querySelector(s);
-  const RC = "rc_store_v1";     // clipped products/images
   const JOB = "wpb_job";        // the scan job the content script drives
   const QUEUE = "wpb_queue";    // batch run over the list
   const L = window.ScanLists;
 
-  let store = { collections: [], items: [], activeId: "" };
   let tab = null, read = null, job = null, queue = null;
   let lists = [], curList = null;
   let products = [], picked = new Set();
@@ -101,16 +99,16 @@
   }
 
   function paintNow() {
-    const now = $("#now"), add = $("#addbtn"), clip = $("#clipbtn"), dot = $("#dot");
+    const now = $("#now"), add = $("#addbtn"), dot = $("#dot");
     dot.className = "dot" + (job && job.active && !job.paused ? " busy" : "");
     if (!read) { now.textContent = "페이지를 읽는 중…"; add.disabled = true; return; }
     if (read.kind === "internal") {
       now.innerHTML = "브라우저 내부 페이지입니다. <span class='badge'>담을 수 없음</span>";
       // reset the label too — otherwise it keeps whatever the last real page said
       add.textContent = "＋ Add this page";
-      add.disabled = true; clip.disabled = true; return;
+      add.disabled = true; return;
     }
-    add.disabled = false; clip.disabled = false;
+    add.disabled = false;
     const already = urlInList(read.url);
     const scannable = !!(read.ctx || read.adapter);
     const where = read.ctx ? [read.ctx.site, read.ctx.category].filter(Boolean).join(" · ") : "";
@@ -158,9 +156,10 @@
     const entries = (curList && curList.entries) || [];
     const running = !!(queue && queue.active);
     const scannableCount = entries.filter(e => e.scannable !== false).length;
+    $("#runlist").dataset.empty = scannableCount ? "0" : "1";
     $("#runlist").disabled = !scannableCount || running;
     $("#runlist").textContent = scannableCount && scannableCount !== entries.length
-      ? `▶ Run all (${scannableCount})` : "▶ Run all";
+      ? `▶ Scan all (${scannableCount})` : "▶ Scan all";
 
     if (!entries.length) {
       body.innerHTML = '<div class="lempty">아직 담은 사이트가 없습니다.<br>' +
@@ -297,13 +296,15 @@
     // reads as "still working" long after the scan is done
     $("#livetext").textContent = on ? (job.status || "작업 중…") : "";
     $("#dot").className = "dot" + (on && !job.paused ? " busy" : "");
-    // controls exist only while there is something to control
-    const busy = on || !!(queue && queue.active);
-    $("#runctl").hidden = !busy;
-    $("#runlist").disabled = busy;
-    $("#jpause").hidden = !on || !!job.paused;
-    $("#jresume").hidden = !on || !job.paused;
-    $("#stoplist").hidden = !(queue && queue.active);
+    /* The controls never move or vanish — a button that disappears makes the
+       user hunt for it mid-run. State shows as enabled/disabled instead. */
+    const running = !!(queue && queue.active);
+    const busy = on || running;
+    const paused = !!(job && job.paused);
+    $("#runlist").disabled = busy || $("#runlist").dataset.empty === "1";
+    $("#jpause").disabled = !on;
+    $("#jpause").textContent = paused ? "▶ Resume" : "⏸ Pause";
+    $("#jreset").disabled = !busy;
   }
 
   // ---- products -------------------------------------------------------------
@@ -362,36 +363,6 @@
     $("#selcount").textContent = "Selected " + picked.size;
   }
 
-  /* Clip one product from the page you're on — for when the thing worth keeping
-     is a single item rather than a whole category, and on sites we can't scan.
-     It lands in the same catalog a scan feeds, so it shows up under PRODUCTS and
-     exports to Excel like everything else. It is tagged source:"clip" because a
-     hand-picked item is a biased sample: LAB's trend maths leaves clips out
-     (charter: NEVER 트렌드 왜곡) while the sheet still includes them. */
-  async function clipHere() {
-    if (!tab) return;
-    let origin; try { origin = new URL(tab.url).origin + "/*"; } catch (e) { return; }
-    const ok = await chrome.permissions.request({ origins: [origin] }).catch(() => false);
-    if (!ok) return toast("사이트 접근을 허용해야 담을 수 있습니다");
-    let data = null;
-    try {
-      const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["clip.js"] });
-      data = r && r.result;
-    } catch (e) { return toast("읽지 못했습니다"); }
-    if (!data) return toast("상품 정보를 찾지 못했습니다");
-    if (!data.name) data.name = (tab.title || "").slice(0, 200);
-    if (!data.product_url) data.product_url = tab.url;
-
-    const res = await new Promise(r => chrome.runtime.sendMessage({
-      type: "catalogPut",
-      scan: { meta: { source: "clip", site: data.source || hostOf(tab.url), scannedAt: new Date().toISOString() },
-              items: [data] },
-    }, x => { void chrome.runtime.lastError; r(x); }));
-    if (!res || !res.ok) return toast("저장하지 못했습니다");
-    await refreshProducts();
-    toast(res.added ? "PRODUCTS에 담았습니다" : "이미 담긴 상품입니다");
-  }
-
   // ---- wiring ---------------------------------------------------------------
   document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
     const v = b.dataset.view;
@@ -403,7 +374,6 @@
   }));
 
   $("#addbtn").addEventListener("click", addCurrentPage);
-  $("#clipbtn").addEventListener("click", clipHere);
   $("#catalog").addEventListener("click", () =>
     chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") }));
 
@@ -570,45 +540,41 @@
       });
     setTimeout(send, 1500);
   });
-  /* Stop goes to the scanning tab, not straight to storage.
-
-     Writing storage alone left the current URL's scan running with nothing to
-     close it, and the rows collected so far were never written out — the user
-     pressed Stop and got no file. The tab's handler ends the job AND builds the
-     spreadsheet from what it already has. Storage is the fallback for a tab
-     that has gone away. */
-  $("#stoplist").addEventListener("click", () => {
-    const fallback = () => chrome.storage.local.get(QUEUE, o => {
-      const q = o && o[QUEUE];
-      if (q) { q.active = false; chrome.storage.local.set({ [QUEUE]: q }); }
-    });
-    const tabId = queue && queue.tabId;
-    if (tabId == null) return fallback();
-    try {
-      chrome.tabs.sendMessage(tabId, { type: "queueStop" }, r => {
-        if (chrome.runtime.lastError || !r) fallback();
-        else toast("중지 — 여기까지 수집한 상품을 Excel로 저장합니다");
-      });
-    } catch (e) { fallback(); }
+  // One toggle. The scan keeps its place, so resuming never re-scrapes a page.
+  $("#jpause").addEventListener("click", () => {
+    if (job && job.paused) return sendEngine("resume");
+    sendEngine("pause", () => toast("일시정지 — Resume을 누르면 이어서 진행합니다"));
   });
 
-  // ⏸ / ▶ — the scan keeps its place, so resuming never re-scrapes a page
-  $("#jpause").addEventListener("click", () =>
-    sendEngine("pause", () => toast("일시정지 — ▶ 계속을 누르면 이어서 진행합니다")));
-  $("#jresume").addEventListener("click", () => sendEngine("resume"));
+  /* Reset — stop the run and clear its state.
 
-  /* ↺ — throw the run away. Separate from "중지 후 저장" on purpose: one keeps
-     the work, this one discards it, and a button that could mean either is a
-     button nobody dares press. */
+     "Stop and save" used to be a second button next to this one. A pair where
+     one keeps the work and the other destroys it is a pair nobody dares press,
+     so there is one button now and the question is asked at the moment it
+     matters — with the safe answer (keep what was collected) as the default
+     action. The tab's queueStop handler stops the queue, writes the one
+     spreadsheet, and closes the job; storage is the fallback for a dead tab. */
   $("#jreset").addEventListener("click", async () => {
-    if (!(await confirmIn("지금까지 모은 상품을 버리고 처음으로 되돌릴까요?\n" +
-      "이미 카탈로그에 저장된 상품은 그대로 남습니다."))) return;
-    chrome.storage.local.get(QUEUE, o => {
+    const running = !!(queue && queue.active);
+    const rows = (queue && (queue.rows || []).length) || 0;
+    const ok = await confirmIn(running && rows
+      ? `실행을 중지할까요?\n여기까지 수집한 ${rows}개는 Excel로 저장됩니다.`
+      : "실행 상태를 초기화할까요?\n이미 카탈로그에 저장된 상품은 그대로 남습니다.");
+    if (!ok) return;
+    const clearStorage = () => chrome.storage.local.get(QUEUE, o => {
       const q = o && o[QUEUE];
       if (q) { q.active = false; q.rows = []; chrome.storage.local.set({ [QUEUE]: q }); }
     });
+    if (running && rows) {
+      return sendEngine("queueStop", r => {
+        if (!r) { clearStorage(); return toast("중지했습니다 (탭이 닫혀 저장은 건너뜀)"); }
+        toast("중지 — 여기까지 수집한 상품을 Excel로 저장합니다");
+      });
+    }
+    clearStorage();
     sendEngine("reset", () => toast("초기화했습니다"));
   });
+
   $("#listxlsx").addEventListener("click", () => {
     const rows = productsOfList(curList && curList.id);
     const tag = (curList.name || "list").replace(/[^\w가-힣]+/g, "_");
@@ -670,7 +636,6 @@
   });
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== "local") return;
-    if (ch[RC]) store = ch[RC].newValue || store;
     if (ch[JOB]) {
       const was = job; job = ch[JOB].newValue || null; paintLive();
       if (was && was.active && (!job || !job.active)) refreshProducts();
@@ -684,7 +649,6 @@
   });
 
   (async () => {
-    store = (await load(RC)) || store;
     job = await load(JOB);
     queue = await load(QUEUE);
     await loadLists();

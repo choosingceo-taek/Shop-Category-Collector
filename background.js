@@ -22,70 +22,22 @@ function toBase64(bytes) {
   return btoa(bin);
 }
 
-// ---- side panel + right-click clipping -------------------------------------
-// The toolbar icon opens the research companion panel. Unlike the old popup it
-// stays open while the user browses, which is what makes it read as a working
-// assistant rather than a dialog.
-// The side panel is the companion's home: it reads the page, curates the scan
-// list (brand categories the user re-runs weekly), shows batch progress, and
-// links to the catalog. So the toolbar icon opens the panel. Scanning a single
-// page stays on the in-page FAB at bottom-left — one job per entry point.
+// ---- side panel --------------------------------------------------------------
+// The toolbar icon opens the research companion panel. Unlike a popup it stays
+// open while the user browses, which is what makes it read as a working
+// assistant rather than a dialog: it reads the page, curates the scan list
+// (brand categories the user re-runs weekly), shows batch progress, and leads
+// to LAB. Scanning a single page stays on the in-page FAB at bottom-left —
+// one job per entry point.
+//
+// Right-click "clip this product" lived here too and was removed: it was a
+// second, quieter way to add things that nobody could tell apart from
+// "Add this page", and its samples were hand-picked, so LAB had to exclude
+// them anyway. Dropping it also retired the contextMenus permission.
 chrome.runtime.onInstalled.addListener(() => {
   try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); } catch (e) {}
-  try {
-    chrome.contextMenus.removeAll(() => {
-      chrome.contextMenus.create({ id: "rc_image", title: "이미지를 컬렉션에 담기", contexts: ["image"] });
-      chrome.contextMenus.create({ id: "rc_page", title: "이 상품을 컬렉션에 담기", contexts: ["page", "link", "selection"] });
-    });
-  } catch (e) {}
 });
 try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); } catch (e) {}
-
-const RC_KEY = "rc_store_v1";
-function rcAdd(data) {
-  return new Promise(res => {
-    chrome.storage.local.get(RC_KEY, o => {
-      const store = o[RC_KEY] || { collections: [], items: [], activeId: "" };
-      if (!store.collections.length) {
-        const id = "c" + Date.now();
-        store.collections.push({ id, name: "리서치 " + new Date().toISOString().slice(0, 10), createdAt: Date.now() });
-        store.activeId = id;
-      }
-      if (!store.collections.some(c => c.id === store.activeId)) store.activeId = store.collections[0].id;
-      const dupe = store.items.some(i => i.collectionId === store.activeId &&
-        i.product_url && i.product_url === data.product_url && i.type === data.type);
-      if (!dupe) {
-        store.items.push(Object.assign({
-          id: "i" + Date.now() + Math.random().toString(36).slice(2, 6),
-          collectionId: store.activeId, addedAt: Date.now(),
-        }, data));
-      }
-      chrome.storage.local.set({ [RC_KEY]: store }, () => res(!dupe));
-    });
-  });
-}
-const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
-
-// A context-menu click grants activeTab for that tab, so clipping works on ANY
-// site with no standing host permission — the zero-permission path.
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (!tab || !tab.id) return;
-  try {
-    if (info.menuItemId === "rc_image") {
-      await rcAdd({
-        type: "image", name: (tab.title || "").slice(0, 200), brand: "", price: "",
-        image_url: info.srcUrl || "", product_url: info.linkUrl || info.pageUrl || tab.url || "",
-        fabric_composition: "", colorways: "", size_range: "", category: "", design: "",
-        source: hostOf(tab.url || info.pageUrl),
-      });
-    } else if (info.menuItemId === "rc_page") {
-      const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["clip.js"] });
-      const data = res && res.result;
-      if (data && data.name) await rcAdd(data);
-    }
-    try { await chrome.sidePanel.open({ tabId: tab.id }); } catch (e) {}
-  } catch (e) { /* restricted page (chrome://, web store) — nothing to clip */ }
-});
 
 // The catalog lives in IndexedDB in the extension origin. The content script
 // can't reach it (it runs in the page's origin), so it posts finished scans
