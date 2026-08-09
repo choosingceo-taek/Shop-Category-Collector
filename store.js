@@ -125,7 +125,10 @@
      So placeholders are treated as empty everywhere: cleaned before a row is
      stored, and cleaned again when rows are read (which repairs the rows the
      old scans already poisoned, without a migration). */
-  const IMG_PLACEHOLDER = /^data:|(?:^|\/)(?:blank|placeholder|spacer|transparent|1x1|pixel)\.(?:gif|png|svg)(?:[?#]|$)/i;
+  // filename CONTAINING a token, not exactly equal to it — Zara's placeholder
+  // is "transparent-background.png", a real https URL that an exact-name match
+  // let straight through into every stored row. Sync with sites.js PLACEHOLDER.
+  const IMG_PLACEHOLDER = /^data:|\/[^/?#]*(?:blank|placeholder|spacer|transparent|1x1|pixel|noimage|no-image|dummy)[^/?#]*\.(?:gif|png|svg|jpe?g|webp)(?:[?#]|$)/i;
   function cleanImage(u) {
     const s = String(u || "").trim();
     return (!s || IMG_PLACEHOLDER.test(s) || !/^https?:/i.test(s)) ? "" : s;

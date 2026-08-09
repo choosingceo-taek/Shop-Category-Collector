@@ -879,7 +879,14 @@
        and take the LARGEST srcset entry (the widest `w` descriptor) — a
        thumbnail in a spreadsheet is downscaled anyway, and the small candidate
        is often a blur-up preview. */
-    const PLACEHOLDER = /^data:|(?:^|\/)(?:blank|placeholder|spacer|transparent|1x1|pixel)\.(?:gif|png|svg)(?:[?#]|$)/i;
+    /* Matches the FILENAME (last path segment) containing a placeholder token.
+       Zara proved exact-name matching insufficient: its lazy grid uses a real
+       https URL to "transparent-background.png", which sailed straight through
+       a pattern that only knew "transparent.png" — and a whole export shipped
+       with invisible thumbnails. Tokens inside directory names don't trigger
+       ([^/?#]* cannot cross a slash), so /transparent/photo.jpg still passes.
+       Keep in sync with IMG_PLACEHOLDER in store.js. */
+    const PLACEHOLDER = /^data:|\/[^/?#]*(?:blank|placeholder|spacer|transparent|1x1|pixel|noimage|no-image|dummy)[^/?#]*\.(?:gif|png|svg|jpe?g|webp)(?:[?#]|$)/i;
 
     function widestFromSrcset(srcset) {
       let best = "", bestW = -1;
