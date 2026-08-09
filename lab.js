@@ -88,16 +88,22 @@
   }
 
   /* Render the whole LAB view into `el`. Needs nothing but the collected rows. */
-  function render(el, items, opts) {
+  function render(el, all, opts) {
     opts = opts || {};
     const months = opts.months || 6;
     const granularity = opts.granularity || "month";
     const dim = opts.dim || "fabric";
+    // Hand-clipped products are a curated sample — including them would bend
+    // every share figure toward whatever caught someone's eye. Trends read from
+    // scans only; the clips stay in PRODUCTS and in the Excel.
+    const items = (all || []).filter(i => i && i.source !== "clip");
+    const clipped = (all || []).length - items.length;
     const o = T.overview(items, { months, granularity });
 
     if (!o.total) {
-      el.innerHTML = `<div class="labempty">아직 수집된 상품이 없습니다.<br>
-        스캔을 시작하면 이곳에 시간에 따른 변화가 쌓입니다.</div>`;
+      el.innerHTML = `<div class="labempty">${clipped
+        ? `손으로 담은 상품 ${clipped}개만 있습니다.<br>추이는 스캔한 상품으로만 계산합니다 — 리스트를 만들어 ▶ Run all 하세요.`
+        : "아직 수집된 상품이 없습니다.<br>스캔을 시작하면 이곳에 시간에 따른 변화가 쌓입니다."}</div>`;
       return;
     }
 
@@ -132,7 +138,8 @@
       </div>
       <p class="foot">전반기와 후반기의 점유율 차이(퍼센트포인트)입니다. 한 구간의 우연한 변동을
         트렌드로 오인하지 않도록 기간을 반으로 나눠 비교하며, 표본이 ${opts.minCount || 3}건 미만인
-        항목은 제외합니다. 모든 수치는 수집된 상품에서 직접 계산합니다.</p>`;
+        항목은 제외합니다. 모든 수치는 수집된 상품에서 직접 계산합니다.${
+        clipped ? ` 손으로 담은 상품 ${clipped}개는 표본이 한쪽으로 치우치므로 이 통계에서 제외했습니다(상품 목록과 Excel에는 포함).` : ""}</p>`;
   }
 
   root.LabView = { render, lineChart, volumeChart };

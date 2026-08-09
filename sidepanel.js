@@ -300,7 +300,12 @@
     $("#selcount").textContent = "Selected " + picked.size;
   }
 
-  // ---- clip (any site, via the injected extractor) --------------------------
+  /* Clip one product from the page you're on — for when the thing worth keeping
+     is a single item rather than a whole category, and on sites we can't scan.
+     It lands in the same catalog a scan feeds, so it shows up under PRODUCTS and
+     exports to Excel like everything else. It is tagged source:"clip" because a
+     hand-picked item is a biased sample: LAB's trend maths leaves clips out
+     (charter: NEVER 트렌드 왜곡) while the sheet still includes them. */
   async function clipHere() {
     if (!tab) return;
     let origin; try { origin = new URL(tab.url).origin + "/*"; } catch (e) { return; }
@@ -313,13 +318,16 @@
     } catch (e) { return toast("읽지 못했습니다"); }
     if (!data) return toast("상품 정보를 찾지 못했습니다");
     if (!data.name) data.name = (tab.title || "").slice(0, 200);
-    if (!store.collections.length) {
-      store.collections.push({ id: "c" + Date.now(), name: "Clips", createdAt: Date.now() });
-      store.activeId = store.collections[0].id;
-    }
-    store.items.push(Object.assign({ id: "i" + Date.now(), collectionId: store.activeId, addedAt: Date.now() }, data));
-    chrome.storage.local.set({ [RC]: store });
-    toast("클립에 담았습니다");
+    if (!data.product_url) data.product_url = tab.url;
+
+    const res = await new Promise(r => chrome.runtime.sendMessage({
+      type: "catalogPut",
+      scan: { meta: { source: "clip", site: data.source || hostOf(tab.url), scannedAt: new Date().toISOString() },
+              items: [data] },
+    }, x => { void chrome.runtime.lastError; r(x); }));
+    if (!res || !res.ok) return toast("저장하지 못했습니다");
+    await refreshProducts();
+    toast(res.added ? "PRODUCTS에 담았습니다" : "이미 담긴 상품입니다");
   }
 
   // ---- wiring ---------------------------------------------------------------
