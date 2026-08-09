@@ -307,7 +307,7 @@
     if (!entries.length) {
       body.innerHTML = '<div class="lempty">No sites in this list yet.<br>' +
         'Open a brand\'s category page and press <b>＋ Add this page</b>,<br>' +
-        'or bring a whole sheet in with <b>⬆</b> above.</div>';
+        'or bring a whole sheet in with <b>⬆ Import file</b>.</div>';
       return;
     }
     const qIdx = e => running ? queue.list.findIndex(x => L.normUrl(x.url) === L.normUrl(e.url)) : -1;
@@ -703,6 +703,15 @@
   }
 
   $("#importbtn").addEventListener("click", () => $("#importfile").click());
+  // Pasting sits beside Import and Add, but its box only opens when asked —
+  // a four-line textarea permanently between the button and the list would
+  // push the sites themselves off the screen.
+  $("#pastetoggle").addEventListener("click", () => {
+    const box = $("#bulkbox"), open = box.hidden;
+    box.hidden = !open;
+    $("#pastetoggle").setAttribute("aria-expanded", String(open));
+    if (open) $("#bulk").focus();
+  });
   $("#importfile").addEventListener("change", async e => {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";                       // allow re-importing the same file

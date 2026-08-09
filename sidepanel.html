@@ -127,8 +127,10 @@
     border:1.5px solid var(--hard); border-radius:var(--r-s); }
   #addbtn:hover:not(:disabled) { background:var(--hard); color:#fff; }
   #addbtn:disabled { background:none; color:var(--muted); border-color:var(--line2); }
-  .addrow { display:flex; gap:6px; margin-top:6px; }
-  .addrow button { flex:1; font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:6px; }
+  .addrow { display:flex; gap:6px; margin-top:7px; }
+  .addrow button { flex:1; font-size:12px; font-weight:600; padding:8px 6px;
+    border-radius:var(--r-s); background:var(--wash); border-color:transparent; }
+  .addrow button[aria-expanded="true"] { background:var(--ink); color:#fff; }
 
   .listwrap { padding:0 14px 20px; }
   .panelcard { background:none; border:0; padding:0; margin:0; }
@@ -223,15 +225,14 @@
   .ent .act:hover { color:var(--ink); }
   .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
 
-  /* bulk paste is the rare path, so it is folded away until asked for */
-  .bulk { margin-top:12px; border-top:1px solid var(--line); padding-top:10px; }
-  .bulk summary { font-size:11.5px; color:var(--muted); cursor:pointer; }
-  .bulk textarea { width:100%; margin-top:8px; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* pasting is the rare path — offered beside the others, opened on demand */
+  .bulkbox { margin-top:8px; }
+  .bulkbox textarea { width:100%; margin-top:8px; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
     border:1px solid var(--line2); border-radius:var(--r-s); padding:8px 9px;
     background:var(--card); color:var(--ink); resize:vertical; }
-  .bulk button { margin-top:6px; width:100%; font-size:12.5px; font-weight:600;
+  .bulkbox button { margin-top:6px; width:100%; font-size:12.5px; font-weight:600;
     border-radius:var(--r-s); padding:8px; }
-  .bulk .hint { font-size:10.5px; color:var(--muted); line-height:1.55; margin-top:7px; }
+  .bulkbox .hint { font-size:10.5px; color:var(--muted); line-height:1.55; margin-top:7px; }
 
   .live { padding:9px 14px; font-size:11.5px;
     color:var(--ink2); display:none; }
@@ -355,12 +356,11 @@
 
         <div class="fs sites">
           <div class="fhead"><span class="fico">🗂️</span><span class="ft"><b>Sites</b></span>
-            <!-- the list's own tools, as icons: rename, delete, import, and
-                 the two export formats, which name themselves -->
+            <!-- the list's OWN tools: rename it, delete it, take it out.
+                 Putting sites IN is a different job and lives with Add. -->
             <span class="ftools" id="ltools">
               <button class="iconbtn" id="renlist" title="Rename this list" aria-label="Rename this list">✎</button>
               <button class="iconbtn" id="dellist" title="Delete this list" aria-label="Delete this list">🗑</button>
-              <button class="iconbtn" id="importbtn" title="Import a sheet of sites" aria-label="Import a sheet of sites">⬆</button>
               <button class="xbtn" id="explisttxt" title="Export as .txt — edit it and import again">.txt</button>
               <button class="xbtn" id="explistxlsx" title="Export as .xlsx — edit it and import again">.xlsx</button>
             </span>
@@ -374,10 +374,22 @@
             <select id="listsel" title="Choose a list" hidden></select>
           </div>
 
-          <!-- put the page you are on into it -->
+          <!-- Putting sites in: one page, a whole sheet, or a pasted block.
+               Three doors to the same room, so they stand together. -->
           <div class="adder">
             <div class="now" id="now">Reading the page…</div>
             <button id="addbtn" class="solid">＋ Add this page</button>
+            <div class="addrow">
+              <button id="importbtn" title="Read a sheet of sites (.xlsx · .csv · .txt)">⬆ Import file</button>
+              <button id="pastetoggle" aria-expanded="false" title="Paste a block of URLs">⌨ Paste URLs</button>
+            </div>
+            <div class="bulkbox" id="bulkbox" hidden>
+              <textarea id="bulk" rows="4" placeholder="Zara
+- Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
+              <button id="addbulk">Add to list</button>
+              <div class="hint">Import reads Brand · Category · URL columns automatically;
+                without headers every line containing a URL is still read.</div>
+            </div>
           </div>
 
           <!-- what is in it -->
@@ -387,15 +399,6 @@
           </div>
           <div id="listbody"></div>
 
-          <!-- adding many at once lives with adding one, quietly at the end -->
-          <details class="bulk">
-            <summary>Paste several URLs</summary>
-            <textarea id="bulk" rows="4" placeholder="Zara
-- Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
-            <button id="addbulk">Add to list</button>
-            <div class="hint">Import (⬆ above) reads Brand · Category · URL columns
-              automatically; without headers every line containing a URL is still read.</div>
-          </details>
         </div>
 
         </div>
