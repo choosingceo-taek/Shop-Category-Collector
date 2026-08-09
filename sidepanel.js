@@ -154,9 +154,6 @@
     add.disabled = false;
     const already = urlInList(read.url);
     const scannable = !!(read.ctx || read.adapter);
-    const where = read.ctx ? [read.ctx.site, read.ctx.category].filter(Boolean).join(" · ") : "";
-    // three states, never two: confirmed / we have access but the page hasn't
-    // answered yet (refresh the tab) / no access at all
     // Any web page can be scanned — access is requested when it is added and
     // the engine is injected on demand. "Reference" is left for addresses that
     // are not web pages at all.
@@ -164,8 +161,18 @@
     const badge = scannable ? `<span class="badge ok">Scannable</span>`
       : web ? `<span class="badge" title="Adding this page will ask for access to the site">Scannable?</span>`
       : `<span class="badge">Reference</span>`;
-    now.innerHTML = `<span class="host">${esc(where || read.host)}</span>` + badge +
-      (already ? `<span class="badge ok">In list</span>` : "");
+    /* Show the two fields that will actually be filed — brand and category —
+       rather than one packed line. These are what Excel and LAB group by, so
+       seeing them wrong here is the moment to fix them (✎ on the row). */
+    const brand = (read.ctx && read.ctx.site) || (read.adapter && read.adapter.label) ||
+      brandFromHost(read.host);
+    const cat = (read.ctx && read.ctx.category) ||
+      (tab && tab.title || "").replace(/\s*[|·—-]\s*[^|·—-]*$/, "").trim().slice(0, 60) || read.host;
+    now.innerHTML = `<span class="bdot" style="background:${brandColor(brand)}"></span>` +
+      `<span class="txt"><span class="host">${esc(brand)}</span>` +
+      `<span class="sub">${esc(cat)}</span>` +
+      (already ? `<span class="sub" style="color:var(--accent)">Already in ${esc(curList ? curList.name : "the list")}</span>` : "") +
+      `</span>` + badge;
     add.textContent = already ? "✓ Already in list" : "＋ Add this page";
     add.disabled = already;
   }
@@ -215,17 +222,22 @@
      access requested when it starts). Only a non-web address — a file:// or a
      chrome:// page, which cannot be added anyway — can still be Ref. */
   async function repairScannable() {
+    /* Undefined is repaired too, not just false. "Scan?" is honest only while
+       we genuinely cannot tell; once the origin is ours the answer is known,
+       and leaving the hedge in place is what made an Abercrombie entry read
+       Scan? on a site the manifest fully covers. */
     const stale = [];
-    lists.forEach(l => (l.entries || []).forEach(e => { if (e.scannable === false) stale.push(e); }));
+    lists.forEach(l => (l.entries || []).forEach(e => { if (e.scannable !== true) stale.push(e); }));
     if (!stale.length) return 0;
     let fixed = 0;
     for (const e of stale) {
       if (!/^https?:/i.test(e.url || "")) continue;          // genuinely not a web page
       // Certain when we can name the adapter or we already hold the origin
       // (the engine goes in either way); otherwise unknown, which still runs.
+      const was = e.scannable;
       if (adapterFor(e.url) || await hasHostAccess(e.url).catch(() => false)) e.scannable = true;
       else delete e.scannable;
-      fixed++;
+      if (e.scannable !== was) fixed++;      // report only what actually moved
     }
     if (fixed) await L.save(lists);
     return fixed;
@@ -250,8 +262,7 @@
        click, which is the gesture Chrome requires, and the service worker
        injects the engine into any page we're allowed to touch. A refusal still
        leaves the entry as Scan? rather than Ref, and the run asks again. */
-    if (a || ad) entry.scannable = true;
-    else if (read.access) delete entry.scannable;
+    if (a || ad || read.access) entry.scannable = true;
     else {
       const g = await grantAccess([tab.url]).catch(() => ({ granted: 0 }));
       if (g.granted) { entry.scannable = true; read.access = true; }
@@ -265,6 +276,20 @@
     toast(`Added — ${entry.brand} · ${entry.label}`);
   }
 
+  /* A colour per brand, derived from its name — no storage, no lookup table,
+     and the same brand keeps the same mark in every list. The palette is the
+     warm pastel set the panel already lives in, so a long list reads as
+     organised rather than decorated. */
+  const BRAND_HUES = ["#d2691e", "#9fc9a2", "#9fbbe0", "#c0a8dd", "#c08532", "#dfa88f", "#a8bfa0", "#d59a9a"];
+  function brandColor(name) {
+    const s = String(name || "").toLowerCase();
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return BRAND_HUES[h % BRAND_HUES.length];
+  }
+  const folded = new Set();          // brands the user collapsed, this session
+  let listQuery = "";
+
   function renderList() {
     const body = $("#listbody");
     const entries = (curList && curList.entries) || [];
@@ -275,36 +300,74 @@
     $("#runlist").textContent = scannableCount && scannableCount !== entries.length
       ? `▶ Scan all (${scannableCount})` : "▶ Scan all";
 
+    // The filter only earns its space once the list is long enough to scroll.
+    $("#lsearch").hidden = entries.length < 7;
+    if (entries.length < 7) { listQuery = ""; $("#lq").value = ""; }
+
     if (!entries.length) {
       body.innerHTML = '<div class="lempty">No sites in this list yet.<br>' +
-        'On any page worth revisiting, press <b>＋ Add this page</b>.</div>';
+        'Open a brand\'s category page and press <b>＋ Add this page</b>,<br>' +
+        'or bring a whole sheet in with <b>Import</b> below.</div>';
       return;
     }
     const qIdx = e => running ? queue.list.findIndex(x => L.normUrl(x.url) === L.normUrl(e.url)) : -1;
+    const q = listQuery.trim().toLowerCase();
+    const hit = e => !q || [e.brand, e.label, e.url].some(v => String(v || "").toLowerCase().includes(q));
     const groups = new Map();
     entries.forEach((e, i) => {
+      if (!hit(e)) return;
       const b = e.brand || hostOf(e.url) || "Other";
       if (!groups.has(b)) groups.set(b, []);
       groups.get(b).push({ e, i });
     });
-    body.innerHTML = [...groups.entries()].map(([brand, rows]) => `<div class="grp">
-      <div class="gname"><span>${esc(brand)}</span><span class="gn">${rows.length}</span></div>
-      ${rows.map(({ e, i }) => {
+    if (!groups.size) {
+      body.innerHTML = `<div class="lempty">Nothing matches “${esc(listQuery)}”.</div>`;
+      return;
+    }
+    const shown = [...groups.values()].reduce((n, r) => n + r.length, 0);
+    const sum = q ? `${shown} of ${entries.length} · ${groups.size} brands`
+      : `${entries.length} sites · ${groups.size} brands`;
+
+    body.innerHTML = `<div class="lsum">${esc(sum)}</div>` +
+      [...groups.entries()].map(([brand, rows]) => {
+        // searching temporarily opens every group — a hidden match is a bug
+        const fold = !q && folded.has(brand);
+        return `<div class="grp${fold ? " fold" : ""}" data-b="${esc(brand)}">
+      <button class="gname" type="button">
+        <span class="gdot" style="background:${brandColor(brand)}"></span>
+        <span class="gnm">${esc(brand)}</span>
+        <span class="gn">${rows.length}</span>
+        <span class="gcar">▾</span>
+      </button>
+      <div class="gbody">${rows.map(({ e, i }) => {
         const qi = qIdx(e);
         const cls = running ? (qi > -1 && qi < queue.idx ? " done" : qi === queue.idx ? " cur" : "") : "";
+        // The address is the identity but not the reading matter — show the
+        // path, which is what tells two categories of one brand apart.
+        let where = e.url;
+        try { const u = new URL(e.url); where = (u.pathname + u.search).slice(0, 70) || u.host; } catch (x) {}
         return `<div class="ent${cls}" data-i="${i}">
           <div class="txt">
             <div class="lb">${esc(e.label || e.url)}</div>
-            <span class="u">${esc(e.url)}</span>
+            <span class="u">${esc(where)}</span>
           </div>
           ${e.scannable === false ? '<span class="tag">Ref</span>'
-            : e.scannable ? '<span class="tag">Scan</span>'
-            : '<span class="tag" title="Only the page itself can tell — included in the run">Scan?</span>'}
+            : e.scannable ? '<span class="tag on">Scan</span>'
+            : '<span class="tag q" title="Only the page itself can tell — included in the run">Scan?</span>'}
           <button class="act go" title="Open">↗</button>
           <button class="act ren" title="Rename">✎</button>
           <button class="act del" title="Remove">✕</button>
         </div>`;
-      }).join("")}</div>`).join("");
+      }).join("")}</div></div>`;
+      }).join("");
+
+    body.querySelectorAll(".grp .gname").forEach(el => el.addEventListener("click", () => {
+      const b = el.parentElement.dataset.b;
+      if (folded.has(b)) folded.delete(b); else folded.add(b);
+      el.parentElement.classList.toggle("fold");
+    }));
+    $("#lfold").textContent = groups.size && [...groups.keys()].every(b => folded.has(b))
+      ? "Expand" : "Collapse";
 
     body.querySelectorAll(".ent").forEach(el => {
       const i = +el.dataset.i;
@@ -330,6 +393,19 @@
     sel.innerHTML = lists.map(l =>
       `<option value="${esc(l.id)}">${esc(l.name)} · ${(l.entries || []).length}</option>`).join("");
     if (curList) sel.value = curList.id;
+    // The chips are the visible control; the select stays as the value holder
+    // so everything that reads #listsel keeps working.
+    const chips = $("#lchips");
+    chips.innerHTML = lists.map(l =>
+      `<button type="button" data-id="${esc(l.id)}"${curList && l.id === curList.id ? ' class="on"' : ""}>` +
+      `${esc(l.name)}<span class="n">${(l.entries || []).length}</span></button>`).join("") +
+      `<button type="button" class="add" id="newlist" title="Start another list">＋ New</button>`;
+    chips.querySelectorAll("button[data-id]").forEach(b => b.addEventListener("click", () => {
+      if (curList && b.dataset.id === curList.id) return;
+      sel.value = b.dataset.id;
+      sel.dispatchEvent(new Event("change"));
+    }));
+    chips.querySelector("#newlist").addEventListener("click", newList);
   }
 
   // Products this list collected. Rows carry the list ids that produced them,
@@ -495,14 +571,16 @@
 
   $("#listsel").addEventListener("change", e => {
     curList = lists.find(l => l.id === e.target.value) || curList;
-    renderList(); paintNow(); paintListResult();
+    listQuery = ""; $("#lq").value = "";
+    fillListSelect(); renderList(); paintNow(); paintListResult();
   });
-  $("#newlist").addEventListener("click", async () => {
+  // Bound to the chip rail, which is rebuilt whenever the lists change.
+  async function newList() {
     const name = await promptIn("New list name", "My references");
     if (!name) return;
     curList = { id: "l" + Date.now(), name: name.trim(), entries: [], createdAt: Date.now() };
     lists.push(curList); await L.save(lists); fillListSelect(); renderList(); paintNow();
-  });
+  }
   $("#renlist").addEventListener("click", async () => {
     if (!curList) return;
     const name = await promptIn("List name", curList.name);
@@ -514,6 +592,15 @@
     if (!await confirmIn(`Delete the list "${curList.name}"? The sites in it go with it.`)) return;
     lists = lists.filter(l => l.id !== curList.id);
     curList = lists[0]; await L.save(lists); fillListSelect(); renderList(); paintNow();
+  });
+  $("#lq").addEventListener("input", e => { listQuery = e.target.value; renderList(); });
+  $("#lfold").addEventListener("click", () => {
+    const brands = [...new Set(((curList && curList.entries) || [])
+      .map(e => e.brand || hostOf(e.url) || "Other"))];
+    const allFolded = brands.length && brands.every(b => folded.has(b));
+    folded.clear();
+    if (!allFolded) brands.forEach(b => folded.add(b));
+    renderList();
   });
   $("#addbulk").addEventListener("click", async () => {
     const parsed = L.parseList($("#bulk").value)

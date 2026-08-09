@@ -18,28 +18,42 @@
      next step obvious at a glance. */
   :root {
     color-scheme: light dark;
-    --bg:#f6f1e6; --card:#fffdf8; --ink:#1b1813; --ink2:#4d463c; --muted:#8d8574;
-    --line:#e4dac5; --hard:#1b1813; --wash:#efe8d8; --overlay:rgba(20,17,13,.58);
-    /* one warm accent, spent on emphasis only (streak/flame in the reference) */
-    --accent:#d2691e; --accent2:#f0a04b;
+    --bg:#fff; --card:#fff; --ink:#111; --ink2:#3f3f3f; --muted:#8a8a8a;
+    --line:#e5e5e5; --line2:#d8d8d8; --hard:#111; --wash:#f7f7f7;
+    --overlay:rgba(0,0,0,.45);
+    /* One accent, and only for state: a run in progress, the row being
+       scanned. Nothing decorative is coloured — the brand dots in the list
+       are data, not decoration. */
+    --accent:#b4551a; --accent2:#d2691e;
+    --cta:#111; --cta-ink:#fff; --cta-hi:#000;
     --serif: ui-serif, Georgia, "Times New Roman", "Apple SD Gothic Neo", serif;
+    --r:4px;                                   /* boxes are squared, not pills */
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#17140f; --card:#221e17; --ink:#f3eee1; --ink2:#cdc5b4; --muted:#8f8878;
-      --line:#332d22; --hard:#f3eee1; --wash:#1e1a14; --overlay:rgba(0,0,0,.62);
-      --accent:#e8a33d; --accent2:#f0c07a; }
+    :root { --bg:#121212; --card:#181818; --ink:#f2f2f2; --ink2:#c9c9c9; --muted:#8c8c8c;
+      --line:#2b2b2b; --line2:#3a3a3a; --hard:#f2f2f2; --wash:#1c1c1c;
+      --overlay:rgba(0,0,0,.65);
+      --accent:#e8a33d; --accent2:#f0c07a;
+      --cta:#f2f2f2; --cta-ink:#111; --cta-hi:#fff; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
     font:13px/1.5 system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;
     display:flex; flex-direction:column; height:100vh; overflow:hidden; }
   button, select, input { font:inherit; color:var(--ink); background:var(--card);
-    border:1px solid var(--line); border-radius:999px; padding:7px 12px; }
+    border:1px solid var(--line2); border-radius:var(--r); padding:7px 12px; }
   button { cursor:pointer; }
   button:hover:not(:disabled) { border-color:var(--hard); }
   button:disabled { opacity:.4; cursor:default; }
   .solid { background:var(--hard); color:var(--bg); border-color:var(--hard); font-weight:650; }
-  textarea, input[type=search] { border-radius:12px; }
+  textarea, input[type=search] { border-radius:var(--r); }
+  /* A labelled box: the label sits on its own top border, so a group of
+     controls announces what it is without spending a whole heading line.
+     This is the one borrowed device from the reference screen. */
+  .fs { position:relative; border:1px solid var(--line); border-radius:var(--r);
+    padding:15px 12px 13px; margin-bottom:14px; }
+  .fs > .lg { position:absolute; top:-7px; left:11px; padding:0 6px; background:var(--bg);
+    font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
   .cap { text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
   .row { display:flex; gap:6px; align-items:center; }
   .grow { flex:1; min-width:0; }
@@ -65,29 +79,57 @@
   .view.on { display:flex; }
 
   /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
+  /* The capture card: what is about to be filed, spelled out. Brand and
+     category are what the spreadsheet groups by, so they are the two lines
+     the user reads before pressing Add — not the raw address. */
   .adder { margin:2px 0 10px; }
-  .now { font-size:11.5px; color:var(--ink2); margin-bottom:10px; line-height:1.5; }
-  .now .host { font-weight:700; color:var(--ink); }
-  .now .badge { display:inline-block; margin-left:6px; padding:1px 6px; font-size:9px;
-    letter-spacing:.09em; text-transform:uppercase; border:1px solid var(--line); color:var(--muted); }
+  .now { display:flex; align-items:flex-start; gap:9px; padding:10px 11px; margin-bottom:8px;
+    background:var(--wash); border:1px solid var(--line); border-radius:var(--r);
+    font-size:11.5px; color:var(--ink2); line-height:1.45; }
+  .now .bdot { width:9px; height:9px; border-radius:50%; flex:none; margin-top:4px; }
+  .now .txt { flex:1; min-width:0; }
+  .now .host { display:block; font-weight:700; color:var(--ink); font-size:12.5px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .now .sub { display:block; color:var(--muted); font-size:11px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .now .badge { display:inline-block; margin-top:3px; padding:1px 6px; font-size:9px;
+    letter-spacing:.09em; text-transform:uppercase; border:1px solid var(--line2);
+    border-radius:var(--r); color:var(--muted); flex:none; }
   .now .badge.ok { border-color:var(--hard); color:var(--ink); }
-  #addbtn { width:100%; padding:12px; letter-spacing:.08em; text-transform:uppercase;
-    font-size:11px; font-weight:700; }
+  /* Capture and run are different acts, so they cannot be the same black
+     block stacked twice — the eye reads two identical buttons as one control
+     it has to stop and parse. Adding is the warm, frequent one; solid ink
+     stays with the run and with LAB. */
+  #addbtn { width:100%; padding:11px; letter-spacing:.1em; text-transform:uppercase;
+    font-size:10.5px; font-weight:700; background:var(--card); color:var(--ink);
+    border:1.5px solid var(--hard); }
+  #addbtn:hover:not(:disabled) { background:var(--hard); color:var(--bg); }
+  #addbtn:disabled { background:none; color:var(--muted); border-color:var(--line); }
   .addrow { display:flex; gap:6px; margin-top:6px; }
   .addrow button { flex:1; font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:6px; }
 
   .listwrap { padding:4px 14px 18px; }
   /* soft card blocks floating on the warm ground, as in the reference */
-  .panelcard { background:var(--card); border:1px solid var(--line); border-radius:16px;
-    padding:12px 13px; margin-bottom:10px; }
+  .panelcard { background:none; border:0; padding:0; margin:0; }
   .panelcard > .cap { display:block; color:var(--muted); margin-bottom:8px; }
-  .lhead { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
-  .lhead select { flex:1; min-width:0; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
-    border-radius:12px; }
+  .lhead { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
+  /* Lists as chips: every list and its size readable at rest, one tap to
+     switch, and a "＋" that is a list rather than an unlabelled icon. */
+  .lchips { display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0; }
+  .lchips button { font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+    padding:5px 10px; border-radius:var(--r); font-weight:700; }
+  .lchips button .n { font-weight:400; opacity:.6; margin-left:5px; }
+  .lchips button.on { background:var(--hard); color:var(--bg); border-color:var(--hard); }
+  .lchips button.add { font-weight:400; color:var(--muted); }
+  .ltools { display:flex; align-items:center; gap:5px; margin-bottom:10px; }
+  .ltools .cap { color:var(--muted); }
+  .ltools button { font-size:10.5px; padding:4px 9px; letter-spacing:.05em; }
+  .ltools .iconbtn { width:26px; height:26px; font-size:11px; }
+  .ltools .tsep { flex:1; }
   .iconbtn { width:30px; height:30px; padding:0; display:inline-flex; align-items:center;
     justify-content:center; flex:none; font-size:13px; border-radius:50%; }
   .runrow { display:flex; gap:6px; margin-bottom:8px; }
-  .upnote { border:1px solid rgba(80,200,120,.45); border-radius:10px; padding:10px 12px;
+  .upnote { border:1px solid rgba(80,200,120,.45); border-radius:var(--r); padding:10px 12px;
     margin-bottom:10px; font-size:12px; line-height:1.55; }
   .upnote .uphow { color:var(--muted); font-size:11px; margin:3px 0 8px; }
   .upnote button { width:100%; font-size:11px; font-weight:700; letter-spacing:.05em; }
@@ -101,13 +143,13 @@
   @media (prefers-color-scheme: dark) { .runctl .danger { color:#ff9a7a; } }
   /* LAB — the destination. On a cream ground the strongest mark available is
      solid ink, which is also what the reference reserves for its one action. */
-  .labbtn { display:block; width:100%; text-align:left; margin:10px 14px 12px;
-    width:calc(100% - 28px); padding:15px 17px; border:0; border-radius:18px;
+  .labbtn { display:block; text-align:left; margin:12px 14px 14px;
+    width:calc(100% - 28px); padding:15px 17px; border:0; border-radius:var(--r);
     background:var(--hard); color:var(--bg); }
   .labbtn:hover { background:#000; }
   @media (prefers-color-scheme: dark) { .labbtn:hover { background:#fff; } }
   .labbtn .lbmain { display:flex; align-items:center; justify-content:space-between;
-    font-family:var(--serif); font-size:25px; font-weight:600; letter-spacing:.02em; }
+    font-family:var(--serif); font-size:23px; font-weight:600; letter-spacing:.06em; }
   .labbtn .lbgo { font-size:16px; color:var(--accent2); }
   .labbtn .lbsub { display:block; font-size:11px; opacity:.72; margin-top:3px; }
   .capline { display:flex; align-items:center; justify-content:space-between; gap:8px;
@@ -116,31 +158,54 @@
   .runrow button { flex:1; font-size:10.5px; font-weight:700; letter-spacing:.1em;
     text-transform:uppercase; padding:11px; }
   .qstate { padding:9px 11px; background:var(--wash); font-size:11.5px; margin-bottom:11px;
-    border-radius:12px; border-left:3px solid var(--accent); }
+    border-radius:var(--r); border-left:3px solid var(--accent); }
   .result { padding:11px 12px; background:var(--wash); margin-bottom:12px; font-size:11.5px;
-    border-radius:14px; }
+    border-radius:var(--r); }
   .result b { font-weight:700; }
   .result button { font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:6px; }
 
-  .grp { margin-bottom:14px; }
-  .grp .gname { display:flex; align-items:baseline; gap:6px; font-size:9.5px; color:var(--muted);
-    text-transform:uppercase; letter-spacing:.12em; padding:0 2px 6px; margin-bottom:4px; }
-  .grp .gn { color:var(--muted); }
-  .ent { display:flex; align-items:center; gap:8px; padding:9px 10px; margin-bottom:4px;
-    background:var(--card); border:1px solid var(--line); border-radius:12px; }
-  .ent.cur { background:var(--wash); border-color:var(--accent); }
+  /* The list itself. After importing a research sheet this is hundreds of
+     rows, so it is organised the way the spreadsheet is: brand first, each
+     brand a foldable block carrying its own colour and count. The colour is
+     derived from the brand name, so the same brand keeps the same mark
+     everywhere without anything being stored. */
+  .lsearch { display:flex; gap:6px; align-items:center; margin:2px 0 10px; }
+  .lsearch input { flex:1; min-width:0; font-size:11.5px; padding:8px 10px; border-radius:var(--r); }
+  .lsearch button { font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:6px 9px; }
+  .lsum { font-size:10px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase;
+    margin:0 2px 8px; }
+  .grp { margin-bottom:9px; border:1px solid var(--line); border-radius:var(--r);
+    background:var(--card); overflow:hidden; }
+  .grp .gname { display:flex; align-items:center; gap:7px; width:100%; text-align:left;
+    padding:9px 11px; border:0; border-radius:0; background:none; font-size:11.5px;
+    font-weight:700; color:var(--ink); }
+  .grp .gname:hover { background:var(--wash); }
+  .grp .gdot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .grp .gnm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .grp .gn { color:var(--muted); font-weight:400; font-size:11px; }
+  .grp .gcar { color:var(--muted); font-size:9px; flex:none; transition:transform .15s; }
+  .grp.fold .gcar { transform:rotate(-90deg); }
+  .grp.fold .gbody { display:none; }
+  .grp .gbody { padding:0 7px 7px; }
+  .ent { display:flex; align-items:center; gap:8px; padding:8px 9px; margin-top:3px;
+    background:var(--wash); border:1px solid transparent; border-radius:var(--r); }
+  .ent:hover { border-color:var(--line); }
+  .ent.cur { background:var(--card); border-color:var(--accent); }
   .ent.done { opacity:.42; }
   .ent .txt { flex:1; min-width:0; }
   .ent .lb { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ent .u { font-size:10px; color:var(--muted); overflow:hidden; text-overflow:ellipsis;
     white-space:nowrap; display:block; }
+  /* Scan is the norm and needs no label; only the exceptions are marked. */
   .ent .tag { font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
-    border:1px solid var(--line); border-radius:999px; padding:1px 6px; flex:none; }
+    border:1px solid var(--line2); border-radius:var(--r); padding:1px 6px; flex:none; }
+  .ent .tag.q { border-style:dashed; }
+  .ent .tag.on { display:none; }
   .ent .act { border:0; background:none; color:var(--muted); padding:2px 4px; font-size:11px; flex:none; }
   .ent .act:hover { color:var(--ink); }
   .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
 
-  .paste { border-top:1px solid var(--line); padding:12px 14px 20px; }
+  .paste { padding:15px 12px 13px; }
   .paste .cap { color:var(--muted); display:block; margin-bottom:6px; }
   .paste textarea { width:100%; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
     border:1px solid var(--line); padding:8px 9px; background:var(--bg); color:var(--ink);
@@ -169,7 +234,7 @@
   .selwrap .cap { display:block; color:var(--muted); margin-bottom:3px; }
   .selwrap select { width:100%; text-transform:uppercase; font-size:10.5px; letter-spacing:.05em; }
   .pgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px 14px; }
-  .pc { position:relative; background:var(--wash); margin:0; border-radius:14px; overflow:hidden; }
+  .pc { position:relative; background:var(--wash); margin:0; border-radius:var(--r); overflow:hidden; }
   .pc img, .pc .ph { width:100%; aspect-ratio:3/4; object-fit:cover; display:block; background:var(--wash); }
   .pc figcaption { position:absolute; left:0; right:0; bottom:0; padding:20px 8px 7px;
     background:linear-gradient(transparent, var(--overlay)); color:#fff;
@@ -199,7 +264,11 @@
   .ask { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
     align-items:center; justify-content:center; padding:18px; z-index:20; }
   .ask[hidden] { display:none; }
-  .askbox { background:var(--card); border:1px solid var(--line); border-radius:18px;
+  /* Any author `display` beats the UA's [hidden] rule, so every flex block in
+     here would stay on screen after being hidden — the filter row did exactly
+     that on an empty list. One guard, applied everywhere. */
+  [hidden] { display:none !important; }
+  .askbox { background:var(--card); border:1px solid var(--line); border-radius:var(--r);
     padding:16px; width:100%; max-width:320px; }
   .asktext { font-size:12.5px; line-height:1.55; margin-bottom:10px; }
   #askinput { width:100%; margin-bottom:10px; }
@@ -255,67 +324,85 @@
       <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
 
       <div class="listwrap">
-        <!-- list + its controls read as one card floating on the warm ground -->
+        <!-- Four labelled groups, in the order the work happens: pick the
+             list, put a page in it, run it, look at what is in it. Each one
+             names itself on its own top border, so a glance answers "what is
+             this row of controls for" without a heading line per block. -->
         <div class="panelcard">
-        <div class="lhead">
-          <select id="listsel" title="Choose a list"></select>
-          <button class="iconbtn" id="newlist" title="New list">＋</button>
-          <button class="iconbtn" id="renlist" title="Rename list">✎</button>
-          <button class="iconbtn" id="dellist" title="Delete list">🗑</button>
-        </div>
-        <div class="explist">
-          <span class="cap">Export list</span>
-          <button id="explisttxt" title="Edit in a text editor and import again to update the list">.txt</button>
-          <button id="explistxlsx" title="Edit in Excel and import again to update the list">.xlsx</button>
-        </div>
-        <div class="qstate" id="qstate" hidden></div>
-        <!-- one fixed set of controls, always in the same place: the state
-             lives in enabled/disabled, not in buttons appearing and vanishing -->
-        <div class="runrow">
-          <button id="runlist" class="solid">▶ Scan all</button>
-        </div>
-        <div class="runctl">
-          <button id="jpause">⏸ Pause</button>
-          <button id="jreset" class="danger" title="Stop the run and clear its state">↺ Reset</button>
-        </div>
-        <label class="capline" for="maxitems">Max products per URL
-          <select id="maxitems" title="Upper limit of products taken from one URL">
-            <option value="30">30</option>
-            <option value="60" selected>60 (default)</option>
-            <option value="100">100</option>
-            <option value="200">200</option>
-            <option value="0">No limit</option>
-          </select>
-        </label>
-        </div>
 
-        <div class="result" id="listresult" hidden>
-          <span id="resulttext"></span>
-          <div class="row" style="margin-top:7px">
-            <button id="listxlsx" class="grow">⬇ Excel</button>
-            <button id="listview" class="grow">View</button>
+        <div class="fs"><span class="lg">List</span>
+          <!-- chips, not a dropdown: a dropdown hides how many lists exist
+               and how big each one is; the chips answer both at rest -->
+          <div class="lhead">
+            <div class="lchips" id="lchips"></div>
+            <select id="listsel" title="Choose a list" hidden></select>
+          </div>
+          <div class="ltools" id="ltools">
+            <button class="iconbtn" id="renlist" title="Rename this list">✎</button>
+            <button class="iconbtn" id="dellist" title="Delete this list">🗑</button>
+            <span class="tsep"></span>
+            <span class="cap">Export</span>
+            <button id="explisttxt" title="Edit in a text editor and import again to update the list">.txt</button>
+            <button id="explistxlsx" title="Edit in Excel and import again to update the list">.xlsx</button>
           </div>
         </div>
 
-        <!-- adding the current page is an action on the list above it -->
-        <div class="adder">
-          <div class="now" id="now">Reading the page…</div>
-          <button id="addbtn" class="solid">＋ Add this page</button>
+        <div class="fs"><span class="lg">Add page</span>
+          <div class="adder">
+            <div class="now" id="now">Reading the page…</div>
+            <button id="addbtn" class="solid">＋ Add this page</button>
+          </div>
         </div>
 
-        <div id="listbody"></div>
-      </div>
+        <!-- one fixed set of controls, always in the same place: the state
+             lives in enabled/disabled, not in buttons appearing and vanishing -->
+        <div class="fs"><span class="lg">Scan</span>
+          <div class="qstate" id="qstate" hidden></div>
+          <div class="runrow">
+            <button id="runlist" class="solid">▶ Scan all</button>
+          </div>
+          <div class="runctl">
+            <button id="jpause">⏸ Pause</button>
+            <button id="jreset" class="danger" title="Stop the run and clear its state">↺ Reset</button>
+          </div>
+          <label class="capline" for="maxitems">Max products per URL
+            <select id="maxitems" title="Upper limit of products taken from one URL">
+              <option value="30">30</option>
+              <option value="60" selected>60 (default)</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="0">No limit</option>
+            </select>
+          </label>
+          <div class="result" id="listresult" hidden>
+            <span id="resulttext"></span>
+            <div class="row" style="margin-top:7px">
+              <button id="listxlsx" class="grow">⬇ Excel</button>
+              <button id="listview" class="grow">View</button>
+            </div>
+          </div>
+        </div>
 
-      <div class="paste">
-        <span class="cap">Import</span>
-        <button id="importbtn">Import from file (.xlsx · .csv · .txt)</button>
-        <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
-        <div class="hint">Brand · Category · URL columns are detected automatically.
-          Without headers, every line containing a URL is still read.</div>
-        <span class="cap" style="margin-top:12px">Paste URLs</span>
-        <textarea id="bulk" rows="4" placeholder="Zara
+        <div class="fs"><span class="lg">Sites in this list</span>
+          <div class="lsearch" id="lsearch" hidden>
+            <input id="lq" type="search" placeholder="Filter brand, category or address">
+            <button id="lfold" title="Collapse or expand every brand">Collapse</button>
+          </div>
+          <div id="listbody"></div>
+        </div>
+
+        <div class="fs paste"><span class="lg">Import</span>
+          <button id="importbtn">Import from file (.xlsx · .csv · .txt)</button>
+          <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
+          <div class="hint">Brand · Category · URL columns are detected automatically.
+            Without headers, every line containing a URL is still read.</div>
+          <span class="cap" style="margin-top:12px">Paste URLs</span>
+          <textarea id="bulk" rows="4" placeholder="Zara
 - Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
-        <button id="addbulk">Add to list</button>
+          <button id="addbulk">Add to list</button>
+        </div>
+
+        </div>
       </div>
     </section>
 

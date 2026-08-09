@@ -77,9 +77,19 @@ function collectionSig(url) {
   try {
     const u = new URL(url);
     const p = u.searchParams;
-    const q = (p.get("q") || "").trim().toLowerCase();
-    const facet = (p.get("facet") || "").trim().toLowerCase();
-    const cat = (p.get("cat_id") || p.get("catId") || p.get("cat_ids") || "").trim();
+    /* Every query parameter is part of the collection's identity unless it is
+       a page cursor or a tracking tag. Naming the meaningful ones one site at
+       a time does not scale and gets it wrong quietly: Abercrombie splits
+       Tees, Tanks and Dresses with categoryId + facet on ONE path, so a
+       short list of known keys made three categories look like one and the
+       second and third were skipped as "already scanning that". Dropping the
+       cursor keys is what keeps a paginated page recognisable as the same
+       collection. */
+    const SKIP = /^(page|pageid|pagenum|pageno|nao|start|offset|begin|mlink|utm_[a-z]+|gclid|fbclid|msclkid|srsltid|icid)$/i;
+    const parts = [];
+    p.forEach((v, k) => { if (!SKIP.test(k)) parts.push(k.toLowerCase() + "=" + String(v).trim().toLowerCase()); });
+    parts.sort();
+    const query = parts.join("&");
     // Gap-family SPAs put the real category filters in the FRAGMENT
     // (#pageId=0&style=…&neckline=…) — hoodies and zip-ups share the exact
     // same path and query. Fold key=value fragments into the signature (minus
@@ -89,11 +99,11 @@ function collectionSig(url) {
     let frag = "";
     if (h.includes("=")) {
       const fp = new URLSearchParams(h);
-      ["pageId", "page", "mlink"].forEach(k => fp.delete(k));
+      [...fp.keys()].forEach(k => { if (SKIP.test(k)) fp.delete(k); });
       fp.sort();
       frag = fp.toString().toLowerCase();
     }
-    return u.pathname + "|" + q + "|" + facet + "|" + cat + "|" + frag;
+    return u.pathname + "|" + query + "|" + frag;
   } catch (e) { return url; }
 }
 
