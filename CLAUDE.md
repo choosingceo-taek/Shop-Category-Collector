@@ -26,8 +26,10 @@
 
 ## 현재 상태 요약 (v1.7.x)
 
-- 수집: 현재 카테고리/검색의 **전 페이지 자동 순회** (모르면 다음 페이지를 직접
-  열어 확인하는 probe 방식 — 감지 실패로 페이지가 누락되지 않음)
+- 수집: **현재 페이지만** (기본값). 카테고리 전체를 훑으면 리서치 한 번에 쓸 수
+  없는 양이 나오고, 목적은 "고른 카테고리들의 리스트"이지 전수 덤프가 아니다.
+  무한 스크롤 그리드는 스크롤로 다 펼쳐지는 그 한 페이지가 대상.
+  전 페이지 순회 코드는 남아 있고 `singlePage:false`로 켤 수 있다.
 - 엔진 라우팅: `sites.js`의 어댑터 레지스트리 `[walmart, target, cottonon, zara, cos, massimodutti, shopify, generic]`
   - walmart: 커스텀 SPA 엔진 (embedded JSON 컨테이너 스코핑 + 상세 fetch)
   - target: 커스텀 SPA (?Nao=24 오프셋 페이지네이션, JSON-LD·불릿 상세, multiBrand)

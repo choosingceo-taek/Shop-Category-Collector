@@ -194,7 +194,7 @@
           <small>Drop items containing these words · comma-separated</small></div>
         <button id="fclear">✕ Clear filters</button>
       </details>
-      <button id="run" class="act">Scan All Pages → Excel</button>
+      <button id="run" class="act">Scan This Page → Excel</button>
       <div class="actrow">
         <button id="pr2" class="act" disabled>⏸ Pause</button>
         <button id="reset2" class="act">↺ Reset</button>

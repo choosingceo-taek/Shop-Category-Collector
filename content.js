@@ -179,9 +179,10 @@ async function runStep(j) {
     const page = (a.context && (a.context(document).page || 1)) || 1;
     if (page <= j.pagesDone) {
       // this page is already collected (resume/reload) -> jump to the next one
-      const more = (j.totalPages && j.pagesDone < j.totalPages) ||
+      const more = j.singlePage === false && (
+                   (j.totalPages && j.pagesDone < j.totalPages) ||
                    (j.resultCount && j.items.length < j.resultCount) ||
-                   (!j.totalPages && !j.resultCount);
+                   (!j.totalPages && !j.resultCount));
       const next = more ? a.nextPageUrl(location.href, j.pagesDone) : null;
       if (next && j.pagesDone < MAX_PAGES) { await sleep(600); location.href = next; }
       else { j.phase = j.withSpec ? "spec" : "build"; await s(j); step(); }
@@ -236,9 +237,16 @@ async function runStep(j) {
     j.emptyStreak = added === 0 ? (j.emptyStreak || 0) + 1 : 0;
     await s(j);
     const target = j.resultCount ? "/" + j.resultCount : "";
-    await report(`Collecting… ${page}${j.totalPages ? "/" + j.totalPages + "p" : "p"} · ${j.items.length}${target} items (+${added} this page)`);
+    await report(j.singlePage === false
+      ? `Collecting… ${page}${j.totalPages ? "/" + j.totalPages + "p" : "p"} · ${j.items.length}${target} items (+${added} this page)`
+      : `이 페이지에서 ${j.items.length}${target}개 수집`);
 
-    const next = a.nextPageUrl(location.href, page);
+    // Current page only (the default). Walking a whole category returns far more
+    // products than a research pass can use, and the point is a curated list of
+    // categories rather than an exhaustive dump — so we scrape the page the user
+    // chose and stop. Infinite-scroll grids still scroll out fully: that IS the
+    // one page. Set singlePage:false to restore full pagination.
+    const next = j.singlePage === false ? a.nextPageUrl(location.href, page) : null;
     // Keep paginating while the site's reported total says items are missing —
     // but with a small tolerance: the reported count often includes 1-2
     // sponsored/unavailable items that never render (e.g. "12" for an 11-item
@@ -455,6 +463,7 @@ async function startJob(opts) {
   await s({ active: true, paused: false, phase: "list", items: [], seen: {}, pagesDone: 0,
       totalPages: 0, emptyStreak: 0, withSpec: opts.withSpec !== false, tabId,
       startUrl: location.href, queued: !!opts.queued,
+      singlePage: opts.singlePage !== false,   // current page only unless asked otherwise
       filters: opts.filters || {}, sig: collectionSig(location.href), status: "Starting…" });
   // collection always begins at the first page, wherever the user started from.
   // Adapters whose pagination isn't ?page=N (e.g. SFCC's ?start=N&sz=M) provide
