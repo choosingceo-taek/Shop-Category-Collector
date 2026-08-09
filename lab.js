@@ -268,31 +268,31 @@
         </div>
       </div>
 
-      <h3>🔄 Latest change by ${unit} <span class="sub">vs the previous recorded period</span></h3>
-      ${changeBoard(c, label)}
+      <section class="sec"><h3>🔄 Latest change by ${unit} <span class="sub">vs the previous recorded period</span></h3>
+      ${changeBoard(c, label)}</section>
 
-      <h3>👀 ${esc(label)} to watch now <span class="sub">reason always shown</span></h3>
-      ${emergingBoard(e)}
+      <section class="sec"><h3>👀 ${esc(label)} to watch now <span class="sub">reason always shown</span></h3>
+      ${emergingBoard(e)}</section>
 
-      <h3>🏆 Most seen ${esc(label)} <span class="sub">whole window, by frequency</span></h3>
-      ${rankedList(rk)}
+      <section class="sec"><h3>🏆 Most seen ${esc(label)} <span class="sub">whole window, by frequency</span></h3>
+      ${rankedList(rk)}</section>
 
-      <h3>🆕 New arrivals per period</h3>
-      ${volumeChart(s.labels, s.counts)}
+      <section class="sec"><h3>🆕 New arrivals per period</h3>
+      ${volumeChart(s.labels, s.counts)}</section>
 
-      <h3>📈 ${esc(label)} share over time <span class="sub">% of each period\u2019s new arrivals</span></h3>
-      ${lineChart(s, { alt: label + " share over time" })}
+      <section class="sec"><h3>📈 ${esc(label)} share over time <span class="sub">% of each period\u2019s new arrivals</span></h3>
+      ${lineChart(s, { alt: label + " share over time" })}</section>
 
       <div class="movers">
-        <div><h3>⬆️ Rising over the window</h3>${moverList(m.risers || [], "up")}</div>
-        <div><h3>⬇️ Falling over the window</h3>${moverList(m.fallers || [], "down")}</div>
+        <section class="sec"><h3>⬆️ Rising over the window</h3>${moverList(m.risers || [], "up")}</section>
+        <section class="sec"><h3>⬇️ Falling over the window</h3>${moverList(m.fallers || [], "down")}</section>
       </div>
 
-      <h3>💰 Price &amp; markdown pressure <span class="sub">where the season stands</span></h3>
-      ${priceBoard(T.priceByPeriod(items, base), unit)}
+      <section class="sec"><h3>💰 Price &amp; markdown pressure <span class="sub">where the season stands</span></h3>
+      ${priceBoard(T.priceByPeriod(items, base), unit)}</section>
 
-      <h3>🗓️ Record by ${unit} <span class="sub">at a glance</span></h3>
-      ${ledgerTable(led)}
+      <section class="sec"><h3>🗓️ Record by ${unit} <span class="sub">at a glance</span></h3>
+      ${ledgerTable(led)}</section>
 
       <p class="foot">
         <b>Latest change</b> compares the last two periods that actually have data, so skipping a
