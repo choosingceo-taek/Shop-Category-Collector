@@ -100,7 +100,8 @@
 
   function paintNow() {
     const now = $("#now"), add = $("#addbtn"), dot = $("#dot");
-    dot.className = "dot" + (job && job.active && !job.paused ? " busy" : "");
+    // the lens IS the status light — toggle, never rewrite the class list
+    dot.classList.toggle("busy", !!(job && job.active && !job.paused));
     if (!read) { now.textContent = "페이지를 읽는 중…"; add.disabled = true; return; }
     if (read.kind === "internal") {
       now.innerHTML = "브라우저 내부 페이지입니다. <span class='badge'>담을 수 없음</span>";
@@ -295,7 +296,7 @@
     // clear it when the run ends — a leftover "저장됨…" line with a progress bar
     // reads as "still working" long after the scan is done
     $("#livetext").textContent = on ? (job.status || "작업 중…") : "";
-    $("#dot").className = "dot" + (on && !job.paused ? " busy" : "");
+    $("#dot").classList.toggle("busy", on && !job.paused);
     /* The controls never move or vanish — a button that disappears makes the
        user hunt for it mid-run. State shows as enabled/disabled instead. */
     const running = !!(queue && queue.active);

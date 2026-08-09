@@ -36,8 +36,12 @@
 
   header { padding:12px 14px 0; border-bottom:1px solid var(--hard); }
   .brandline { display:flex; align-items:center; gap:8px; }
-  .dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex:none; }
-  .dot.busy { background:var(--ink); animation:pulse 1.1s ease-in-out infinite; }
+  .lens { width:20px; height:20px; flex:none; color:var(--ink); display:block; }
+  .lens svg { width:100%; height:100%; display:block; }
+  .lens.busy { color:var(--accent); animation:pulse 1.1s ease-in-out infinite; }
+  /* readable by screen readers, invisible on screen */
+  .sronly { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
   h1 { font-size:13px; margin:0; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
   .tabs { display:flex; gap:18px; margin-top:11px; }
@@ -192,7 +196,19 @@
 </head>
 <body>
   <header>
-    <div class="brandline"><span class="dot" id="dot"></span><h1>Market Lens</h1></div>
+    <div class="brandline">
+      <!-- The wordmark is gone: Chrome already prints the extension name in the
+           side panel's own title bar, so repeating it spent the top of a narrow
+           panel saying what the user just read. The lens doubles as the status
+           light — it fills and pulses while a scan runs. -->
+      <span class="lens" id="dot" title="Market Lens">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2"/>
+          <path d="M15.4 15.4 L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <h1 class="sronly">Market Lens</h1>
+    </div>
     <div class="tabs">
       <button class="tab on" data-view="collector">Collector</button>
       <button class="tab" data-view="products">Products</button>
