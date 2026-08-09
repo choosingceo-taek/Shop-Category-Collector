@@ -47,12 +47,14 @@
      a glance no matter how many rows it holds. */
   .fs { background:var(--card); border-radius:var(--r); padding:12px;
     margin:0 0 18px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
-  .fhead { display:flex; align-items:center; gap:9px; margin:0 0 10px -2px; }
+  .fhead { display:flex; align-items:center; gap:9px; margin:0 0 11px -2px; }
+  .fhead .ftools { margin-left:auto; display:flex; gap:5px; align-items:center; }
   .fico { width:29px; height:29px; display:flex; align-items:center; justify-content:center;
     background:var(--wash); border-radius:7px; font-size:14px; flex:none; }
-  .fhead .ft { display:flex; flex-direction:column; min-width:0; line-height:1.3; }
-  .fhead b { font-size:13px; font-weight:600; letter-spacing:-.01em; }
-  .fhead .fsub { font-size:10.5px; color:var(--muted); }
+  .fhead .ft { min-width:0; }
+  .fhead b { font-size:14px; font-weight:650; letter-spacing:-.01em; }
+  .xbtn { font-size:11px; padding:4px 9px; border-radius:999px; background:var(--wash);
+    border-color:transparent; color:var(--ink2); }
   .cap { text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
   .row { display:flex; gap:6px; align-items:center; }
   .grow { flex:1; min-width:0; }
@@ -126,13 +128,7 @@
   .lchips button .n { font-weight:400; opacity:.6; margin-left:5px; }
   .lchips button.on { background:var(--hard); color:var(--bg); border-color:var(--hard); }
   .lchips button.add { font-weight:400; color:var(--muted); }
-  .ltools { display:flex; align-items:center; gap:5px; margin-bottom:10px; }
-  .ltools .lbl { color:var(--muted); font-size:11.5px; }
-  .ltools button { font-size:11.5px; padding:5px 11px; border-radius:999px;
-    background:var(--wash); border-color:transparent; }
-  .ltools .iconbtn { width:28px; height:28px; font-size:12px; background:var(--wash);
-    border-color:transparent; }
-  .ltools .tsep { flex:1; }
+  .iconbtn { background:var(--wash); border-color:transparent; }
   .iconbtn { width:30px; height:30px; padding:0; display:inline-flex; align-items:center;
     justify-content:center; flex:none; font-size:13px; border-radius:50%; }
   .runrow { display:flex; gap:6px; margin-bottom:8px; }
@@ -178,9 +174,9 @@
   .lsearch { display:flex; gap:6px; align-items:center; margin:2px 0 10px; }
   .lsearch input { flex:1; min-width:0; font-size:12.5px; padding:8px 11px;
     border-radius:999px; background:var(--wash); border-color:transparent; }
-  .lsearch button { font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:6px 9px; }
-  .lsum { font-size:10px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase;
-    margin:0 2px 8px; }
+  .lsearch button { font-size:11.5px; padding:6px 11px; border-radius:999px;
+    background:var(--wash); border-color:transparent; }
+  .lsum { font-size:11px; color:var(--muted); margin:0 2px 9px; }
   .grp { margin-bottom:10px; border:0; border-radius:var(--r-s);
     background:var(--wash); overflow:hidden; }
   .grp .gname { display:flex; align-items:center; gap:7px; width:100%; text-align:left;
@@ -212,14 +208,15 @@
   .ent .act:hover { color:var(--ink); }
   .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
 
-  .paste { padding:15px 12px 13px; }
-  .paste .cap { color:var(--muted); display:block; margin-bottom:6px; }
-  .paste textarea { width:100%; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
-    border:1px solid var(--line); padding:8px 9px; background:var(--bg); color:var(--ink);
-    resize:vertical; }
-  .paste button { margin-top:6px; width:100%; font-size:10px; letter-spacing:.09em;
-    text-transform:uppercase; padding:7px; }
-  .paste .hint { font-size:10.5px; color:var(--muted); line-height:1.55; margin-top:6px; }
+  /* bulk paste is the rare path, so it is folded away until asked for */
+  .bulk { margin-top:12px; border-top:1px solid var(--line); padding-top:10px; }
+  .bulk summary { font-size:11.5px; color:var(--muted); cursor:pointer; }
+  .bulk textarea { width:100%; margin-top:8px; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+    border:1px solid var(--line2); border-radius:var(--r-s); padding:8px 9px;
+    background:var(--card); color:var(--ink); resize:vertical; }
+  .bulk button { margin-top:6px; width:100%; font-size:12.5px; font-weight:600;
+    border-radius:var(--r-s); padding:8px; }
+  .bulk .hint { font-size:10.5px; color:var(--muted); line-height:1.55; margin-top:7px; }
 
   .live { padding:9px 14px; font-size:11.5px;
     color:var(--ink2); display:none; }
@@ -331,39 +328,65 @@
       <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
 
       <div class="listwrap">
-        <!-- Four labelled groups, in the order the work happens: pick the
-             list, put a page in it, run it, look at what is in it. Each one
-             names itself on its own top border, so a glance answers "what is
-             this row of controls for" without a heading line per block. -->
+        <!-- TWO cards, because there are only two things here.
+
+             Lists, adding a page, importing a sheet and the sites themselves
+             were four separate blocks, but every one of them is an operation
+             on the SAME object — the list. Split apart they read as four
+             features to learn; together they read as one thing you manage,
+             which is what it is. Scanning is the only genuinely different
+             act (it goes out and does work), so it keeps its own card. -->
         <div class="panelcard">
 
-        <div class="fs"><div class="fhead"><span class="fico">🗂️</span><span class="ft"><b>Lists</b><span class="fsub">Sites you collect, kept as named lists</span></span></div>
-          <!-- chips, not a dropdown: a dropdown hides how many lists exist
-               and how big each one is; the chips answer both at rest -->
+        <div class="fs">
+          <div class="fhead"><span class="fico">🗂️</span><span class="ft"><b>Sites</b></span>
+            <!-- the list's own tools, as icons: rename, delete, import, and
+                 the two export formats, which name themselves -->
+            <span class="ftools" id="ltools">
+              <button class="iconbtn" id="renlist" title="Rename this list" aria-label="Rename this list">✎</button>
+              <button class="iconbtn" id="dellist" title="Delete this list" aria-label="Delete this list">🗑</button>
+              <button class="iconbtn" id="importbtn" title="Import a sheet of sites" aria-label="Import a sheet of sites">⬆</button>
+              <button class="xbtn" id="explisttxt" title="Export as .txt — edit it and import again">.txt</button>
+              <button class="xbtn" id="explistxlsx" title="Export as .xlsx — edit it and import again">.xlsx</button>
+            </span>
+          </div>
+          <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
+
+          <!-- which list: chips, not a dropdown — a dropdown hides how many
+               lists exist and how big each one is -->
           <div class="lhead">
             <div class="lchips" id="lchips"></div>
             <select id="listsel" title="Choose a list" hidden></select>
           </div>
-          <div class="ltools" id="ltools">
-            <button class="iconbtn" id="renlist" title="Rename this list">✎</button>
-            <button class="iconbtn" id="dellist" title="Delete this list">🗑</button>
-            <span class="tsep"></span>
-            <span class="lbl">Export</span>
-            <button id="explisttxt" title="Edit in a text editor and import again to update the list">.txt</button>
-            <button id="explistxlsx" title="Edit in Excel and import again to update the list">.xlsx</button>
-          </div>
-        </div>
 
-        <div class="fs"><div class="fhead"><span class="fico">📌</span><span class="ft"><b>Add this page</b><span class="fsub">Files the page you are looking at into the list</span></span></div>
+          <!-- put the page you are on into it -->
           <div class="adder">
             <div class="now" id="now">Reading the page…</div>
             <button id="addbtn" class="solid">＋ Add this page</button>
           </div>
+
+          <!-- what is in it -->
+          <div class="lsearch" id="lsearch" hidden>
+            <input id="lq" type="search" placeholder="Filter sites">
+            <button id="lfold" title="Collapse or expand every brand">Collapse</button>
+          </div>
+          <div id="listbody"></div>
+
+          <!-- adding many at once lives with adding one, quietly at the end -->
+          <details class="bulk">
+            <summary>Paste several URLs</summary>
+            <textarea id="bulk" rows="4" placeholder="Zara
+- Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
+            <button id="addbulk">Add to list</button>
+            <div class="hint">Import (⬆ above) reads Brand · Category · URL columns
+              automatically; without headers every line containing a URL is still read.</div>
+          </details>
         </div>
 
         <!-- one fixed set of controls, always in the same place: the state
              lives in enabled/disabled, not in buttons appearing and vanishing -->
-        <div class="fs"><div class="fhead"><span class="fico">▶️</span><span class="ft"><b>Scan</b><span class="fsub">Visits every site in the list and collects products</span></span></div>
+        <div class="fs">
+          <div class="fhead"><span class="fico">▶️</span><span class="ft"><b>Scan</b></span></div>
           <div class="qstate" id="qstate" hidden></div>
           <div class="runrow">
             <button id="runlist" class="solid">▶ Scan all</button>
@@ -388,25 +411,6 @@
               <button id="listview" class="grow">View</button>
             </div>
           </div>
-        </div>
-
-        <div class="fs"><div class="fhead"><span class="fico">🏷️</span><span class="ft"><b>Sites in this list</b><span class="fsub">Grouped by brand — tap a brand to fold it</span></span></div>
-          <div class="lsearch" id="lsearch" hidden>
-            <input id="lq" type="search" placeholder="Filter brand, category or address">
-            <button id="lfold" title="Collapse or expand every brand">Collapse</button>
-          </div>
-          <div id="listbody"></div>
-        </div>
-
-        <div class="fs paste"><div class="fhead"><span class="fico">⬆️</span><span class="ft"><b>Import</b><span class="fsub">Bring in a sheet or paste URLs</span></span></div>
-          <button id="importbtn">Import from file (.xlsx · .csv · .txt)</button>
-          <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
-          <div class="hint">Brand · Category · URL columns are detected automatically.
-            Without headers, every line containing a URL is still read.</div>
-          <span class="cap" style="margin-top:12px">Paste URLs</span>
-          <textarea id="bulk" rows="4" placeholder="Zara
-- Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
-          <button id="addbulk">Add to list</button>
         </div>
 
         </div>

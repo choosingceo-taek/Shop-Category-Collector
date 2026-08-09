@@ -307,7 +307,7 @@
     if (!entries.length) {
       body.innerHTML = '<div class="lempty">No sites in this list yet.<br>' +
         'Open a brand\'s category page and press <b>＋ Add this page</b>,<br>' +
-        'or bring a whole sheet in with <b>Import</b> below.</div>';
+        'or bring a whole sheet in with <b>⬆</b> above.</div>';
       return;
     }
     const qIdx = e => running ? queue.list.findIndex(x => L.normUrl(x.url) === L.normUrl(e.url)) : -1;
