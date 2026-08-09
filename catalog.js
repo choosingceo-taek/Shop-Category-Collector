@@ -99,6 +99,12 @@
     return isFinite(t) ? t : null;
   };
 
+  const byBrand = (x, y) => {
+    const a = String(x.brand || ""), b = String(y.brand || "");
+    if (!a || !b) return (!a && !b) ? 0 : (a ? -1 : 1);
+    return a.localeCompare(b);
+  };
+
   function periodRange(v) {
     if (!v) return null;
     const now = new Date();
@@ -147,8 +153,9 @@
       : sort === "name" ? String(x.name).localeCompare(String(y.name))
       // newest upload first; rows with no upload date go last, never guessed at
       : sort === "launch" ? ((launchedAt(y) ?? -1) - (launchedAt(x) ?? -1))
-      : sort === "brand" ? (String(x.brand || "￿").localeCompare(String(y.brand || "￿"))
-                            || (y.addedAt || 0) - (x.addedAt || 0))
+      // no brand sinks to the bottom; written out rather than using a U+FFFF
+      // sentinel, which makes the file invalid UTF-8 and blocks the extension
+      : sort === "brand" ? (byBrand(x, y) || (y.addedAt || 0) - (x.addedAt || 0))
       : (y.addedAt || 0) - (x.addedAt || 0));
     return out;
   }

@@ -134,6 +134,11 @@
 
 ## 작업 관행
 
+- **NEVER 유니코드 noncharacter(U+FFFF, U+FFFE, U+FDD0~FDEF)를 소스에 넣지 말 것.**
+  "가장 뒤로 정렬" 같은 sentinel로 쓰기 쉬운데, 크롬이 "isn't UTF-8 encoded"로
+  그 파일을 거부하고 **manifest 전체가 로드 실패**한다(확장이 아예 설치 안 됨).
+  Node 테스트는 이걸 못 잡으므로 `scratchpad/encoding-test.js`가 파일 단위로 검사한다.
+  정렬에서 빈 값을 뒤로 보내려면 비교 함수에서 명시적으로 분기할 것.
 - 모든 변경은 Node 테스트(`scratchpad/*.js` 스위트)로 회귀 확인 후 커밋.
   라이브 사이트 접근이 차단된 환경이므로, 실제 페이지 구조는 사용자가
   `diagnose-console.js`(Walmart) / `diagnose-generic.js`(기타)를 콘솔에 붙여넣은

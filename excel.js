@@ -296,9 +296,16 @@
        covers one category, so a brand's categories land together anyway.
        Array#sort is stable, so inside a brand the shop's own order survives —
        that order is the merchandiser's ranking and re-sorting by name would
-       throw the information away. Rows with no brand sink to the bottom. */
-    const grp = r => String(r.brand || "￿").toLowerCase();
-    const kept = unsorted.slice().sort((a, b) => grp(a).localeCompare(grp(b)));
+       throw the information away. Rows with no brand sink to the bottom —
+       spelled out rather than done with a high sentinel character, because a
+       U+FFFF sentinel makes the file invalid UTF-8 and Chrome then refuses to
+       load the whole extension. */
+    const brandOf = r => String(r.brand || "").toLowerCase();
+    const kept = unsorted.slice().sort((a, b) => {
+      const x = brandOf(a), y = brandOf(b);
+      if (!x || !y) return (!x && !y) ? 0 : (x ? -1 : 1);
+      return x.localeCompare(y);
+    });
 
     // colour-variant families: how many kept rows share each product slug
     const family = new Map();
