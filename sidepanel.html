@@ -4,40 +4,40 @@
 <meta charset="utf-8">
 <title>Market Lens</title>
 <style>
-  /* Editorial, monochrome — modeled on the team's Market Lens app: uppercase
-     micro-labels, hairline rules, square corners, black on white. */
+  /* Minimal / editorial: monochrome, hairline rules, square corners, uppercase
+     micro-labels. The tone matches the team's other tools; the layout is our
+     own, built around the one job — collecting reference URLs while browsing. */
   :root {
     color-scheme: light dark;
-    --bg:#ffffff; --ink:#111111; --ink2:#444444; --muted:#8a8a8a;
-    --line:#e4e2de; --hard:#111111; --wash:#f5f4f1; --overlay:rgba(20,20,20,.55);
+    --bg:#ffffff; --ink:#111111; --ink2:#454545; --muted:#8c8c8c;
+    --line:#e5e3df; --hard:#111111; --wash:#f6f5f2; --overlay:rgba(18,18,18,.55);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#121212; --ink:#f2f0ec; --ink2:#c9c7c2; --muted:#8f8d88;
-      --line:#2b2b29; --hard:#f2f0ec; --wash:#1c1c1a; --overlay:rgba(0,0,0,.62); }
+    :root { --bg:#121212; --ink:#f2f0ec; --ink2:#c8c6c1; --muted:#8f8d88;
+      --line:#2b2b29; --hard:#f2f0ec; --wash:#1c1c1a; --overlay:rgba(0,0,0,.6); }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
     font:13px/1.5 system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;
     display:flex; flex-direction:column; height:100vh; overflow:hidden; }
-  button, select, input, textarea { font:inherit; color:var(--ink); background:var(--bg);
+  button, select, input { font:inherit; color:var(--ink); background:var(--bg);
     border:1px solid var(--line); border-radius:0; padding:7px 10px; }
   button { cursor:pointer; }
   button:hover:not(:disabled) { border-color:var(--hard); }
   button:disabled { opacity:.4; cursor:default; }
-  .solid { background:var(--hard); color:var(--bg); border-color:var(--hard);
-    font-weight:600; letter-spacing:.02em; }
+  .solid { background:var(--hard); color:var(--bg); border-color:var(--hard); font-weight:600; }
   .cap { text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
   .row { display:flex; gap:6px; align-items:center; }
   .grow { flex:1; min-width:0; }
 
-  header { padding:13px 14px 0; background:var(--bg); border-bottom:1px solid var(--hard); }
+  header { padding:12px 14px 0; border-bottom:1px solid var(--hard); }
   .brandline { display:flex; align-items:center; gap:8px; }
   .dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex:none; }
   .dot.busy { background:var(--ink); animation:pulse 1.1s ease-in-out infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
-  h1 { font-size:14px; margin:0; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+  h1 { font-size:13px; margin:0; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
   .tabs { display:flex; gap:18px; margin-top:11px; }
-  .tab { border:0; background:none; padding:0 0 9px; font-size:11px; font-weight:700;
+  .tab { border:0; background:none; padding:0 0 9px; font-size:10.5px; font-weight:700;
     letter-spacing:.12em; text-transform:uppercase; color:var(--muted);
     border-bottom:2px solid transparent; }
   .tab.on { color:var(--ink); border-bottom-color:var(--hard); }
@@ -46,55 +46,57 @@
   .view { flex:1; overflow-y:auto; display:none; flex-direction:column; }
   .view.on { display:flex; }
 
-  /* ---- MARKET RESEARCH: browse the catalog, select, export ---- */
-  .filters { padding:12px 14px; border-bottom:1px solid var(--line); display:flex;
-    flex-direction:column; gap:9px; }
-  .search { position:relative; }
-  .search input { width:100%; padding:9px 11px; letter-spacing:.06em;
-    text-transform:uppercase; font-size:11px; }
-  .search input::placeholder { color:var(--muted); }
-  .selwrap { flex:1; min-width:0; }
-  .selwrap .cap { display:block; color:var(--muted); margin-bottom:3px; }
-  .selwrap select { width:100%; text-transform:uppercase; font-size:11px; letter-spacing:.05em; }
-  .iconbtn { width:34px; height:34px; padding:0; display:inline-flex; align-items:center;
+  /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
+  .adder { padding:13px 14px; border-bottom:1px solid var(--line); }
+  .now { font-size:11.5px; color:var(--ink2); margin-bottom:10px; line-height:1.5; }
+  .now .host { font-weight:700; color:var(--ink); }
+  .now .badge { display:inline-block; margin-left:6px; padding:1px 6px; font-size:9px;
+    letter-spacing:.09em; text-transform:uppercase; border:1px solid var(--line); color:var(--muted); }
+  .now .badge.ok { border-color:var(--hard); color:var(--ink); }
+  #addbtn { width:100%; padding:11px; letter-spacing:.1em; text-transform:uppercase;
+    font-size:11px; font-weight:700; }
+  .addrow { display:flex; gap:6px; margin-top:6px; }
+  .addrow button { flex:1; font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:6px; }
+
+  .listwrap { padding:11px 14px 18px; }
+  .lhead { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
+  .lhead select { flex:1; min-width:0; font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .iconbtn { width:30px; height:30px; padding:0; display:inline-flex; align-items:center;
     justify-content:center; flex:none; font-size:13px; }
+  .runrow { display:flex; gap:6px; margin-bottom:12px; }
+  .runrow button { flex:1; font-size:10.5px; font-weight:700; letter-spacing:.1em;
+    text-transform:uppercase; padding:9px; }
+  .qstate { padding:8px 10px; background:var(--wash); font-size:11.5px; margin-bottom:11px;
+    border-left:2px solid var(--hard); }
 
-  .pgrid { display:grid; grid-template-columns:1fr 1fr; gap:2px; padding:2px; }
-  .pc { position:relative; background:var(--wash); }
-  .pc img, .pc .ph { width:100%; aspect-ratio:3/4; object-fit:cover; display:block; background:var(--wash); }
-  .pc .cap-o { position:absolute; left:0; right:0; bottom:0; padding:22px 9px 8px;
-    background:linear-gradient(transparent, var(--overlay)); color:#fff;
-    display:flex; flex-direction:column; gap:1px; }
-  .pc .b { font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
-  .pc .n { font-size:10.5px; line-height:1.3; overflow:hidden; display:-webkit-box;
-    -webkit-line-clamp:1; -webkit-box-orient:vertical; }
-  .pc .p { font-size:11.5px; font-weight:700; }
-  .pc .p s { font-weight:400; opacity:.75; margin-left:4px; }
-  .pc .ck { position:absolute; top:8px; right:8px; width:17px; height:17px; margin:0;
-    appearance:none; background:#fff; border:1px solid #111; cursor:pointer; }
-  .pc .ck:checked { background:#111; }
-  .pc .ck:checked::after { content:"✓"; color:#fff; font-size:11px; display:flex;
-    align-items:center; justify-content:center; height:100%; }
-  .pc.sel { outline:2px solid var(--hard); outline-offset:-2px; }
-  .pempty { grid-column:1/-1; text-align:center; color:var(--muted); padding:44px 18px;
-    font-size:12px; line-height:1.8; }
+  .grp { margin-bottom:14px; }
+  .grp .gname { display:flex; align-items:baseline; gap:6px; font-size:9.5px; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.12em; padding-bottom:5px;
+    border-bottom:1px solid var(--line); margin-bottom:2px; }
+  .grp .gn { color:var(--muted); }
+  .ent { display:flex; align-items:center; gap:8px; padding:8px 0;
+    border-bottom:1px solid var(--line); }
+  .ent.cur { background:var(--wash); }
+  .ent.done { opacity:.42; }
+  .ent .txt { flex:1; min-width:0; }
+  .ent .lb { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ent .u { font-size:10px; color:var(--muted); overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; display:block; }
+  .ent .tag { font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+    border:1px solid var(--line); padding:1px 4px; flex:none; }
+  .ent .act { border:0; background:none; color:var(--muted); padding:2px 4px; font-size:11px; flex:none; }
+  .ent .act:hover { color:var(--ink); }
+  .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
 
-  .selbar { border-top:1px solid var(--hard); background:var(--bg); padding:9px 14px;
-    display:flex; align-items:center; gap:8px; }
-  .selbar .cnt { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
-  .selbar .sp { flex:1; }
-  .cir { width:36px; height:36px; border-radius:50%; padding:0; display:inline-flex;
-    align-items:center; justify-content:center; font-size:12px; border:1px solid var(--hard); }
-  .cir.txt { font-size:9.5px; font-weight:700; letter-spacing:.06em; }
+  .paste { border-top:1px solid var(--line); padding:12px 14px 20px; }
+  .paste .cap { color:var(--muted); display:block; margin-bottom:6px; }
+  .paste textarea { width:100%; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+    border:1px solid var(--line); padding:8px 9px; background:var(--bg); color:var(--ink);
+    resize:vertical; }
+  .paste button { margin-top:6px; width:100%; font-size:10px; letter-spacing:.09em;
+    text-transform:uppercase; padding:7px; }
 
-  /* ---- SCANNER: context, scan list, progress, clips ---- */
-  .say { padding:12px 14px; border-bottom:1px solid var(--line); }
-  .say .obs { font-size:12.5px; color:var(--ink2); margin-bottom:9px; }
-  .say .obs b { color:var(--ink); font-weight:700; }
-  .say .sub { display:block; color:var(--muted); font-size:11.5px; margin-top:3px; }
-  .say .cta { width:100%; }
-  .say .alt { margin-top:6px; width:100%; }
-  .live { padding:9px 14px; border-bottom:1px solid var(--line); font-size:12px;
+  .live { padding:9px 14px; border-bottom:1px solid var(--line); font-size:11.5px;
     color:var(--ink2); display:none; }
   .live.on { display:block; }
   .bar { height:2px; background:var(--line); margin-top:7px; overflow:hidden; }
@@ -102,43 +104,43 @@
     animation:slide 1.3s ease-in-out infinite; }
   @keyframes slide { 0%{margin-left:-30%} 100%{margin-left:100%} }
 
-  .listsec { border-bottom:1px solid var(--line); padding:11px 14px 13px; }
-  .lhead { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
-  .lhead b { font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
-  .lcount { color:var(--muted); font-size:11px; }
-  .mini { padding:4px 10px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; }
-  .qstate { padding:8px 10px; background:var(--wash); font-size:12px; margin-bottom:9px; }
-  .listbody { display:flex; flex-direction:column; gap:9px; max-height:32vh; overflow-y:auto; }
-  .bgroup .bname { font-size:9.5px; color:var(--muted); text-transform:uppercase;
-    letter-spacing:.12em; margin-bottom:4px; }
-  .chips { display:flex; flex-wrap:wrap; gap:4px; }
-  .chip { display:inline-flex; align-items:center; gap:5px; max-width:100%;
-    border:1px solid var(--line); padding:3px 8px; font-size:11px; background:var(--bg); }
-  .chip.cur { border-color:var(--hard); background:var(--wash); }
-  .chip.done { opacity:.45; }
-  .chip a { color:inherit; text-decoration:none; overflow:hidden; text-overflow:ellipsis;
-    white-space:nowrap; max-width:150px; }
-  .chip a:hover { text-decoration:underline; }
-  .chip .cx { border:0; background:none; color:var(--muted); padding:0 1px; cursor:pointer; font-size:11px; }
-  .lempty { color:var(--muted); font-size:12px; line-height:1.6; }
+  /* ---------- PRODUCTS: what the scans collected ---------- */
+  .filters { padding:11px 14px; border-bottom:1px solid var(--line);
+    display:flex; flex-direction:column; gap:8px; }
+  .filters input[type=search] { width:100%; text-transform:uppercase; font-size:10.5px; letter-spacing:.06em; }
+  .selwrap { flex:1; min-width:0; }
+  .selwrap .cap { display:block; color:var(--muted); margin-bottom:3px; }
+  .selwrap select { width:100%; text-transform:uppercase; font-size:10.5px; letter-spacing:.05em; }
+  .pgrid { display:grid; grid-template-columns:1fr 1fr; gap:2px; padding:2px; }
+  .pc { position:relative; background:var(--wash); margin:0; }
+  .pc img, .pc .ph { width:100%; aspect-ratio:3/4; object-fit:cover; display:block; background:var(--wash); }
+  .pc figcaption { position:absolute; left:0; right:0; bottom:0; padding:20px 8px 7px;
+    background:linear-gradient(transparent, var(--overlay)); color:#fff;
+    display:flex; flex-direction:column; gap:1px; }
+  .pc .b { font-size:8.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+  .pc .n { font-size:10px; line-height:1.3; overflow:hidden; display:-webkit-box;
+    -webkit-line-clamp:1; -webkit-box-orient:vertical; }
+  .pc .p { font-size:11px; font-weight:700; }
+  .pc .p s { font-weight:400; opacity:.7; margin-left:4px; }
+  .pc .ck { position:absolute; top:7px; right:7px; width:16px; height:16px; margin:0;
+    appearance:none; background:#fff; border:1px solid #111; cursor:pointer; }
+  .pc .ck:checked { background:#111; }
+  .pc .ck:checked::after { content:"✓"; color:#fff; font-size:10px; display:flex;
+    align-items:center; justify-content:center; height:100%; }
+  .pc.sel { outline:2px solid var(--hard); outline-offset:-2px; }
+  .pempty { grid-column:1/-1; text-align:center; color:var(--muted); padding:40px 18px;
+    font-size:12px; line-height:1.8; }
+  .selbar { border-top:1px solid var(--hard); padding:9px 14px; display:none;
+    align-items:center; gap:8px; background:var(--bg); }
+  .selbar.on { display:flex; }
+  .selbar .cnt { font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+  .cir { width:34px; height:34px; border-radius:50%; padding:0; display:inline-flex;
+    align-items:center; justify-content:center; font-size:12px; border:1px solid var(--hard); }
+  .cir.txt { font-size:9px; font-weight:700; letter-spacing:.05em; }
 
-  .colrow { padding:10px 14px; border-bottom:1px solid var(--line); }
-  .tools { padding:10px 14px; border-bottom:1px solid var(--line); }
-  .count { font-size:11px; color:var(--muted); padding:9px 14px 0; letter-spacing:.06em; }
-  #tray { padding:10px 14px 22px; }
-  .it { display:grid; grid-template-columns:42px 1fr auto; gap:9px; align-items:start;
-    padding:8px 0; border-bottom:1px solid var(--line); }
-  .it img, .it .ph { width:42px; height:56px; object-fit:cover; background:var(--wash); display:block; }
-  .it .n { font-size:12px; line-height:1.35; overflow:hidden; display:-webkit-box;
-    -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-  .it .m { font-size:10.5px; color:var(--muted); margin-top:2px; }
-  .it .f { font-size:10.5px; color:var(--ink2); margin-top:2px; }
-  .it .x { border:0; background:none; color:var(--muted); padding:2px 5px; }
-  .it a { color:inherit; text-decoration:none; }
-  .empty { color:var(--muted); text-align:center; padding:28px 14px; font-size:12px; line-height:1.7; }
-  .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:14px;
+  .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:16px;
     background:var(--hard); color:var(--bg); padding:7px 14px; font-size:11.5px;
-    letter-spacing:.04em; opacity:0; transition:opacity .18s; pointer-events:none; z-index:9; }
+    opacity:0; transition:opacity .18s; pointer-events:none; z-index:9; }
   .toast.on { opacity:.97; }
 </style>
 </head>
@@ -146,63 +148,66 @@
   <header>
     <div class="brandline"><span class="dot" id="dot"></span><h1>Market Lens</h1></div>
     <div class="tabs">
-      <button class="tab on" data-view="research">Market Research</button>
-      <button class="tab" data-view="scanner">Scanner</button>
+      <button class="tab on" data-view="collector">Collector</button>
+      <button class="tab" data-view="products">Products</button>
     </div>
   </header>
 
   <main>
-    <!-- MARKET RESEARCH: everything collected, filterable & selectable -->
-    <section class="view on" id="v-research">
+    <!-- COLLECTOR — add whatever page you're on, then curate the list -->
+    <section class="view on" id="v-collector">
+      <div class="adder">
+        <div class="now" id="now">페이지를 읽는 중…</div>
+        <button id="addbtn" class="solid">＋ Add this page</button>
+        <div class="addrow">
+          <button id="clipbtn">＋ Clip product</button>
+          <button id="catalog">Catalog</button>
+        </div>
+      </div>
+
+      <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
+
+      <div class="listwrap">
+        <div class="lhead">
+          <select id="listsel" title="리스트 선택"></select>
+          <button class="iconbtn" id="newlist" title="새 리스트">＋</button>
+          <button class="iconbtn" id="renlist" title="리스트 이름 변경">✎</button>
+          <button class="iconbtn" id="dellist" title="리스트 삭제">🗑</button>
+        </div>
+        <div class="qstate" id="qstate" hidden></div>
+        <div class="runrow">
+          <button id="runlist" class="solid">▶ Run all</button>
+          <button id="stoplist" hidden>■ Stop</button>
+        </div>
+        <div id="listbody"></div>
+      </div>
+
+      <div class="paste">
+        <span class="cap">Paste URLs</span>
+        <textarea id="bulk" rows="4" placeholder="Zara
+- Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
+        <button id="addbulk">Add to list</button>
+      </div>
+    </section>
+
+    <!-- PRODUCTS — what the scans collected -->
+    <section class="view" id="v-products">
       <div class="filters">
-        <div class="search"><input id="psearch" type="search" placeholder="Search products"></div>
+        <input id="psearch" type="search" placeholder="Search products">
         <div class="row">
           <div class="selwrap"><span class="cap">Brand</span>
             <select id="pbrand"><option value="">All</option></select></div>
           <div class="selwrap"><span class="cap">Category</span>
             <select id="pcat"><option value="">All</option></select></div>
-          <button class="iconbtn" id="prefresh" title="새로고침" style="align-self:flex-end">↻</button>
         </div>
       </div>
       <div class="pgrid" id="pgrid"></div>
     </section>
-
-    <!-- SCANNER: the companion — reads the page, curates the scan list -->
-    <section class="view" id="v-scanner">
-      <div class="say">
-        <div class="obs" id="obs">페이지를 읽는 중…</div>
-        <button class="solid cta" id="cta" disabled>확인 중</button>
-        <button class="alt" id="alt" hidden></button>
-      </div>
-      <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
-      <section class="listsec">
-        <div class="lhead">
-          <b>Scan List</b><span class="lcount" id="lcount"></span>
-          <span style="flex:1"></span>
-          <button id="runlist" class="mini solid">▶ Run All</button>
-          <button id="stoplist" class="mini" hidden>■ Stop</button>
-        </div>
-        <div class="qstate" id="qstate" hidden></div>
-        <div id="listbody" class="listbody"></div>
-      </section>
-      <div class="colrow row">
-        <select id="col" class="grow" title="컬렉션"></select>
-        <button id="newcol" class="iconbtn" title="새 컬렉션">＋</button>
-      </div>
-      <div class="tools row">
-        <button id="catalog" class="solid grow cap" style="letter-spacing:.08em">Catalog</button>
-        <button id="export" class="cap" title="이 컬렉션 내보내기">Export</button>
-        <button id="clear" class="cap" title="이 컬렉션 비우기">Clear</button>
-      </div>
-      <div class="count" id="count"></div>
-      <div id="tray"></div>
-    </section>
   </main>
 
-  <!-- selection bar for MARKET RESEARCH -->
   <div class="selbar" id="selbar">
-    <span class="cnt" id="selcount2">Selected 0</span>
-    <span class="sp"></span>
+    <span class="cnt" id="selcount">Selected 0</span>
+    <span style="flex:1"></span>
     <button class="cir txt" id="selall" title="보이는 상품 전체 선택">ALL</button>
     <button class="cir" id="selreset" title="선택 해제">↺</button>
     <button class="cir" id="selexport" title="선택한 상품 Excel 내보내기">⬆</button>
@@ -211,6 +216,7 @@
   <div class="toast" id="toast"></div>
   <script src="exceljs.min.js"></script>
   <script src="excel.js"></script>
+  <script src="sites.js"></script>
   <script src="store.js"></script>
   <script src="lists.js"></script>
   <script src="sidepanel.js"></script>

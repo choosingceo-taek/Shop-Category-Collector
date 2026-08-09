@@ -1,33 +1,32 @@
-/* Side-panel research companion.
+/* Market Lens side panel.
 
-   What makes it read as an assistant rather than a form: it does the looking.
-   Every time the tab changes or finishes loading it re-reads the page, says what
-   it found in plain language, and offers the ONE action that fits — scan this
-   category, clip this product, or ask for access it doesn't have yet. During a
-   scan it narrates progress from the job the content script is already writing.
+   The one job: while browsing Chrome, whenever a page is worth coming back to,
+   add it to your own list of reference sites — and shape that list over time
+   (rename, regroup, split into several lists). Everything else hangs off that.
 
-   Permission model (charter: 권한 최소). Nothing is granted up front:
-   - allow-listed shops (existing host_permissions) → read via the content script
-   - any other site → the panel asks for THAT origin at the moment the user
-     clicks, through optional_host_permissions; Chrome prompts and remembers it
-   - right-click clipping needs nothing at all (activeTab, see background.js) */
+   COLLECTOR  add the current page, curate the list, run the whole list
+   PRODUCTS   what those scans collected, filter and export
+
+   Adding works on ANY page, not just the shops with an adapter: a reference URL
+   is worth keeping even when we can't scan it yet. Entries carry a SCAN/REF tag
+   so the difference is visible, and "Run all" only walks the scannable ones. */
 (function () {
   "use strict";
   const $ = s => document.querySelector(s);
-  const RC = "rc_store_v1";     // collections
+  const RC = "rc_store_v1";     // clipped products/images
   const JOB = "wpb_job";        // the scan job the content script drives
-  const QUEUE = "wpb_queue";    // the batch run over the scan list
+  const QUEUE = "wpb_queue";    // batch run over the list
+  const L = window.ScanLists;
 
   let store = { collections: [], items: [], activeId: "" };
-  let tab = null;               // current tab
-  let read = null;              // what we last understood about the page
-  let job = null;
-  let queue = null;             // live batch-run state
-  let lists = [], curList = null;   // the curated brand/category URL list
+  let tab = null, read = null, job = null, queue = null;
+  let lists = [], curList = null;
+  let products = [], picked = new Set();
 
-  const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const load = k => new Promise(r => chrome.storage.local.get(k, o => r(o[k] || null)));
-  const save = () => chrome.storage.local.set({ [RC]: store });
+  const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
 
   let toastT;
   function toast(msg) {
@@ -35,18 +34,17 @@
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 1800);
   }
 
-  function ensureCollection() {
-    if (!store.collections.length) {
-      const id = "c" + Date.now();
-      store.collections.push({ id, name: "리서치 " + new Date().toISOString().slice(0, 10), createdAt: Date.now() });
-      store.activeId = id;
-    }
-    if (!store.collections.some(c => c.id === store.activeId)) store.activeId = store.collections[0].id;
+  // Can we actually scan this URL, or is it reference-only? SITES.active falls
+  // back to the generic adapter for anything unknown, so "generic" means we have
+  // no real support for it — keep the URL, but don't promise a scan.
+  function adapterFor(url) {
+    try {
+      const a = window.SITES && window.SITES.active(url);
+      return (a && a.id !== "generic") ? a : null;
+    } catch (e) { return null; }
   }
 
-  // ---- looking at the page -------------------------------------------------
-  // Ask the content script (only present on allow-listed shops). A tab without
-  // one just doesn't answer, which is the "site we can't see yet" case.
+  // ---- current page ---------------------------------------------------------
   function askAdapter(tabId) {
     return new Promise(res => {
       let done = false;
@@ -60,162 +58,155 @@
       } catch (e) { finish(null); }
     });
   }
-  const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
-  const originOf = u => { try { return new URL(u).origin + "/*"; } catch (e) { return ""; } };
 
   async function observe() {
     const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
     tab = t || null;
     const url = (tab && tab.url) || "";
     const internal = !url || /^(chrome|edge|about|devtools|chrome-extension):/i.test(url);
-
-    if (internal) { read = { kind: "internal" }; return paint(); }
-
-    const adapter = await askAdapter(tab.id).catch(() => null);
-    if (adapter) { read = { kind: "shop", adapter, host: hostOf(url) }; return paint(); }
-
-    // not an allow-listed shop: can we already read this origin?
-    const origin = originOf(url);
-    const allowed = origin ? await chrome.permissions.contains({ origins: [origin] }).catch(() => false) : false;
-    if (!allowed) { read = { kind: "locked", host: hostOf(url), origin }; return paint(); }
-
-    // we have access — actually look at the page
-    let data = null;
-    try {
-      const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["clip.js"] });
-      data = r && r.result;
-    } catch (e) {}
-    read = { kind: "page", host: hostOf(url), origin, data: (data && data.name) ? data : null };
-    paint();
+    read = internal ? { kind: "internal" }
+      : { kind: "page", host: hostOf(url), url,
+          ctx: await askAdapter(tab.id).catch(() => null),
+          adapter: adapterFor(url) };
+    paintNow();
   }
 
-  // ---- saying what it sees, and offering the fitting action ----------------
-  function paint() {
-    const obs = $("#obs"), cta = $("#cta"), alt = $("#alt"), dot = $("#dot");
-    alt.hidden = true; cta.disabled = false;
-    dot.className = "dot" + (job && job.active && !job.paused ? " busy" : (read && read.kind !== "internal" ? "" : " idle"));
-
-    if (!read) { obs.textContent = "페이지를 읽는 중…"; cta.disabled = true; cta.textContent = "확인 중"; return; }
-
+  function paintNow() {
+    const now = $("#now"), add = $("#addbtn"), clip = $("#clipbtn"), dot = $("#dot");
+    dot.className = "dot" + (job && job.active && !job.paused ? " busy" : "");
+    if (!read) { now.textContent = "페이지를 읽는 중…"; add.disabled = true; return; }
     if (read.kind === "internal") {
-      obs.innerHTML = "브라우저 내부 페이지입니다.<span class='sub'>쇼핑몰이나 참고할 페이지를 열면 바로 읽겠습니다.</span>";
-      cta.disabled = true; cta.textContent = "읽을 페이지가 없습니다";
-      return;
+      now.innerHTML = "브라우저 내부 페이지입니다. <span class='badge'>담을 수 없음</span>";
+      add.disabled = true; clip.disabled = true; return;
     }
-
-    if (read.kind === "shop") {
-      const a = read.adapter;
-      const where = [a.site, a.category].filter(Boolean).join(" · ");
-      const inList = urlInList(tab && tab.url);
-      // The panel's job on a category page is curating the scan list: this is
-      // where the user builds their own set of brand categories to re-run.
-      // (An immediate one-off scan stays on the FAB at bottom-left.)
-      obs.innerHTML = `<b>${esc(where || read.host)}</b> 카테고리를 보고 있습니다.` +
-        `<span class='sub'>${inList
-          ? "이미 스캔 목록에 있는 카테고리입니다. ▶ 전체 스캔으로 목록 전체를 수집하세요."
-          : "목록에 담아두면 ▶ 전체 스캔 한 번으로 매주 같은 카테고리들을 다시 수집합니다. 지금 바로 이 페이지만 스캔하려면 좌측 하단 동그란 아이콘."}</span>`;
-      if (inList) {
-        cta.textContent = "✓ 목록에 있음 — 이 상품만 담기";
-        cta.onclick = clipHere;
-      } else {
-        cta.textContent = "＋ 이 카테고리를 목록에 담기";
-        cta.onclick = () => addCategoryToList(a);
-      }
-      alt.hidden = false; alt.textContent = "📁 카탈로그 열기";
-      alt.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") });
-      return;
-    }
-
-    if (read.kind === "locked") {
-      obs.innerHTML = `<b>${esc(read.host)}</b> — 아직 이 사이트를 읽을 권한이 없습니다.` +
-        `<span class='sub'>허용하면 이 사이트의 상품과 이미지를 바로 담을 수 있습니다. 허용 없이 담으려면 페이지에서 우클릭 → 컬렉션에 담기.</span>`;
-      cta.textContent = "이 사이트 읽기 허용";
-      cta.onclick = async () => {
-        const ok = await chrome.permissions.request({ origins: [read.origin] }).catch(() => false);
-        if (ok) observe(); else toast("허용하지 않으면 우클릭으로 담을 수 있습니다");
-      };
-      return;
-    }
-
-    // a readable, non-shop page
-    const d = read.data;
-    if (d) {
-      const bits = [d.brand, d.price].filter(Boolean).join(" · ");
-      obs.innerHTML = `상품 페이지로 보입니다: <b>${esc(d.name.slice(0, 70))}</b>` +
-        (bits ? `<span class='sub'>${esc(bits)}${d.fabric_composition ? " · " + esc(d.fabric_composition) : ""}</span>`
-              : `<span class='sub'>${esc(read.host)}</span>`);
-      cta.textContent = "＋ 컬렉션에 담기";
-      cta.onclick = clipHere;
-    } else {
-      obs.innerHTML = `<b>${esc(read.host)}</b>에서 상품 정보를 찾지 못했습니다.` +
-        `<span class='sub'>참고 이미지는 페이지에서 우클릭 → 이미지를 컬렉션에 담기로 저장할 수 있습니다.</span>`;
-      cta.textContent = "그래도 이 페이지 담기";
-      cta.onclick = clipHere;
-    }
+    add.disabled = false; clip.disabled = false;
+    const already = urlInList(read.url);
+    const scannable = !!(read.ctx || read.adapter);
+    const where = read.ctx ? [read.ctx.site, read.ctx.category].filter(Boolean).join(" · ") : "";
+    now.innerHTML = `<span class="host">${esc(where || read.host)}</span>` +
+      (scannable ? `<span class="badge ok">Scannable</span>` : `<span class="badge">Reference</span>`) +
+      (already ? `<span class="badge ok">In list</span>` : "");
+    add.textContent = already ? "✓ Already in list" : "＋ Add this page";
+    add.disabled = already;
   }
 
-  // ---- acting --------------------------------------------------------------
-  async function clipHere() {
-    if (!tab) return;
-    const origin = originOf(tab.url || "");
-    if (origin) {
-      const ok = await chrome.permissions.request({ origins: [origin] }).catch(() => false);
-      if (!ok) return toast("사이트 접근을 허용해야 담을 수 있습니다");
+  // ---- the list -------------------------------------------------------------
+  async function loadLists() {
+    lists = await L.load();
+    if (!lists.length) {
+      lists = [{ id: "l" + Date.now(), name: "My references", entries: [], createdAt: Date.now() }];
+      await L.save(lists);
     }
-    let data = null;
-    try {
-      const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["clip.js"] });
-      data = r && r.result;
-    } catch (e) { return toast("읽지 못했습니다: " + (e.message || e)); }
-    if (!data) return toast("상품 정보를 찾지 못했습니다");
-    if (!data.name) data.name = (tab.title || "(제목 없음)").slice(0, 200);
-    addItem(data);
+    curList = lists.find(x => curList && x.id === curList.id) || lists[0];
+  }
+  function urlInList(url) {
+    if (!url || !curList) return false;
+    const k = L.normUrl(url);
+    return (curList.entries || []).some(e => L.normUrl(e.url) === k);
   }
 
-  function addItem(data) {
-    ensureCollection();
-    const dupe = store.items.some(i => i.collectionId === store.activeId &&
-      i.product_url && i.product_url === data.product_url && i.type === data.type);
-    if (dupe) return toast("이미 담긴 항목입니다");
-    store.items.push(Object.assign({
-      id: "i" + Date.now() + Math.random().toString(36).slice(2, 6),
-      collectionId: store.activeId, addedAt: Date.now(),
-    }, data));
-    save(); renderTray(); toast("담았습니다");
+  async function addCurrentPage() {
+    if (!tab || !tab.url || !read || read.kind === "internal") return;
+    const a = read.ctx, ad = read.adapter;
+    const entry = {
+      brand: (a && a.site) || (ad && ad.label) || read.host,
+      label: (a && a.category) || (tab.title || "").replace(/\s*[|·—-]\s*[^|·—-]*$/, "").trim().slice(0, 60) || read.host,
+      url: tab.url,
+      scannable: !!(a || ad),
+    };
+    const m = L.mergeEntries(curList.entries || [], [entry]);
+    if (!m.added) return toast("이미 리스트에 있습니다");
+    curList.entries = m.list;
+    await L.save(lists);
+    renderList(); paintNow();
+    toast(`추가됨 — ${entry.brand} · ${entry.label}`);
   }
 
-  // ---- narrating the running scan -----------------------------------------
+  function renderList() {
+    const body = $("#listbody");
+    const entries = (curList && curList.entries) || [];
+    const running = !!(queue && queue.active);
+    const scannableCount = entries.filter(e => e.scannable !== false).length;
+    $("#runlist").disabled = !scannableCount || running;
+    $("#runlist").textContent = scannableCount && scannableCount !== entries.length
+      ? `▶ Run all (${scannableCount})` : "▶ Run all";
+
+    if (!entries.length) {
+      body.innerHTML = '<div class="lempty">아직 담은 사이트가 없습니다.<br>' +
+        '참고하고 싶은 페이지에서 <b>＋ Add this page</b>를 누르세요.</div>';
+      return;
+    }
+    const qIdx = e => running ? queue.list.findIndex(x => L.normUrl(x.url) === L.normUrl(e.url)) : -1;
+    const groups = new Map();
+    entries.forEach((e, i) => {
+      const b = e.brand || hostOf(e.url) || "기타";
+      if (!groups.has(b)) groups.set(b, []);
+      groups.get(b).push({ e, i });
+    });
+    body.innerHTML = [...groups.entries()].map(([brand, rows]) => `<div class="grp">
+      <div class="gname"><span>${esc(brand)}</span><span class="gn">${rows.length}</span></div>
+      ${rows.map(({ e, i }) => {
+        const qi = qIdx(e);
+        const cls = running ? (qi > -1 && qi < queue.idx ? " done" : qi === queue.idx ? " cur" : "") : "";
+        return `<div class="ent${cls}" data-i="${i}">
+          <div class="txt">
+            <div class="lb">${esc(e.label || e.url)}</div>
+            <span class="u">${esc(e.url)}</span>
+          </div>
+          ${e.scannable === false ? '<span class="tag">Ref</span>' : '<span class="tag">Scan</span>'}
+          <button class="act go" title="열기">↗</button>
+          <button class="act ren" title="이름 변경">✎</button>
+          <button class="act del" title="빼기">✕</button>
+        </div>`;
+      }).join("")}</div>`).join("");
+
+    body.querySelectorAll(".ent").forEach(el => {
+      const i = +el.dataset.i;
+      el.querySelector(".go").addEventListener("click", () =>
+        chrome.tabs.create({ url: curList.entries[i].url }));
+      el.querySelector(".del").addEventListener("click", async () => {
+        curList.entries.splice(i, 1); await L.save(lists); renderList(); paintNow();
+      });
+      el.querySelector(".ren").addEventListener("click", async () => {
+        const e = curList.entries[i];
+        const label = prompt("이름", e.label || "");
+        if (label == null) return;
+        const brand = prompt("브랜드 / 그룹", e.brand || "");
+        if (brand == null) return;
+        e.label = label.trim(); e.brand = brand.trim();
+        await L.save(lists); renderList();
+      });
+    });
+  }
+
+  function fillListSelect() {
+    const sel = $("#listsel");
+    sel.innerHTML = lists.map(l =>
+      `<option value="${esc(l.id)}">${esc(l.name)} · ${(l.entries || []).length}</option>`).join("");
+    if (curList) sel.value = curList.id;
+  }
+
+  function paintQueue() {
+    const box = $("#qstate");
+    const running = !!(queue && queue.active);
+    box.hidden = !running;
+    $("#stoplist").hidden = !running;
+    if (running) {
+      const cur = queue.list[queue.idx] || {};
+      box.innerHTML = `<b>${queue.idx + 1}/${queue.list.length}</b> ${esc(cur.brand || "")} · ${esc(cur.label || "")}`;
+    }
+    renderList();
+  }
   function paintLive() {
-    const box = $("#live");
     const on = !!(job && job.active);
-    box.classList.toggle("on", on);
+    $("#live").classList.toggle("on", on);
     if (on) $("#livetext").textContent = job.status || "작업 중…";
-    $("#dot").className = "dot" + (on && !job.paused ? " busy" : (read && read.kind !== "internal" ? "" : " idle"));
+    $("#dot").className = "dot" + (on && !job.paused ? " busy" : "");
   }
 
-  // ---- MARKET RESEARCH tab: browse the catalog, select, export -------------
-  // The catalog (IndexedDB) is readable from any extension page, so the panel
-  // can browse everything collected without opening the full tab: filter by
-  // brand/category, tick products, and export the ticked set to Excel.
-  let products = [];
-  const picked = new Set();          // product keys ticked in the grid
-
-  function tabTo(view) {
-    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.view === view));
-    $("#v-research").classList.toggle("on", view === "research");
-    $("#v-scanner").classList.toggle("on", view === "scanner");
-    $("#selbar").hidden = view !== "research";
-    if (view === "research") refreshProducts();
-  }
-  document.querySelectorAll(".tab").forEach(b =>
-    b.addEventListener("click", () => tabTo(b.dataset.view)));
-
+  // ---- products -------------------------------------------------------------
   async function refreshProducts() {
     try { products = await window.CatalogStore.allProducts(); } catch (e) { products = []; }
-    fillProductFilters();
-    renderProducts();
-  }
-  function fillProductFilters() {
     const fill = (sel, values) => {
       const cur = sel.value;
       sel.innerHTML = '<option value="">All</option>' +
@@ -224,6 +215,7 @@
     };
     fill($("#pbrand"), new Set(products.map(p => p.brand).filter(Boolean)));
     fill($("#pcat"), new Set(products.map(p => p.category).filter(Boolean)));
+    renderProducts();
   }
   const priceN = v => { const m = String(v || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
   function visibleProducts() {
@@ -237,172 +229,105 @@
     }).sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));
   }
   function renderProducts() {
-    const rows = visibleProducts();
-    const grid = $("#pgrid");
+    const rows = visibleProducts(), grid = $("#pgrid");
     if (!products.length) {
-      grid.innerHTML = '<div class="pempty">아직 수집된 상품이 없습니다.<br>SCANNER 탭에서 카테고리를 담고 ▶ Run All 하세요.</div>';
-      paintSel(); return;
-    }
-    if (!rows.length) {
+      grid.innerHTML = '<div class="pempty">아직 수집된 상품이 없습니다.<br>COLLECTOR에서 사이트를 담고 ▶ Run all 하세요.</div>';
+    } else if (!rows.length) {
       grid.innerHTML = '<div class="pempty">조건에 맞는 상품이 없습니다.</div>';
-      paintSel(); return;
+    } else {
+      grid.innerHTML = rows.slice(0, 400).map(p => {
+        const sale = p.price_was && priceN(p.price_was) > priceN(p.price);
+        const img = p.image_url ? `<img src="${esc(p.image_url)}" alt="" loading="lazy">` : '<div class="ph"></div>';
+        return `<figure class="pc${picked.has(p.key) ? " sel" : ""}" data-k="${esc(p.key)}">
+          ${img}<input class="ck" type="checkbox" ${picked.has(p.key) ? "checked" : ""}>
+          <figcaption>
+            ${p.brand ? `<span class="b">${esc(p.brand)}</span>` : ""}
+            <span class="n">${esc(p.name || "")}</span>
+            ${p.price ? `<span class="p">${esc(p.price)}${sale ? `<s>${esc(p.price_was)}</s>` : ""}</span>` : ""}
+          </figcaption></figure>`;
+      }).join("");
     }
-    grid.innerHTML = rows.slice(0, 400).map(p => {
-      const sale = p.price_was && priceN(p.price_was) > priceN(p.price);
-      const img = p.image_url ? `<img src="${esc(p.image_url)}" alt="" loading="lazy">` : '<div class="ph"></div>';
-      return `<figure class="pc${picked.has(p.key) ? " sel" : ""}" data-k="${esc(p.key)}" style="margin:0">
-        ${img}
-        <input class="ck" type="checkbox" ${picked.has(p.key) ? "checked" : ""}>
-        <figcaption class="cap-o">
-          ${p.brand ? `<span class="b">${esc(p.brand)}</span>` : ""}
-          <span class="n">${esc(p.name || "")}</span>
-          ${p.price ? `<span class="p">${esc(p.price)}${sale ? `<s>${esc(p.price_was)}</s>` : ""}</span>` : ""}
-        </figcaption></figure>`;
-    }).join("");
-    paintSel();
+    $("#selcount").textContent = "Selected " + picked.size;
   }
-  function paintSel() { $("#selcount2").textContent = "Selected " + picked.size; }
 
-  $("#pgrid").addEventListener("change", e => {
-    const ck = e.target.closest(".ck"); if (!ck) return;
-    const card = e.target.closest(".pc"); const k = card.getAttribute("data-k");
-    if (ck.checked) picked.add(k); else picked.delete(k);
-    card.classList.toggle("sel", ck.checked);
-    paintSel();
-  });
-  ["psearch", "pbrand", "pcat"].forEach(id => $("#" + id).addEventListener("input", renderProducts));
-  $("#prefresh").addEventListener("click", refreshProducts);
-  $("#selall").addEventListener("click", () => {
-    const rows = visibleProducts();
-    const allOn = rows.length && rows.every(p => picked.has(p.key));
-    rows.forEach(p => allOn ? picked.delete(p.key) : picked.add(p.key));
-    renderProducts();
-  });
-  $("#selreset").addEventListener("click", () => { picked.clear(); renderProducts(); });
-
-  // export the ticked products through the same 12-column builder the scans use
-  $("#selexport").addEventListener("click", async () => {
-    const rows = products.filter(p => picked.has(p.key));
-    if (!rows.length) return toast("선택한 상품이 없습니다");
-    const btn = $("#selexport");
-    btn.disabled = true;
+  // ---- clip (any site, via the injected extractor) --------------------------
+  async function clipHere() {
+    if (!tab) return;
+    let origin; try { origin = new URL(tab.url).origin + "/*"; } catch (e) { return; }
+    const ok = await chrome.permissions.request({ origins: [origin] }).catch(() => false);
+    if (!ok) return toast("사이트 접근을 허용해야 담을 수 있습니다");
+    let data = null;
     try {
-      const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
-        ExcelJS: window.ExcelJS,
-        fetchImage: url => new Promise(res => {
-          if (!url) return res(null);
-          try {
-            chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
-              void chrome.runtime.lastError; res(r && r.ok ? r : null);
-            });
-          } catch (e) { res(null); }
-        }),
-        filters: {},
-        onProgress: (i, total) => { $("#selcount2").textContent = `Images ${i}/${total}`; },
-      });
-      let b64 = "";
-      for (let i = 0; i < bytes.length; i += 0x8000)
-        b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-      b64 = btoa(b64);
-      const name = `selection_${rows.length}items_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      chrome.runtime.sendMessage({
-        type: "downloadFile", filename: name, b64,
-        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }, r => toast(r && r.ok ? `Excel 저장 — ${rows.length}개` : "내보내기 실패"));
-    } catch (e) { toast("내보내기 실패: " + (e.message || e)); }
-    finally { btn.disabled = false; paintSel(); }
+      const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["clip.js"] });
+      data = r && r.result;
+    } catch (e) { return toast("읽지 못했습니다"); }
+    if (!data) return toast("상품 정보를 찾지 못했습니다");
+    if (!data.name) data.name = (tab.title || "").slice(0, 200);
+    if (!store.collections.length) {
+      store.collections.push({ id: "c" + Date.now(), name: "Clips", createdAt: Date.now() });
+      store.activeId = store.collections[0].id;
+    }
+    store.items.push(Object.assign({ id: "i" + Date.now(), collectionId: store.activeId, addedAt: Date.now() }, data));
+    chrome.storage.local.set({ [RC]: store });
+    toast("클립에 담았습니다");
+  }
+
+  // ---- wiring ---------------------------------------------------------------
+  document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
+    const v = b.dataset.view;
+    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
+    $("#v-collector").classList.toggle("on", v === "collector");
+    $("#v-products").classList.toggle("on", v === "products");
+    $("#selbar").classList.toggle("on", v === "products");
+    if (v === "products") refreshProducts();
+  }));
+
+  $("#addbtn").addEventListener("click", addCurrentPage);
+  $("#clipbtn").addEventListener("click", clipHere);
+  $("#catalog").addEventListener("click", () =>
+    chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") }));
+
+  $("#listsel").addEventListener("change", e => {
+    curList = lists.find(l => l.id === e.target.value) || curList;
+    renderList(); paintNow();
   });
-
-  // ---- the scan list: curated brand categories, managed visually -----------
-  const L = window.ScanLists;
-
-  async function loadLists() {
-    lists = await L.load();
-    if (!lists.length) {
-      lists = [{ id: "l" + Date.now(), name: "주간 리서치", entries: [], createdAt: Date.now() }];
-      await L.save(lists);
-    }
-    curList = lists[0];   // the panel curates the primary list; others live in the catalog tab
-  }
-  function urlInList(url) {
-    if (!url || !curList) return false;
-    const k = L.normUrl(url);
-    return (curList.entries || []).some(e => L.normUrl(e.url) === k);
-  }
-  async function addCategoryToList(adapterInfo) {
-    if (!tab || !tab.url) return;
-    const entry = {
-      brand: (adapterInfo && adapterInfo.site) || read.host || "",
-      label: (adapterInfo && adapterInfo.category) || (tab.title || "").slice(0, 60),
-      url: tab.url,
-    };
-    const m = L.mergeEntries(curList.entries || [], [entry]);
-    if (!m.added) return toast("이미 목록에 있습니다");
+  $("#newlist").addEventListener("click", async () => {
+    const name = prompt("새 리스트 이름", "My references");
+    if (!name) return;
+    curList = { id: "l" + Date.now(), name: name.trim(), entries: [], createdAt: Date.now() };
+    lists.push(curList); await L.save(lists); fillListSelect(); renderList(); paintNow();
+  });
+  $("#renlist").addEventListener("click", async () => {
+    if (!curList) return;
+    const name = prompt("리스트 이름", curList.name);
+    if (!name) return;
+    curList.name = name.trim(); await L.save(lists); fillListSelect();
+  });
+  $("#dellist").addEventListener("click", async () => {
+    if (!curList || lists.length < 2) return toast("리스트가 하나뿐입니다");
+    if (!confirm(`"${curList.name}" 리스트를 삭제할까요?`)) return;
+    lists = lists.filter(l => l.id !== curList.id);
+    curList = lists[0]; await L.save(lists); fillListSelect(); renderList(); paintNow();
+  });
+  $("#addbulk").addEventListener("click", async () => {
+    const parsed = L.parseList($("#bulk").value)
+      .map(e => Object.assign(e, { scannable: !!adapterFor(e.url) }));
+    if (!parsed.length) return toast("URL을 찾지 못했습니다");
+    const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
-    await L.save(lists);
-    renderList(); paint();
-    toast(`목록에 담았습니다 — ${entry.brand} · ${entry.label}`);
-  }
-
-  // The list, drawn as brand groups of category chips. During a batch run the
-  // finished ones dim and the current one is highlighted, so progress is
-  // visible at a glance.
-  function renderList() {
-    const body = $("#listbody");
-    const entries = (curList && curList.entries) || [];
-    $("#lcount").textContent = entries.length ? entries.length + "개 카테고리" : "";
-    $("#runlist").disabled = !entries.length || !!(queue && queue.active);
-    if (!entries.length) {
-      body.innerHTML = '<div class="lempty">쇼핑몰 카테고리 페이지에서 <b>＋ 목록에 담기</b>를 누르면 여기에 쌓입니다.<br>여러 개 담아두고 ▶ 전체 스캔 한 번으로 전부 수집하세요.</div>';
-      return;
-    }
-    const running = queue && queue.active;
-    const idxOf = e => running ? queue.list.findIndex(x => L.normUrl(x.url) === L.normUrl(e.url)) : -1;
-    const groups = new Map();
-    entries.forEach(e => {
-      const b = e.brand || "기타";
-      if (!groups.has(b)) groups.set(b, []);
-      groups.get(b).push(e);
-    });
-    body.innerHTML = [...groups.entries()].map(([brand, es]) => `<div class="bgroup">
-      <div class="bname">${esc(brand)}</div>
-      <div class="chips">${es.map(e => {
-        const qi = idxOf(e);
-        const cls = running ? (qi > -1 && qi < queue.idx ? " done" : qi === queue.idx ? " cur" : "") : "";
-        return `<span class="chip${cls}" data-u="${esc(e.url)}">
-          <a href="${esc(e.url)}" target="_blank" rel="noopener" title="${esc(e.url)}">${esc(e.label || e.url)}</a>
-          <button class="cx" title="목록에서 빼기">✕</button></span>`;
-      }).join("")}</div></div>`).join("");
-    body.querySelectorAll(".cx").forEach(b => b.addEventListener("click", async ev => {
-      ev.preventDefault();
-      const u = b.closest(".chip").getAttribute("data-u");
-      curList.entries = curList.entries.filter(e => e.url !== u);
-      await L.save(lists);
-      renderList(); paint();
-    }));
-  }
-
-  function paintQueue() {
-    const box = $("#qstate");
-    const running = !!(queue && queue.active);
-    box.hidden = !running;
-    $("#stoplist").hidden = !running;
-    $("#runlist").hidden = running;
-    if (running) {
-      const cur = queue.list[queue.idx] || {};
-      box.innerHTML = `<b>${queue.idx + 1}/${queue.list.length}</b> ${esc(cur.brand || "")} · ${esc(cur.label || "")} 수집 중`;
-    }
-    renderList();
-  }
+    await L.save(lists); $("#bulk").value = "";
+    fillListSelect(); renderList(); paintNow();
+    toast(`${m.added}개 추가` + (m.skipped ? ` · ${m.skipped}개 중복` : ""));
+  });
 
   $("#runlist").addEventListener("click", async () => {
-    const entries = (curList && curList.entries) || [];
-    if (!entries.length) return;
-    if (!confirm(`${entries.length}개 카테고리를 순서대로 전체 스캔합니다. 시작할까요?`)) return;
+    const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
+    if (!entries.length) return toast("스캔 가능한 사이트가 없습니다");
+    if (!confirm(`${entries.length}개 사이트를 순서대로 전체 스캔합니다. 시작할까요?`)) return;
     const t = await chrome.tabs.create({ url: entries[0].url, active: false });
     const send = () => chrome.tabs.sendMessage(t.id,
       { type: "runList", name: curList.name, list: entries, withSpec: true, filters: {} },
-      r => { if (chrome.runtime.lastError || !r) return setTimeout(send, 900); toast("전체 스캔을 시작했습니다"); });
+      r => { if (chrome.runtime.lastError || !r) return setTimeout(send, 900); toast("스캔을 시작했습니다"); });
     setTimeout(send, 1500);
   });
   $("#stoplist").addEventListener("click", () => {
@@ -412,107 +337,65 @@
     });
   });
 
-  // ---- collection ----------------------------------------------------------
-  function exportJson() {
-    const col = store.collections.find(c => c.id === store.activeId);
-    const items = store.items.filter(i => i.collectionId === store.activeId);
-    if (!items.length) return toast("담긴 항목이 없습니다");
-    const payload = {
-      meta: { schema: "shop-scan/1", source: "clip", site: "리서치 컴패니언",
-        collection: col ? col.name : "", scannedAt: new Date().toISOString(), count: items.length },
-      items: items.map(i => ({
-        brand: i.brand || "", name: i.name || "", category: i.category || "",
-        price: i.price || "", price_was: "", colorways: i.colorways || "", color_count: "",
-        size_range: i.size_range || "", fabric_composition: i.fabric_composition || "",
-        design: i.design || "", product_url: i.product_url || "", image_url: i.image_url || "",
-        source: i.source || "",
-      })),
-    };
-    const name = (col ? col.name : "collection").replace(/[^\w가-힣.-]+/g, "_") + ".json";
-    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
-    chrome.runtime.sendMessage({ type: "downloadFile", filename: name, b64, mime: "application/json" },
-      r => toast(r && r.ok ? "내보냈습니다 — 리포트에 올리면 됩니다" : "내보내기 실패"));
-  }
-
-  function renderTray() {
-    ensureCollection();
-    const sel = $("#col");
-    sel.innerHTML = "";
-    store.collections.forEach(c => {
-      const n = store.items.filter(i => i.collectionId === c.id).length;
-      const o = document.createElement("option");
-      o.value = c.id; o.textContent = `${c.name} (${n})`;
-      sel.appendChild(o);
-    });
-    sel.value = store.activeId;
-
-    const items = store.items.filter(i => i.collectionId === store.activeId).sort((a, b) => b.addedAt - a.addedAt);
-    $("#count").textContent = items.length ? `${items.length}개 담김` : "";
-    const tray = $("#tray");
-    tray.innerHTML = "";
-    if (!items.length) {
-      tray.innerHTML = '<div class="empty">아직 담은 항목이 없습니다.<br>' +
-        '위의 제안 버튼을 누르거나,<br>페이지에서 <b>우클릭 → 컬렉션에 담기</b></div>';
-      return;
-    }
-    items.forEach(i => {
-      const row = document.createElement("div");
-      row.className = "it";
-      const img = i.image_url ? `<img src="${esc(i.image_url)}" alt="" loading="lazy">` : '<div class="ph"></div>';
-      const metaLine = [i.brand, i.price].filter(Boolean).join(" · ") || i.source || "";
-      row.innerHTML =
-        (i.product_url ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">${img}</a>` : img) +
-        `<div><div class="n">${i.product_url
-          ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">${esc(i.name || "(이미지)")}</a>`
-          : esc(i.name || "(이미지)")}</div>` +
-        (metaLine ? `<div class="m">${esc(metaLine)}</div>` : "") +
-        (i.fabric_composition ? `<div class="f">${esc(i.fabric_composition)}</div>` : "") +
-        `</div><button class="x" title="삭제">✕</button>`;
-      row.querySelector(".x").addEventListener("click", () => {
-        store.items = store.items.filter(x => x.id !== i.id); save(); renderTray();
+  $("#pgrid").addEventListener("change", e => {
+    const ck = e.target.closest(".ck"); if (!ck) return;
+    const card = e.target.closest(".pc"), k = card.getAttribute("data-k");
+    if (ck.checked) picked.add(k); else picked.delete(k);
+    card.classList.toggle("sel", ck.checked);
+    $("#selcount").textContent = "Selected " + picked.size;
+  });
+  ["psearch", "pbrand", "pcat"].forEach(id => $("#" + id).addEventListener("input", renderProducts));
+  $("#selall").addEventListener("click", () => {
+    const rows = visibleProducts();
+    const allOn = rows.length && rows.every(p => picked.has(p.key));
+    rows.forEach(p => allOn ? picked.delete(p.key) : picked.add(p.key));
+    renderProducts();
+  });
+  $("#selreset").addEventListener("click", () => { picked.clear(); renderProducts(); });
+  $("#selexport").addEventListener("click", async () => {
+    const rows = products.filter(p => picked.has(p.key));
+    if (!rows.length) return toast("선택한 상품이 없습니다");
+    const btn = $("#selexport"); btn.disabled = true;
+    try {
+      const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
+        ExcelJS: window.ExcelJS,
+        fetchImage: url => new Promise(res => {
+          if (!url) return res(null);
+          try { chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
+            void chrome.runtime.lastError; res(r && r.ok ? r : null); }); } catch (e) { res(null); }
+        }),
+        filters: {},
+        onProgress: (i, total) => { $("#selcount").textContent = `Images ${i}/${total}`; },
       });
-      tray.appendChild(row);
-    });
-  }
-
-  // ---- wiring --------------------------------------------------------------
-  $("#catalog").addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") });
-  });
-  $("#export").addEventListener("click", exportJson);
-  $("#clear").addEventListener("click", () => {
-    const n = store.items.filter(i => i.collectionId === store.activeId).length;
-    if (!n || !confirm(`이 컬렉션의 ${n}개 항목을 모두 지울까요?`)) return;
-    store.items = store.items.filter(i => i.collectionId !== store.activeId);
-    save(); renderTray();
-  });
-  $("#col").addEventListener("change", e => { store.activeId = e.target.value; save(); renderTray(); });
-  $("#newcol").addEventListener("click", () => {
-    const name = prompt("새 컬렉션 이름", "리서치 " + new Date().toISOString().slice(0, 10));
-    if (!name) return;
-    const id = "c" + Date.now();
-    store.collections.push({ id, name: name.trim(), createdAt: Date.now() });
-    store.activeId = id; save(); renderTray();
+      let b64 = "";
+      for (let i = 0; i < bytes.length; i += 0x8000)
+        b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      chrome.runtime.sendMessage({
+        type: "downloadFile",
+        filename: `selection_${rows.length}items_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        b64: btoa(b64),
+        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }, r => toast(r && r.ok ? `Excel 저장 — ${rows.length}개` : "내보내기 실패"));
+    } catch (e) { toast("내보내기 실패"); }
+    finally { btn.disabled = false; $("#selcount").textContent = "Selected " + picked.size; }
   });
 
-  // keep looking as the user browses — this is what makes it feel present
   chrome.tabs.onActivated.addListener(observe);
   chrome.tabs.onUpdated.addListener((id, info) => {
     if (tab && id === tab.id && (info.status === "complete" || info.url)) observe();
   });
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== "local") return;
-    if (ch[RC]) { store = ch[RC].newValue || store; renderTray(); }
+    if (ch[RC]) store = ch[RC].newValue || store;
     if (ch[JOB]) {
       const was = job; job = ch[JOB].newValue || null; paintLive();
-      // a scan just finished -> new products are in the catalog; refresh the grid
       if (was && was.active && (!job || !job.active)) refreshProducts();
     }
     if (ch[QUEUE]) { queue = ch[QUEUE].newValue || null; paintQueue(); }
-    if (ch[L.KEY]) {   // list edited elsewhere (catalog tab) — stay in sync
+    if (ch[L.KEY]) {
       lists = ch[L.KEY].newValue || lists;
       curList = lists.find(x => curList && x.id === curList.id) || lists[0];
-      renderList(); paint();
+      fillListSelect(); renderList(); paintNow();
     }
   });
 
@@ -521,8 +404,7 @@
     job = await load(JOB);
     queue = await load(QUEUE);
     await loadLists();
-    ensureCollection(); save();
-    renderTray(); paintLive(); paintQueue(); paint();
+    fillListSelect(); renderList(); paintLive(); paintQueue(); paintNow();
     refreshProducts();
     observe();
   })();
