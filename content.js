@@ -383,6 +383,10 @@ async function runStep(j) {
       // it's just a second download, exactly like the xlsx.
       try {
         const keptItems = [].concat.apply([], Object.values(kept || {}));
+        // Stamp the saved list that produced this scan, so its results can be
+        // exported as a set later ("scan this list, export this list").
+        const qq = await getQueue();
+        const fromList = (qq && qq.active) ? qq : null;
         const scan = {
           meta: {
             schema: "shop-scan/1",
@@ -392,6 +396,8 @@ async function runStep(j) {
             url: j.startUrl || location.href,
             scannedAt: new Date().toISOString(),
             count: total,
+            listId: fromList ? fromList.listId : "",
+            listName: fromList ? fromList.name : "",
           },
           items: keptItems.map(it => ({
             brand: it.brand || "", name: it.name || "", category: it.category || "",
@@ -500,7 +506,8 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
     (async () => {
       const tabId = await myTabId();
       await clear();                              // any half-finished job is replaced
-      await setQueue({ active: true, tabId, name: m.name || "", list: m.list, idx: 0,
+      await setQueue({ active: true, tabId, listId: m.listId || "", name: m.name || "",
+        list: m.list, idx: 0,
         withSpec: m.withSpec !== false, filters: m.filters || {}, startedAt: Date.now() });
       send({ ok: true, count: m.list.length });
       setTimeout(() => { location.href = m.list[0].url; }, 60);

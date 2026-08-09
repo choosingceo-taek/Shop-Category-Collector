@@ -73,6 +73,16 @@
     out.source = (meta && meta.source) || out.source || "";
     out.site = (meta && meta.site) || out.site || "";
     out.scanId = (meta && meta.scanId) || out.scanId || "";
+    // Which saved list(s) produced this row. A product can legitimately belong
+    // to several (two lists may watch the same category), so this is a union
+    // rather than a last-writer-wins field — that is what lets "export this
+    // list's results" mean exactly the products that list collected.
+    if (meta && meta.listId) {
+      const ids = new Set([].concat(out.listIds || []));
+      ids.add(meta.listId);
+      out.listIds = [...ids];
+      out.listName = meta.listName || out.listName || "";
+    }
     out.addedAt = (oldRec && oldRec.addedAt) || Date.now();
     out.updatedAt = Date.now();
     out.seenCount = ((oldRec && oldRec.seenCount) || 0) + 1;

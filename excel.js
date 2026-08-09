@@ -1,24 +1,25 @@
-/* Styled Excel builder (ExcelJS) — clean 9-column workbook with embedded
-   thumbnails and a strict provenance rule:
+/* Styled Excel builder (ExcelJS) — the seven fields the design team reads, with
+   embedded thumbnails and a strict provenance rule:
 
      - only words that are literally on the site go in as normal text
      - inferred / predicted values are NOT written; the cell shows "재확인 필요" (red)
-     - information we could not find shows "정보 확인" (grey)
+     - information we could not find shows "정보 확인" (red italic)
      - when a problem caused the miss, the cause is appended: "정보 확인 (원인)"
 
    Columns (exactly, in order):
-     Thumbnail · Product URL · Brand · Category · Product Name ·
-     Retail Price · Colorways · Fabric Composition · Key Design Details
+     브랜드 · 카테고리 · 상품명 · 썸네일 · URL · 원단 · 혼용률
 
    Runs in the content script (global ExcelJS) and under Node (require).
 */
 (function (root) {
   "use strict";
 
-  const HEADERS = ["Thumbnail", "Product URL", "Brand", "Category", "Product Name",
-    "Retail Price", "Current Price", "Size", "Colorways", "Color Count",
-    "Fabric Composition", "Key Design Details"];
-  const WIDTHS = [16, 42, 15, 18, 34, 12, 12, 13, 22, 10, 26, 30];
+  // The seven fields the design team actually reads. 원단 (fibre names) and
+  // 혼용률 (the exact blend) are separate columns on purpose: sorting or
+  // filtering by "cotton" is a different question from "how much cotton".
+  const HEADERS = ["브랜드", "카테고리", "상품명", "썸네일", "URL", "원단", "혼용률"];
+  const WIDTHS = [16, 20, 38, 16, 46, 22, 28];
+  const COL = { brand: 1, category: 2, name: 3, thumb: 4, url: 5, fabric: 6, blend: 7 };
   const IMG_PX = 96;
   const ROW_H = 78;
 
@@ -176,10 +177,35 @@
       return slug ? (u.host + "/" + slug.toLowerCase()) : "";
     } catch (e) { return ""; }
   }
+  // 혼용률 — the blend exactly as the site stated it ("69% Cotton, 31% Cupro").
   function fieldComposition(rec) {
     if (rec.fabric_composition && String(rec.fabric_composition).trim())
       return real(String(rec.fabric_composition).trim());
     return check(reasonKo(rec._compReason));
+  }
+  // 원단 — just the fibres named in that blend, percentages stripped, in the
+  // order the site listed them ("69% Cotton, 31% Cupro" -> "Cotton, Cupro").
+  // Derived from the same recorded text, so it never introduces a fibre the
+  // site didn't state.
+  function fibreNames(comp) {
+    const t = String(comp || "");
+    if (!t.trim()) return [];
+    const out = [], seen = new Set();
+    // each "<pct>% <fibre words>" run; also bare fibre names with no percentage
+    const re = /(?:\d{1,3}\s*%\s*)?([A-Za-z][A-Za-z\s-]{1,28}?)(?=\s*(?:[,;/&+]|\d{1,3}\s*%|$))/g;
+    let m;
+    while ((m = re.exec(t))) {
+      const name = m[1].replace(/\s+/g, " ").trim()
+        .replace(/\b\w/g, c => c.toUpperCase());
+      const k = name.toLowerCase();
+      if (name.length < 2 || seen.has(k)) continue;
+      seen.add(k); out.push(name);
+    }
+    return out;
+  }
+  function fieldFabric(rec) {
+    const names = fibreNames(rec.fabric_composition);
+    return names.length ? real(names.join(", ")) : check(reasonKo(rec._compReason));
   }
   function fieldDesign(rec) {
     // 1) real design features pulled from the product page ("Fit: Relaxed; ...")
@@ -263,7 +289,6 @@
 
     // colour-variant families: how many kept rows share each product slug
     const family = new Map();
-    for (const rec of kept) { const k = familyKey(rec); if (k) family.set(k, (family.get(k) || 0) + 1); }
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Fabric-Scanner";
@@ -278,7 +303,7 @@
       c.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
       c.border = { bottom: { style: "thin", color: { argb: "FFBBBBBB" } } };
     });
-    ws.autoFilter = { from: { row: 1, column: 2 }, to: { row: 1, column: HEADERS.length } };
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: HEADERS.length } };
 
     for (let i = 0; i < kept.length; i++) {
       const rec = kept[i];
@@ -286,38 +311,29 @@
       const rowNo = i + 2;
       const row = ws.getRow(rowNo);
 
-      // columns 3..12 (thumbnail + URL handled separately)
-      const prices = fieldPrices(rec);
-      const fields = [
-        null,                    // 1 Thumbnail
-        null,                    // 2 Product URL (hyperlink, handled below)
-        fieldBrand(rec),         // 3
-        fieldCategory(rec),      // 4
-        fieldName(rec),          // 5 (size stripped)
-        prices.orig,             // 6 Retail Price (original)
-        prices.cur,              // 7 Current Price (red pair when discounted)
-        fieldSize(rec),          // 8
-        fieldColorways(rec),     // 9
-        fieldColorCount(rec, family.get(familyKey(rec))),   // 10 Color Count
-        fieldComposition(rec),   // 11
-        fieldDesign(rec),        // 12
-      ];
+      // text columns; thumbnail (4) and URL (5) are handled separately below
+      const fields = {
+        [COL.brand]: fieldBrand(rec),
+        [COL.category]: fieldCategory(rec),
+        [COL.name]: fieldName(rec),
+        [COL.fabric]: fieldFabric(rec),
+        [COL.blend]: fieldComposition(rec),
+      };
       row.height = ROW_H;
       row.alignment = { vertical: "middle", wrapText: true };
 
-      for (let c = 3; c <= HEADERS.length; c++) {
-        const f = fields[c - 1];
-        const cell = row.getCell(c);
+      Object.keys(fields).forEach(c => {
+        const f = fields[c];
+        const cell = row.getCell(+c);
         cell.value = f.text;
         cell.font = fontFor(f.kind);
         cell.border = { bottom: { style: "hair", color: { argb: "FFDDDDDD" } } };
-      }
-      for (const c of [6, 7, 8, 9, 10]) {   // price, size, colorways, color-count centered
-        row.getCell(c).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-      }
+      });
+      row.getCell(COL.fabric).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      row.getCell(COL.blend).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
 
-      // Product URL (col 2)
-      const uc = row.getCell(2);
+      // Product URL
+      const uc = row.getCell(COL.url);
       if (rec.product_url) {
         uc.value = { text: rec.product_url, hyperlink: rec.product_url };
         uc.font = { color: { argb: "FF0563C1" }, underline: true };
@@ -326,8 +342,8 @@
       }
       uc.border = { bottom: { style: "hair", color: { argb: "FFDDDDDD" } } };
 
-      // Thumbnail (col 1)
-      const thumb = row.getCell(1);
+      // Thumbnail
+      const thumb = row.getCell(COL.thumb);
       thumb.border = { bottom: { style: "hair", color: { argb: "FFDDDDDD" } } };
       let embedded = false;
       if (fetchImage && rec.image_url) {
@@ -336,7 +352,7 @@
           if (img && img.ok && img.base64 && /^(png|jpeg|gif)$/.test(img.ext)) {
             const id = wb.addImage({ base64: img.base64, extension: img.ext });
             ws.addImage(id, {
-              tl: { col: 0.15, row: (rowNo - 1) + 0.12 },
+              tl: { col: (COL.thumb - 1) + 0.15, row: (rowNo - 1) + 0.12 },
               ext: { width: IMG_PX, height: IMG_PX },
               editAs: "oneCell",
             });

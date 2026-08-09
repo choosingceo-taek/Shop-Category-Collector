@@ -22,6 +22,7 @@
   let tab = null, read = null, job = null, queue = null;
   let lists = [], curList = null;
   let products = [], picked = new Set();
+  let listFilter = "";          // when set, PRODUCTS shows only that list's results
 
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -186,6 +187,48 @@
     if (curList) sel.value = curList.id;
   }
 
+  // Products this list collected. Rows carry the list ids that produced them,
+  // so a list is a real unit of work end to end: curate it, scan it, export it.
+  const productsOfList = id =>
+    id ? products.filter(p => [].concat(p.listIds || []).includes(id)) : [];
+
+  function paintListResult() {
+    const box = $("#listresult");
+    const rows = productsOfList(curList && curList.id);
+    box.hidden = !rows.length;
+    if (!rows.length) return;
+    const brands = new Set(rows.map(r => r.brand).filter(Boolean));
+    $("#resulttext").innerHTML =
+      `이 리스트로 수집한 상품 <b>${rows.length.toLocaleString()}</b>개` +
+      (brands.size ? ` · 브랜드 ${brands.size}` : "");
+  }
+
+  // Excel of exactly this list's results, through the same 12-column builder.
+  async function exportRows(rows, filename, btn) {
+    if (!rows.length) return toast("내보낼 상품이 없습니다");
+    const label = btn.textContent; btn.disabled = true;
+    try {
+      const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
+        ExcelJS: window.ExcelJS,
+        fetchImage: url => new Promise(res => {
+          if (!url) return res(null);
+          try { chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
+            void chrome.runtime.lastError; res(r && r.ok ? r : null); }); } catch (e) { res(null); }
+        }),
+        filters: {},
+        onProgress: (i, total) => { btn.textContent = `${i}/${total}`; },
+      });
+      let b64 = "";
+      for (let i = 0; i < bytes.length; i += 0x8000)
+        b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      chrome.runtime.sendMessage({
+        type: "downloadFile", filename, b64: btoa(b64),
+        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }, r => toast(r && r.ok ? `Excel 저장 — ${rows.length}개` : "내보내기 실패"));
+    } catch (e) { toast("내보내기 실패"); }
+    finally { btn.disabled = false; btn.textContent = label; }
+  }
+
   function paintQueue() {
     const box = $("#qstate");
     const running = !!(queue && queue.active);
@@ -216,12 +259,14 @@
     fill($("#pbrand"), new Set(products.map(p => p.brand).filter(Boolean)));
     fill($("#pcat"), new Set(products.map(p => p.category).filter(Boolean)));
     renderProducts();
+    paintListResult();
   }
   const priceN = v => { const m = String(v || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
   function visibleProducts() {
     const q = $("#psearch").value.trim().toLowerCase();
     const b = $("#pbrand").value, c = $("#pcat").value;
     return products.filter(p => {
+      if (listFilter && ![].concat(p.listIds || []).includes(listFilter)) return false;
       if (b && p.brand !== b) return false;
       if (c && p.category !== c) return false;
       if (q && ![p.name, p.brand, p.fabric_composition, p.colorways].join(" ").toLowerCase().includes(q)) return false;
@@ -229,6 +274,9 @@
     }).sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));
   }
   function renderProducts() {
+    const scoped = listFilter && lists.find(l => l.id === listFilter);
+    $("#scopebar").hidden = !scoped;
+    if (scoped) $("#scopetext").textContent = "List · " + scoped.name;
     const rows = visibleProducts(), grid = $("#pgrid");
     if (!products.length) {
       grid.innerHTML = '<div class="pempty">아직 수집된 상품이 없습니다.<br>COLLECTOR에서 사이트를 담고 ▶ Run all 하세요.</div>';
@@ -289,7 +337,7 @@
 
   $("#listsel").addEventListener("change", e => {
     curList = lists.find(l => l.id === e.target.value) || curList;
-    renderList(); paintNow();
+    renderList(); paintNow(); paintListResult();
   });
   $("#newlist").addEventListener("click", async () => {
     const name = prompt("새 리스트 이름", "My references");
@@ -326,7 +374,8 @@
     if (!confirm(`${entries.length}개 사이트를 순서대로 전체 스캔합니다. 시작할까요?`)) return;
     const t = await chrome.tabs.create({ url: entries[0].url, active: false });
     const send = () => chrome.tabs.sendMessage(t.id,
-      { type: "runList", name: curList.name, list: entries, withSpec: true, filters: {} },
+      { type: "runList", listId: curList.id, name: curList.name, list: entries,
+        withSpec: true, filters: {} },
       r => { if (chrome.runtime.lastError || !r) return setTimeout(send, 900); toast("스캔을 시작했습니다"); });
     setTimeout(send, 1500);
   });
@@ -335,6 +384,16 @@
       const q = o && o[QUEUE];
       if (q) { q.active = false; chrome.storage.local.set({ [QUEUE]: q }); }
     });
+  });
+  $("#listxlsx").addEventListener("click", () => {
+    const rows = productsOfList(curList && curList.id);
+    const tag = (curList.name || "list").replace(/[^\w가-힣]+/g, "_");
+    exportRows(rows, `${tag}_${rows.length}items_${new Date().toISOString().slice(0, 10)}.xlsx`, $("#listxlsx"));
+  });
+  // jump to PRODUCTS showing only this list's results
+  $("#listview").addEventListener("click", () => {
+    listFilter = curList && curList.id;
+    document.querySelector('.tab[data-view="products"]').click();
   });
 
   $("#pgrid").addEventListener("change", e => {
@@ -352,6 +411,7 @@
     renderProducts();
   });
   $("#selreset").addEventListener("click", () => { picked.clear(); renderProducts(); });
+  $("#scopeclear").addEventListener("click", () => { listFilter = ""; renderProducts(); });
   $("#selexport").addEventListener("click", async () => {
     const rows = products.filter(p => picked.has(p.key));
     if (!rows.length) return toast("선택한 상품이 없습니다");
