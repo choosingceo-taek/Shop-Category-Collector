@@ -92,8 +92,37 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // here and the worker upserts them — which is also what lets the catalog tab
 // and the side panel read the same data with no file passing.
 try { importScripts("store.js"); } catch (e) {}
+try { importScripts("update.js"); } catch (e) {}
+
+/* Update notice — checked at most every 6 hours, whenever the worker happens
+   to be awake. When the repo carries a newer version the toolbar icon gets a
+   NEW badge and the panel shows a download banner; a failed check just means
+   no notice (never an error — the extension works fine without it). */
+const UPDATE_KEY = "wpb_update";
+async function refreshUpdate(force) {
+  const cur = chrome.runtime.getManifest().version;
+  const prev = await new Promise(r => chrome.storage.local.get(UPDATE_KEY, o => r(o[UPDATE_KEY] || null)));
+  if (!force && prev && prev.current === cur && Date.now() - (prev.checkedAt || 0) < 6 * 3600e3) return prev;
+  const res = await self.LensUpdate.check({ current: cur });
+  const rec = {
+    checkedAt: Date.now(), current: cur,
+    ok: !!res.ok, latest: (res.ok && res.latest) || (prev && prev.latest) || "",
+    newer: !!(res.ok && res.newer), zip: self.LensUpdate.ZIP,
+  };
+  await new Promise(r => chrome.storage.local.set({ [UPDATE_KEY]: rec }, r));
+  try {
+    chrome.action.setBadgeText({ text: rec.newer ? "NEW" : "" });
+    if (rec.newer) chrome.action.setBadgeBackgroundColor({ color: "#d03b3b" });
+  } catch (e) {}
+  return rec;
+}
+refreshUpdate(false);
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
+  if (msg && msg.type === "updateStatus") {
+    refreshUpdate(!!msg.force).then(send).catch(() => send(null));
+    return true;
+  }
   // A finished scan -> accumulate into the catalog.
   if (msg && msg.type === "catalogPut" && msg.scan) {
     (async () => {

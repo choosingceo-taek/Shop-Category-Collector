@@ -64,6 +64,10 @@
   .iconbtn { width:30px; height:30px; padding:0; display:inline-flex; align-items:center;
     justify-content:center; flex:none; font-size:13px; }
   .runrow { display:flex; gap:6px; margin-bottom:8px; }
+  .upnote { border:1px solid rgba(80,200,120,.45); border-radius:10px; padding:10px 12px;
+    margin-bottom:10px; font-size:12px; line-height:1.55; }
+  .upnote .uphow { color:var(--muted); font-size:11px; margin:3px 0 8px; }
+  .upnote button { width:100%; font-size:11px; font-weight:700; letter-spacing:.05em; }
   .explist { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
   .explist .cap { color:var(--muted); flex:1; }
   .explist button { font-size:10.5px; padding:4px 9px; letter-spacing:.05em; }
@@ -185,6 +189,11 @@
     <!-- COLLECTOR — add whatever page you're on, then curate the list -->
     <section class="view on" id="v-collector">
       <div class="adder">
+        <div class="upnote" id="upnote" hidden>
+          <div><b>새 버전 <span id="upver"></span></b>이 나왔습니다 (현재 <span id="upcur"></span>)</div>
+          <div class="uphow">ZIP을 받아 기존 폴더에 덮어쓰고, 확장 ↻ 리로드 → 탭 F5 하면 됩니다.</div>
+          <button id="upget">⬇ 새 버전 ZIP 받기</button>
+        </div>
         <div class="now" id="now">페이지를 읽는 중…</div>
         <button id="addbtn" class="solid">＋ Add this page</button>
         <div class="addrow">

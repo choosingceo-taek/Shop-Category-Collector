@@ -691,5 +691,16 @@
     fillListSelect(); renderList(); paintLive(); paintQueue(); paintNow();
     refreshProducts();
     observe();
+    // update notice: the worker checks GitHub (≤ once/6h); we just display it
+    try {
+      chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
+        void chrome.runtime.lastError;
+        if (!r || !r.newer) return;
+        $("#upver").textContent = "v" + r.latest;
+        $("#upcur").textContent = "v" + r.current;
+        $("#upnote").hidden = false;
+        $("#upget").onclick = () => chrome.tabs.create({ url: r.zip });
+      });
+    } catch (e) {}
   })();
 })();
