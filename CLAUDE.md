@@ -174,6 +174,21 @@
   그대로 읽는다(round-trip 테스트로 고정). URL이 신원이라 같은 URL이면 추가가 아니라
   **브랜드·카테고리를 갱신**하고, 파일에 없는 항목은 건드리지 않는다(한 브랜드 시트만
   가져와도 나머지가 지워지지 않음).
+- **타일 텍스트는 상품명이 아닐 수 있다**(v1.59, 실제 엑셀 2건에서 발견).
+  Abercrombie는 타일마다 스크린리더 안내문("Activating this element will cause
+  content on the page to be updated.")을 넣어 그게 전 행의 상품명이 됐고, Edikted는
+  타일 안 사이즈 선택 컨트롤 때문에 전 행이 "Select Size"가 됐다. `bestName`은
+  ① 숨겨진 노드(aria-hidden·sr-only 클래스·1px 클립·display:none) ② 컨트롤 내부
+  (button·select·option·label·role=button) ③ **UI 문구 스톱리스트**를 배제한다.
+  스톱리스트는 단어가 아니라 **문구 전체 일치**라 "New Season Slip Dress"·
+  "Plus Size Corset Top"은 그대로 통과한다(화이트리스트가 아니므로 처음 보는
+  상품명도 통과). 타일에서 쓸 텍스트가 없으면 **URL 슬러그**를 쓴다 — 쇼핑몰이
+  직접 쓴 이름이고 추측이 아니다. JSON-LD/상품 JSON의 이름은 슬러그를 덮어쓴다.
+- **Shopify `vendor`는 브랜드가 아닐 수 있다.** Edikted는 vendor에 스타일 코드를
+  넣어 브랜드 열이 S24503_AQUA…로 채워졌고, 엑셀이 브랜드로 묶으니 **단일 브랜드가
+  상품 수만큼 쪼개졌다**. vendor가 그 상품의 handle과 같거나 공백 없는 코드
+  (영문+숫자+구분자)면 브랜드가 아니라고 보고 비운다 → 리스트 항목의 브랜드가 채운다.
+  상품명도 마찬가지로 **Shopify `product.title`이 정본**이라 타일 추정을 덮어쓴다.
 - 썸네일: 무한 스크롤 그리드는 화면 밖 타일의 `src`가 1x1 placeholder라 그대로 읽으면
   Zara 결과에 이미지가 통째로 비었다. `bestImage`는 srcset(가장 큰 후보) ·
   `<picture><source>` · data-src류 · 배경이미지까지 훑고 placeholder를 버린다.

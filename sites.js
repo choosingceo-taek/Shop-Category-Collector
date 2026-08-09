@@ -815,6 +815,92 @@
     const MAX_TILES = 400;
 
     const textOf = el => ((el && el.textContent) || "").replace(/\s+/g, " ").trim();
+
+    /* Text that is on the page but is not the product.
+
+       Two real spreadsheets made this necessary. Abercrombie writes a screen
+       reader instruction inside every tile — every row came out named
+       "Activating this element will cause content on the page to be updated."
+       Edikted's tile carries a size picker, and every row came out "Select
+       Size". Both are interface text: it belongs to the control, not the
+       garment, and no shop names a product this way.
+
+       This is a stoplist of INTERFACE phrases, not a whitelist of product
+       words, so an unfamiliar product name still passes untouched. Matching is
+       whole-string (or near it) — a real name that merely contains "new" or
+       "size" is not affected. */
+    const UI_PHRASE = new RegExp("^(?:" + [
+      "activating this element[\\s\\S]*", "press (?:enter|space)[\\s\\S]*",
+      "select(?: a)? (?:size|colou?r|option|style)", "choose (?:a )?(?:size|colou?r|options?)",
+      "quick (?:add|shop|view|buy)", "add to (?:bag|cart|wishlist|favou?rites)",
+      "shop (?:now|the look)", "view (?:details|product|more)", "see (?:details|more)",
+      "sold out", "out of stock", "coming soon", "back in stock", "notify me",
+      "new(?: in| arrival[s]?)?", "sale", "best ?seller[s]?", "more colou?rs",
+      "colou?rs? available", "available in \\d+ colou?rs?", "size guide",
+      "opens? in a new (?:tab|window)", "skip to (?:main )?content",
+      "loading[\\s\\S]*", "please wait[\\s\\S]*", "click to [\\s\\S]*", "tap to [\\s\\S]*",
+    ].join("|") + ")[.!\\s]*$", "i");
+    const isUiText = t => !t || UI_PHRASE.test(String(t).trim());
+
+    /* Is this node hidden from sight? Screen-reader-only text is the usual
+       source of interface strings inside a tile, and it is invisible to the
+       user reading the page — so it must be invisible to the scraper too.
+       getComputedStyle is unavailable on a detached document (the detail
+       phase parses fetched HTML), hence the attribute/class fallbacks. */
+    function isHiddenNode(el) {
+      if (!el || !el.getAttribute) return false;
+      if (el.getAttribute("aria-hidden") === "true" || el.hasAttribute("hidden")) return true;
+      const cls = (el.getAttribute("class") || "") + " " + (el.getAttribute("id") || "");
+      if (/\b(sr-only|screen-?reader|visually-?hidden|a11y-?hidden|hidden-?accessible)\b/i.test(cls)) return true;
+      const st = (el.getAttribute("style") || "");
+      if (/display\s*:\s*none|visibility\s*:\s*hidden/i.test(st)) return true;
+      try {
+        const w = el.ownerDocument && el.ownerDocument.defaultView;
+        if (w && w.getComputedStyle) {
+          const cs = w.getComputedStyle(el);
+          if (cs.display === "none" || cs.visibility === "hidden") return true;
+          // the classic sr-only recipe: clipped to a 1px box
+          const box = parseFloat(cs.width) <= 1 && parseFloat(cs.height) <= 1;
+          if (box && (cs.position === "absolute" || cs.position === "fixed") && cs.overflow === "hidden") return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+    // Inside a control (a size picker, an add-to-bag button)? Then the text
+    // labels the control.
+    function inControl(el, stop) {
+      let n = el;
+      for (let d = 0; n && n !== stop && d < 6; d++, n = n.parentElement) {
+        const tag = (n.tagName || "").toUpperCase();
+        if (tag === "BUTTON" || tag === "SELECT" || tag === "OPTION" || tag === "LABEL" ||
+            tag === "FORM" || tag === "NOSCRIPT") return true;
+        if (n.getAttribute && /^(button|listbox|option|tab|menuitem)$/i.test(n.getAttribute("role") || "")) return true;
+      }
+      return false;
+    }
+    // A usable name is visible, outside controls, and not interface text.
+    function goodName(t, el, tile) {
+      if (!t || t.length < 3 || t.length > 200) return false;
+      if (isUiText(t)) return false;
+      if (el && (isHiddenNode(el) || inControl(el, tile))) return false;
+      return true;
+    }
+    /* The product slug in its own URL, as a last resort. Abercrombie's
+       /shop/wd/a-and-f-forme-wide-leg-pant-62626819 is the product's real
+       name written by the shop — a far better answer than a11y text, and
+       still not invented by us. */
+    function nameFromSlug(url) {
+      let seg = "";
+      try {
+        const p = new URL(url).pathname.replace(/\/$/, "");
+        seg = decodeURIComponent(p.slice(p.lastIndexOf("/") + 1));
+      } catch (e) { return ""; }
+      seg = seg.replace(/\.(html?|aspx|php)$/i, "")
+        .replace(/[-_](?:p)?\d{5,}$/i, "")          // trailing product id
+        .replace(/[-_]+/g, " ").trim();
+      if (!seg || seg.length < 3 || /^\d+$/.test(seg)) return "";
+      return seg.replace(/\b\w/g, c => c.toUpperCase()).slice(0, 200);
+    }
     const abs = (href, base) => { try { return new URL(href, base).toString(); } catch (e) { return href || ""; } };
 
     function firstPrice(text) { const m = text.match(PRICE_RE); return m ? m[0] : ""; }
@@ -915,7 +1001,9 @@
         cands.push(widestFromSrcset(img.getAttribute("srcset")));
         cands.push(widestFromSrcset(img.getAttribute("data-srcset")));
         ["src", "data-src", "data-lazy-src", "data-original", "data-image",
-         "data-echo", "data-hi-res-src"].forEach(a => cands.push(img.getAttribute(a) || ""));
+         "data-echo", "data-hi-res-src", "data-image-src", "data-src-large",
+         "data-zoom", "data-zoom-src", "data-large", "data-default-src",
+         "data-flickity-lazyload", "data-bgset"].forEach(a => cands.push(img.getAttribute(a) || ""));
       }
       // <picture><source srcset> — the <img> inside may never get a usable src
       (el.querySelectorAll("picture source, source") || []).forEach(s => {
@@ -944,28 +1032,40 @@
     // price. Heading beats alt because alt is often a generic repeated label
     // ("Product photo") while a title/name-class element is usually the one
     // place the specific product name actually lives.
-    function bestName(el, priceText) {
-      const heading = el.querySelector && el.querySelector(
-        'h1,h2,h3,h4,h5,h6,[class*="title" i],[class*="name" i],[class*="heading" i]');
-      const ht = heading && textOf(heading);
-      if (ht && ht.length >= 3 && ht.length <= 200 && ht !== priceText) return ht;
+    function bestName(el, priceText, url) {
+      // every heading/title candidate, not just the first — the first one is
+      // often a hidden a11y label sitting above the real title
+      const heads = (el.querySelectorAll ? el.querySelectorAll(
+        'h1,h2,h3,h4,h5,h6,[class*="title" i],[class*="name" i],[class*="heading" i]') : []);
+      for (const h of heads) {
+        const ht = textOf(h);
+        if (ht !== priceText && goodName(ht, h, el)) return ht;
+      }
 
       const img = el.querySelector && el.querySelector("img");
       const alt = img && (img.getAttribute("alt") || "").trim();
-      if (alt && alt.length >= 3 && alt.length <= 150 && !/^(image|photo|thumbnail|product|products|img|picture)$/i.test(alt)) return alt;
+      if (alt && alt.length >= 3 && alt.length <= 150 && !isUiText(alt) &&
+          !/^(image|photo|thumbnail|product|products|img|picture)$/i.test(alt)) return alt;
 
       const a = el.tagName === "A" ? el : (el.querySelector && el.querySelector("a[href]"));
       const label = a && ((a.getAttribute("title") || a.getAttribute("aria-label") || "").trim());
-      if (label && label.length >= 3) return label;
+      if (label && label.length >= 3 && label.length <= 200 && !isUiText(label)) return label;
 
-      // fallback: longest text node in the tile, excluding the price text
+      // longest visible text run in the tile that isn't the price or interface
       let best = "";
       (el.querySelectorAll ? el.querySelectorAll("*") : []).forEach(n => {
         if (n.children && n.children.length) return;   // only leaf-ish nodes
         const t = textOf(n);
-        if (t && t !== priceText && !PRICE_RE.test(t) && t.length > best.length && t.length <= 200) best = t;
+        if (t === priceText || PRICE_RE.test(t)) return;
+        if (t.length > best.length && goodName(t, n, el)) best = t;
       });
-      return best;
+      // nothing on the tile is usable -> the shop's own slug, never a guess
+      return best || nameFromSlug(url || bestUrl(el, url) || "");
+    }
+    // Did bestName fall back to the URL slug? Then a real name from structured
+    // data outranks it.
+    function isSlugName(name, url) {
+      return !!name && name === nameFromSlug(url || "");
     }
 
     // Products from schema.org JSON-LD (ItemList / Product). Many storefronts
@@ -1086,7 +1186,7 @@
         // at the end.
         out.push({
           brand: "", category: "", department: "",
-          name: bestName(tile, pp.price) || "", price: pp.price, price_was: pp.price_was,
+          name: bestName(tile, pp.price, product_url) || "", price: pp.price, price_was: pp.price_was,
           product_url,
           image_url: bestImage(tile),
           id: product_url,
@@ -1102,7 +1202,8 @@
         const key = pathKey(p.url);
         const existing = byPath.get(key);
         if (existing) {
-          if (!existing.name && p.name) existing.name = p.name;
+          if (p.name && (!existing.name || isSlugName(existing.name, existing.product_url)))
+            existing.name = p.name;
           if (!existing.price && p.price) existing.price = p.price;
           if (!existing.image_url && p.image) existing.image_url = p.image;
         } else if (p.name && out.length < MAX_TILES) {
@@ -1258,7 +1359,8 @@
       }
       return {
         composition, colorways, design: "",
-        brand: p.vendor || "",
+        brand: realVendor(p.vendor, p.handle),
+        name: p.title || "", name_canonical: !!p.title,
         category: p.type || "",
         price_was,
         reason: composition ? "" : "not_found",
@@ -1327,6 +1429,21 @@
     }
 
     // products.json shape: prices are decimal strings, options carry every value.
+    /* Shopify's "vendor" is a free-text field, and plenty of own-brand shops
+       put the style code in it — Edikted filled a whole spreadsheet's brand
+       column with S23887_LIGHT-GRAY-MELANGE, which is that product's own
+       handle. A value that is the product's identifier is not a brand, so
+       drop it and let the list entry's brand stand. */
+    function realVendor(vendor, handle) {
+      const v = String(vendor || "").trim();
+      if (!v) return "";
+      const norm = x => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (handle && norm(v) === norm(handle)) return "";
+      // a bare style code (letters+digits, no space) is a code, not a name
+      if (!/\s/.test(v) && /\d/.test(v) && /[_-]/.test(v)) return "";
+      return v;
+    }
+
     function parseCollectionProduct(p) {
       const opt = (p.options || []).find(o => /colou?r/i.test(((o && (o.name || o)) || "") + ""));
       const colorways = opt ? (opt.values || []).join("; ") : "";
@@ -1340,7 +1457,8 @@
       }
       return {
         composition, colorways, design: "",
-        brand: p.vendor || "",
+        brand: realVendor(p.vendor, p.handle),
+        name: p.title || "", name_canonical: !!p.title,
         category: p.product_type || "",
         price_was,
         // when the shop actually published it — a real launch date, unlike our

@@ -485,7 +485,11 @@ async function runStep(j) {
             // image/link only at the detail step — take them when the list left
             // them empty, and replace a synthetic pelement-only link once the
             // real product URL is known (a real MD link carries a "-l<ref>" slug).
-            if (d.name && !it.name) it.name = d.name;
+            // The shop's own product JSON title is the name the tile shows, so
+            // an adapter that marks its name canonical (Shopify) replaces
+            // whatever the DOM scrape guessed — that is what stopped a whole
+            // Edikted sheet reading "Select Size".
+            if (d.name && (!it.name || d.name_canonical)) it.name = d.name;
             if (d.image_url && !it.image_url) it.image_url = d.image_url;
             if (d.product_url && !/-l\d/i.test(it.product_url || "")) it.product_url = d.product_url;
         it._compReason = d.reason || "";
