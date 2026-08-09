@@ -1,0 +1,898 @@
+# Miro Research — verified category routes (from the MIRO-MARKET-RESEARCH audit)
+# Import this file in Market Lens (side panel → IMPORT). Same URL twice is deduped on import.
+
+Abercrombie & Fitch
+- Tops 1 : https://www.abercrombie.com/shop/wd/womens-tees-and-tanks-tops?pagefm=navigation-left+nav
+- Tops 2 : https://www.abercrombie.com/shop/wd/womens-camis-and-tank-tops-tops?pagefm=navigation-left+nav
+- Sweatshirts : https://www.abercrombie.com/shop/wd/womens-hoodies-and-sweatshirts-tops?pagefm=navigation-left+nav
+- Shirts : https://www.abercrombie.com/shop/wd/womens-shirts-and-blouses-tops?pagefm=navigation-left+nav
+- Dresses : https://www.abercrombie.com/shop/wd/womens-dresses-and-jumpsuits
+- Pants : https://www.abercrombie.com/shop/wd/womens-sweatpants-and-joggers-bottoms?pagefm=navigation-left+nav
+
+American Eagle
+- Tops 1 : https://www.ae.com/intl/en/c/women/tops/t-shirts/cat90030
+- Tops 2 : https://www.ae.com/intl/en/c/women/tops/tank-tops-tube-tops/cat380157
+- Sweatshirts : https://www.ae.com/intl/en/c/women/tops/hoodies-sweatshirts/cat90048
+- Shirts : https://www.ae.com/intl/en/c/women/tops/shirts-blouses/cat360002
+- Dresses : https://www.ae.com/intl/en/c/women/dresses/cat1320034
+- Pants : https://www.ae.com/intl/en/c/women/bottoms/cat10051
+
+Ann Taylor
+- Tops : https://www.anntaylor.com/clothing/tops-and-blouses/cata000010/
+- Dresses : https://www.anntaylor.com/clothing/dresses/cata000012/
+- Pants : https://www.anntaylor.com/clothing/pants/cata000014/
+
+Apiece Apart
+- Tops : https://www.apieceapart.com/shop/tops
+- Dresses : https://www.apieceapart.com/shop/dresses
+- Pants : https://www.apieceapart.com/shop/pants
+
+Aritzia
+- Tops 1 : https://www.aritzia.com/us/en/clothing/tops
+- Tops 2 : https://www.aritzia.com/us/en/clothing/tshirts
+- Sweatshirts : https://www.aritzia.com/us/en/clothing/sweatsuit-sets?lastViewed=74
+- Shirts : https://www.aritzia.com/us/en/clothing/shirts-blouses
+- Dresses : https://www.aritzia.com/us/en/clothing/dresses-3
+- Pants : https://www.aritzia.com/us/en/clothing/sweatsuit-sets/sweat-pants
+
+Arket
+- Tops 1 : https://www.arket.com/en-ww/women/clothing/tops/
+- Tops 2 : https://www.arket.com/en-ww/women/clothing/tops/t-shirts/
+- Sweatshirts : https://www.arket.com/en-ww/women/clothing/sweatshirts-and-hoodies/
+- Shirts : https://www.arket.com/en-ww/women/clothing/shirts-and-blouses/
+- Dresses : https://www.arket.com/en-ww/women/clothing/dresses/
+
+Banana Republic
+- Tops 1 : https://bananarepublic.gap.com/browse/women/t-shirts?cid=1055063&nav=meganav%3AWOMEN%3AWOMEN%27S+CLOTHING%3AT-Shirts+%26+Tanks#department=136
+- Tops 2 : https://bananarepublic.gap.com/browse/women/tops-and-blouses?cid=5037&nav=meganav%3AWOMEN%3AWOMEN%27S+CLOTHING%3ATops+%26+Shirts#department=136
+- Shirts : https://bananarepublic.gap.com/browse/women/tops-and-blouses?cid=5037&nav=meganav%3AWOMEN%3AWOMEN%27S+CLOTHING%3ATops+%26+Shirts#department=136
+- Dresses : https://bananarepublic.gap.com/browse/women/dresses-and-jumpsuits?cid=69883&nav=meganav%3AWOMEN%3AWOMEN%27S+CLOTHING%3ADresses+%26+Jumpsuits#department=136
+- Pants : https://bananarepublic.gap.com/browse/women/pants?cid=67595&nav=meganav%3AWOMEN%3AWOMEN%27S+CLOTHING%3APants#department=136
+
+Bassike
+- Tops 1 : https://www.bassike.com/collections/womens-clothing
+- Tops 2 : https://www.bassike.com/collections/women-tops-shirts
+- Sweatshirts : https://www.bassike.com/collections/women-knitwear-sweaters
+- Dresses : https://www.bassike.com/collections/womens-dresses-skirts
+- Pants : https://www.bassike.com/collections/womens-pants-shorts
+
+Bellerose
+- Tops : https://bellerose.com/collections/women-t-shirts-tops
+- Sweatshirts : https://bellerose.com/collections/women-sweatshirts
+- Shirts : https://bellerose.com/collections/women-blouses-shirts
+- Dresses : https://bellerose.com/collections/women-dresses
+- Pants : https://bellerose.com/collections/women-trousers?page=2
+
+Damson Madder
+- Tops : https://damsonmadder.com/collections/tops
+- Sweatshirts : https://damsonmadder.com/en-us/collections/knitwear
+- Shirts : https://damsonmadder.com/collections/shirts-blouses
+- Dresses : https://damsonmadder.com/collections/dresses
+- Pants : https://damsonmadder.com/collections/bottoms
+
+Gestuz
+- Tops 1 : https://www.gestuz.com/en-us/shop/tops-t-shirts
+- Tops 2 : https://www.gestuz.com/en-us/shop/blouses
+- Sweatshirts : https://www.gestuz.com/en-us/shop/knitwear-cardigans
+- Shirts : https://www.gestuz.com/en-us/shop/shirts
+- Dresses : https://www.gestuz.com/en-us/shop/dresses
+- Pants : https://www.gestuz.com/en-us/shop/trousers
+
+H&M
+- Tops : https://www2.hm.com/en_us/women/products/tops.html?sort=newProduct
+- Sweatshirts : https://www2.hm.com/en_us/women/products/hoodies-sweatshirts.html?sort=newProduct
+- Shirts : https://www2.hm.com/en_us/women/products/shirts-blouses.html?sort=newProduct
+- Dresses : https://www2.hm.com/en_us/women/products/dresses.html?sort=newProduct
+- Pants : https://www2.hm.com/en_us/women/products/pants.html?sort=newProduct
+
+Jigsaw
+- Tops 1 : https://www.jigsaw-online.com/collections/tops
+- Tops 2 : https://www.jigsaw-online.com/collections/t-shirts
+- Sweatshirts : https://www.jigsaw-online.com/collections/knitwear
+- Shirts : https://www.jigsaw-online.com/collections/shirts-blouses
+- Dresses : https://www.jigsaw-online.com/collections/dresses
+- Pants : https://www.jigsaw-online.com/collections/trousers
+
+La Ligne
+- Tops : https://lalignenyc.com/collections/all-tops
+- Sweatshirts : https://lalignenyc.com/collections/knitwear
+- Dresses : https://lalignenyc.com/collections/dresses
+- Pants : https://lalignenyc.com/collections/bottoms
+
+Leset
+- Tops 1 : https://leset.com/collections/t-shirts
+- Tops 2 : https://leset.com/collections/tank-tops
+- Sweatshirts : https://leset.com/collections/sweat-sets
+- Shirts : https://leset.com/collections/tops
+- Dresses : https://leset.com/collections/dresses
+- Pants : https://leset.com/collections/skirts-shorts
+
+Mango
+- Tops 1 : https://shop.mango.com/us/en/c/women/t-shirts/8e23bdfb
+- Tops 2 : https://shop.mango.com/us/en/c/women/tops/227371cd
+- Sweatshirts : https://shop.mango.com/us/en/c/women/knitwear/7e46863e
+- Shirts : https://shop.mango.com/us/en/c/women/shirts---blouses/b8003173
+- Dresses : https://shop.mango.com/us/en/c/women/dresses-and-jumpsuits/e6bb8705
+- Pants : https://shop.mango.com/us/en/c/women/pants/0bf28b3b
+
+Massimo Dutti
+- Tops 1 : https://www.massimodutti.com/us/women/t-shirts-n1444?celement=2242518
+- Tops 2 : https://www.massimodutti.com/us/s/w-tops-n2889
+- Shirts : https://www.massimodutti.com/us/women/shirts-n1439?celement=1963012
+- Dresses : https://www.massimodutti.com/us/women/dresses-n1494?celement=2158374
+- Pants : https://www.massimodutti.com/us/women/trousers-n1476?celement=2158376
+
+Ninety Percent
+- Tops 1 : https://ninetypercent.com/collections/tanks-and-t-shirts?sort_by=created-descending
+- Tops 2 : https://ninetypercent.com/collections/womens-sustainable-t-shirts-and-tops
+- Sweatshirts : https://ninetypercent.com/collections/signature-sweats
+- Dresses : https://ninetypercent.com/collections/dresses
+- Pants : https://ninetypercent.com/collections/trousers-shorts
+
+Oak + Fort
+- Tops 1 : https://oakandfort.ca/collections/tops
+- Tops 2 : https://oakandfort.ca/collections/womens-tank-tops
+- Sweatshirts : https://oakandfort.ca/collections/fleece-studio
+- Dresses : https://oakandfort.ca/collections/dresses
+- Pants : https://oakandfort.ca/collections/womens-pants
+
+Reformation
+- Tops : https://www.thereformation.com/tops
+- Sweatshirts : https://www.thereformation.com/the-sweater-shop.html
+- Shirts : https://www.thereformation.com/tops/button-ups
+- Dresses : https://www.thereformation.com/dresses
+- Pants : https://www.thereformation.com/clothing/pants
+
+rouje
+- Tops : https://www.rouje.com/en-int/collections/tops
+- Sweatshirts : https://www.rouje.com/en-int/collections/archives-knits
+- Dresses : https://www.rouje.com/en-int/collections/dresses
+- Pants : https://www.rouje.com/en-int/collections/pants
+
+Sanctuary
+- Tops : https://www.sanctuaryclothing.com/collections/tees-tanks
+- Sweatshirts : https://www.sanctuaryclothing.com/collections/sweater
+- Shirts : https://www.sanctuaryclothing.com/collections/tops
+- Dresses : https://www.sanctuaryclothing.com/collections/dress
+- Pants : https://www.sanctuaryclothing.com/collections/pant
+
+Whistles
+- Tops : https://www.whistles.com/us/clothing/tops/
+- Sweatshirts : https://www.whistles.com/new-in/new-in-knitwear/
+- Shirts : https://www.whistles.com/us/clothing/tops/shirts-blouses/
+- Dresses : https://www.whistles.com/us/clothing/dresses/
+- Pants : https://www.whistles.com/us/clothing/pants/
+
+Xirena
+- Tops : https://www.xirena.com/collections/sweats-and-tees
+- Sweatshirts : https://www.xirena.com/collections/sweats-and-tees
+- Shirts : https://www.xirena.com/collections/tops
+- Dresses : https://www.xirena.com/collections/dresses
+- Pants : https://www.xirena.com/collections/bottoms
+
+Zara
+- Tops 1 : https://www.zara.com/us/en/woman-tshirts-l1362.html?v1=2420417
+- Tops 2 : https://www.zara.com/us/en/woman-tops-l1322.html?v1=2635766
+- Sweatshirts : https://www.zara.com/us/en/woman-sweatshirts-l1320.html?v1=2467841
+- Shirts : https://www.zara.com/us/en/woman-shirts-l1217.html?v1=2420369
+- Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html?v1=2420896
+- Pants : https://www.zara.com/us/en/woman-trousers-l1335.html?v1=2420795
+
+Aerie
+- Tops : https://www.ae.com/us/en/c/aerie/clothing/tops/cat4130031
+- Sweatshirts : https://www.ae.com/us/en/c/aerie/tops/hoodies-sweatshirts/cat7030169
+- Dresses : https://www.ae.com/us/en/c/aerie/apparel/dresses-skirts/cat7350015
+- Pants : https://www.ae.com/us/en/c/aerie/clothing-accessories/bottoms/cat4130033
+
+Anthropologie
+- Tops : https://www.anthropologie.com/tees
+- Sweatshirts : https://www.anthropologie.com/tops-sweatshirts
+- Shirts : https://www.anthropologie.com/tops
+- Dresses : https://www.anthropologie.com/dresses
+- Pants : https://www.anthropologie.com/bottoms
+
+Bash
+- Tops : https://ba-sh.com/fr/en/t-shirts/?_gl=1*18k9v40*_up*MQ..*_ga*MTY2MjMwMDkxNC4xNzgzMzA0MDE0*_ga_V0KDVCDYHF*czE3ODMzMDQwMTQkbzEkZzAkdDE3ODMzMDQ1OTckajYwJGwwJGg1MzYzNDQ3NzQ.
+- Sweatshirts : https://ba-sh.com/fr/en/sweatshirts/?_gl=1*6lpw8g*_up*MQ..*_ga*MTY2MjMwMDkxNC4xNzgzMzA0MDE0*_ga_V0KDVCDYHF*czE3ODMzMDQwMTQkbzEkZzAkdDE3ODMzMDQ2MjMkajM0JGwwJGg1MzYzNDQ3NzQ.
+- Shirts : https://ba-sh.com/fr/en/tops-shirts/?_gl=1*wv5ete*_up*MQ..*_ga*MTY2MjMwMDkxNC4xNzgzMzA0MDE0*_ga_V0KDVCDYHF*czE3ODMzMDQwMTQkbzEkZzAkdDE3ODMzMDQ2MTEkajQ2JGwwJGg1MzYzNDQ3NzQ.
+- Dresses : https://ba-sh.com/fr/en/ready-to-wear/dresses/?_gl=1*15p7q1u*_up*MQ..*_ga*MTY2MjMwMDkxNC4xNzgzMzA0MDE0*_ga_V0KDVCDYHF*czE3ODMzMDQwMTQkbzEkZzAkdDE3ODMzMDQ2MTYkajQxJGwwJGg1MzYzNDQ3NzQ.
+- Pants : https://ba-sh.com/fr/en/trousers-jeans/?_gl=1*6jfisz*_up*MQ..*_ga*MTY2MjMwMDkxNC4xNzgzMzA0MDE0*_ga_V0KDVCDYHF*czE3ODMzMDQwMTQkbzEkZzAkdDE3ODMzMDQ2MzUkajIyJGwwJGg1MzYzNDQ3NzQ.
+
+Cotton on
+- Tops : https://cottonon.com/US/co/women/women-clothing/womens-tops/
+- Sweatshirts : https://cottonon.com/US/co/women/women-clothing/womens-sweats/
+- Shirts : https://cottonon.com/US/co/women/women-clothing/womens-tops/womens-shirts-blouses/
+- Dresses : https://cottonon.com/US/co/women/women-clothing/dresses/
+- Pants : https://cottonon.com/US/co/women/women-clothing/womens-pants/
+
+Cotton citizen
+- Tops 1 : https://cottoncitizen.com/collections/womens-t-shirts
+- Tops 2 : https://cottoncitizen.com/collections/women-tanks
+- Sweatshirts : https://cottoncitizen.com/collections/womens-loungewear
+- Shirts : https://cottoncitizen.com/collections/women-shirts
+- Dresses : https://cottoncitizen.com/collections/women-dresses
+- Pants : https://cottoncitizen.com/collections/womens-trousers
+
+Citizens of Humanity
+- Tops 1 : https://citizensofhumanity.com/collections/womens-tops?sort_by=created-descending
+- Tops 2 : https://citizensofhumanity.com/collections/womens-tops?sort_by=created-descending
+- Sweatshirts : https://citizensofhumanity.com/collections/womens-tops?filter.p.m.custom.product_type=Sweatshirts&sort_by=manual
+- Shirts : https://citizensofhumanity.com/collections/womens-tops?sort_by=created-descending
+- Dresses : https://citizensofhumanity.com/collections/dresses-jumpsuits
+- Pants : https://citizensofhumanity.com/collections/womens-non-denim-pants
+
+Evereve
+- Tops : https://evereve.com/collections/tees-tanks
+- Sweatshirts : https://evereve.com/collections/sweatshirts
+- Shirts : https://evereve.com/collections/tops
+- Dresses : https://evereve.com/collections/dresses
+- Pants : https://evereve.com/collections/pants
+
+Everlane
+- Tops : https://www.everlane.com/collections/womens-tees
+- Sweatshirts : https://www.everlane.com/collections/womens-active-lounge?__cf_chl_f_tk=Q8ynDAoxucPAizM7arSDV.mQLceg3upiOZNTFTYiI8o-1783305043-1.0.1.1-FOFvg3_ZN5PGMQNjSb0NgEMFfnbPwGVWHNln7PlzLxg
+- Shirts : https://www.everlane.com/collections/womens-tops
+- Dresses : https://www.everlane.com/collections/womens-dresses
+- Pants : https://www.everlane.com/collections/womens-pants-trousers
+
+Faherty
+- Tops : https://fahertybrand.com/collections/womens-tees-and-tanks
+- Sweatshirts : https://fahertybrand.com/collections/womens-lounge
+- Shirts : https://fahertybrand.com/collections/womens-shirts-tops
+- Dresses : https://fahertybrand.com/collections/womens-dresses
+- Pants : https://fahertybrand.com/collections/womens-pant-guide
+
+Free People
+- Tops : https://www.freepeople.com/tops/
+- Sweatshirts : https://www.freepeople.com/sweatshirts-pullovers/?vis_nav=4
+- Shirts : https://www.freepeople.com/blouses/?feature-product-ids=FP-109929869-000&topper=2
+- Dresses : https://www.freepeople.com/dresses/
+- Pants : https://www.freepeople.com/pants/
+
+FP Movement
+- Tops : https://www.freepeople.com/fpmovement/workout-tops/
+- Sweatshirts : https://www.freepeople.com/fpmovement/hoodies-sweatshirts/
+- Dresses : https://www.freepeople.com/fpmovement/one-pieces/
+- Pants : https://www.freepeople.com/fpmovement/workout-bottoms/
+
+Gap
+- Tops : https://www.gap.com/browse/women/t-shirts-and-tanks?cid=17076&nav=meganav%3AWomen%3ACategories%3AT-Shirts+%26+Tanks#pageId=0&department=136
+- Sweatshirts : https://www.gap.com/browse/women/sweatshirts-and-sweatpants?cid=1041168&nav=meganav%3AWomen%3ACategories%3ASweatshirts+%26+Sweatpants#pageId=0&department=136
+- Dresses : https://www.gap.com/browse/women/dresses?cid=13658&nav=meganav%3AWomen%3ACategories%3ADresses#pageId=0&department=136
+- Pants : https://www.gap.com/browse/women/sweatshirts-and-sweatpants?cid=1041168&nav=meganav%3AWomen%3ACategories%3ASweatshirts+%26+Sweatpants#pageId=0&department=136&style=1144620&mlink=1041168,1,W_SWEATS_MERCH_EBB_SWEATPANTS
+
+J crew
+- Tops : https://www.jcrew.com/plp/womens/categories/clothing/tees-and-tanks
+- Sweatshirts : https://www.jcrew.com/plp/womens/categories/clothing/sweatshirts-and-sweatpants
+- Shirts : https://www.jcrew.com/plp/womens/categories/clothing/shirts-and-tops
+- Dresses : https://www.jcrew.com/plp/womens/categories/clothing/dresses-and-jumpsuits
+- Pants : https://www.jcrew.com/plp/womens/categories/clothing/pants
+
+James Perse
+- Tops 1 : https://www.jamesperse.com/collections/womens-t-shirts
+- Tops 2 : https://www.jamesperse.com/collections/womens-tanks
+- Sweatshirts : https://www.jamesperse.com/collections/womens-sweat-tops-sweat-bottoms
+- Shirts : https://www.jamesperse.com/collections/womens-tops
+- Dresses : https://www.jamesperse.com/collections/womens-dresses-jumpsuits
+- Pants : https://www.jamesperse.com/collections/womens-pants-denim
+
+Lilla P
+- Tops : https://lillap.com/collections/tops
+- Sweatshirts : https://lillap.com/collections/loose-knit-slub-fall-26
+- Dresses : https://lillap.com/collections/dresses
+- Pants : https://lillap.com/collections/bottoms
+
+LNA
+- Tops 1 : https://www.lnaclothing.com/collections/tees
+- Tops 2 : https://www.lnaclothing.com/collections/tanks
+- Sweatshirts : https://www.lnaclothing.com/collections/hoodies-sweatshirts
+- Shirts : https://www.lnaclothing.com/collections/tops
+- Dresses : https://www.lnaclothing.com/collections/dresses-rompers
+- Pants : https://www.lnaclothing.com/collections/pants-shorts
+
+Joules
+- Tops : https://www.joules.com/shop/womens/clothing/tops
+- Sweatshirts : https://www.joules.com/shop/womens/clothing/sweatshirts-and-hoodies
+- Shirts : https://www.joules.com/shop/womens/clothing/shirts-and-blouses
+- Dresses : https://www.joules.com/shop/womens/clothing/dresses
+- Pants : https://www.joules.com/shop/womens/clothing/all-trousers?p=2#1454.34375
+
+Loft
+- Tops : https://www.loft.com/clothing/tees-tanks/cat2860023/
+- Sweatshirts : https://www.loft.com/lou-grey/lou-grey-shop-all/cat1880002/
+- Shirts : https://www.loft.com/clothing/tops/catl000011/
+- Dresses : https://www.loft.com/clothing/dresses/catl000013/
+- Pants : https://www.loft.com/clothing/pants/catl000014/
+
+Lucky Brand
+- Tops : https://www.luckybrand.com/women/clothing/shirts/tshirts-tanktops
+- Sweatshirts : https://www.luckybrand.com/women/clothing/sweaters
+- Shirts : https://www.luckybrand.com/women/clothing/shirts/blouses
+- Dresses : https://www.luckybrand.com/women/clothing/dresses
+- Pants : https://www.luckybrand.com/women/clothing/pants
+
+Madewell
+- Tops 1 : https://www.madewell.com/kr/womens/clothing/tees/
+- Tops 2 : https://www.madewell.com/kr/womens/clothing/tops-shirts/
+- Dresses : https://www.madewell.com/kr/womens/clothing/dresses/
+- Pants : https://www.madewell.com/kr/womens/clothing/pants/
+
+Marine Layer
+- Tops : https://www.marinelayer.com/collections/gals-tees-basics
+- Sweatshirts : https://www.marinelayer.com/collections/gals-sweatshirts-sweatpants
+- Shirts : https://www.marinelayer.com/collections/gals-tops-buttondowns
+- Dresses : https://www.marinelayer.com/collections/gals-dresses
+
+Me+Em
+- Tops : https://www.meandem.com/us/tops/t-shirts
+- Sweatshirts : https://www.meandem.com/us/tops/sweatshirts
+- Shirts : https://www.meandem.com/us/tops
+- Dresses : https://www.meandem.com/us/dresses
+- Pants : https://www.meandem.com/us/pants
+
+Michael Stars
+- Tops 1 : https://www.michaelstars.com/collections/tees
+- Tops 2 : https://www.michaelstars.com/collections/tank
+- Sweatshirts : https://www.michaelstars.com/collections/lounge
+- Shirts : https://www.michaelstars.com/collections/tops
+- Dresses : https://www.michaelstars.com/collections/dresses-jumpsuits
+- Pants : https://www.michaelstars.com/collections/bottoms
+
+Nation LTD
+- Tops : https://nation.la/collections/tops
+- Sweatshirts : https://nation.la/collections/sweatshirts
+- Dresses : https://nation.la/collections/dresses
+- Pants : https://nation.la/collections/sweatpants
+
+Old Navy
+- Tops : https://oldnavy.gap.com/browse/women/t-shirts?cid=1035712&nav=meganav%3AWomen%3AWomen%E2%80%99s+Tops%3AT-shirts+%26+Tanks#department=136
+- Sweatshirts : https://oldnavy.gap.com/browse/women/sweatshirts-and-hoodies?cid=3044037&nav=meganav%3AWomen%3AWomen%E2%80%99s%20Tops%3ASweatshirts%20%26%20Hoodies#department=136
+- Shirts : https://oldnavy.gap.com/browse/women/all-tops?cid=72091&nav=meganav%3AWomen%3AWomen%E2%80%99s+Tops%3AAll+Tops&tid=ON_WMNS_TOPS#department=136&style=1166604&banner=vi_tops_w_blouses_click
+- Dresses : https://oldnavy.gap.com/browse/women/dresses-and-jumpsuits?cid=15292&nav=meganav%3AWomen%3AShop%20Women%27s%20Categories%3ADresses%20%26%20Jumpsuits
+- Pants : https://oldnavy.gap.com/browse/women/sweatpants?cid=3044038&nav=meganav%3AWomen%3AWomen%27s%20Bottoms%3ASweatpants#department=136
+
+&Other Stories
+- Tops : https://www.stories.com/en-us/clothing/tops/
+- Sweatshirts : https://www.stories.com/en-us/clothing/tops/sweatshirts-hoodies/
+- Shirts : https://www.stories.com/en-us/clothing/blouses-shirts/
+- Dresses : https://www.stories.com/en-us/clothing/dresses/
+- Pants : https://www.stories.com/en-us/clothing/trousers/
+
+Paige
+- Tops : https://paige.com/collection/women-tees-and-tanks
+- Sweatshirts : https://paige.com/collection/women-sweaters-and-sweatshirts
+- Shirts : https://paige.com/collection/women-tops
+- Dresses : https://paige.com/collection/women-dresses
+- Pants : https://paige.com/collection/women-pants
+
+Project Social T
+- Tops 1 : https://www.projectsocialt.com/collections/womens-tanks
+- Tops 2 : https://www.projectsocialt.com/collections/womens-tees
+- Tops 3 : https://www.projectsocialt.com/collections/womens-long-sleeves
+- Sweatshirts : https://www.projectsocialt.com/collections/womens-sweatshirts-and-hoodies
+- Shirts : https://www.projectsocialt.com/collections/elevated-tops
+- Dresses : https://www.projectsocialt.com/collections/womens-dresses
+- Pants : https://www.projectsocialt.com/collections/womens-pants
+
+Rails
+- Tops : https://www.rails.com/collections/womens-tops
+- Sweatshirts : https://www.rails.com/collections/womens-tops?filter.p.m.filters.subcategory=Sweatshirts
+- Dresses : https://www.rails.com/collections/dresses-rompers
+- Pants : https://www.rails.com/collections/womens-pants-shorts
+
+Rag & bone
+- Tops : https://www.rag-bone.com/womens/tshirts/
+- Sweatshirts : https://www.rag-bone.com/womens/sweaters/
+- Shirts : https://www.rag-bone.com/womens/tops/
+- Dresses : https://www.rag-bone.com/womens/dresses-skirts/
+- Pants : https://www.rag-bone.com/womens/pants/
+
+Sessun
+- Tops : https://en.sessun.com/catalogue/t-shirts.html
+- Sweatshirts : https://en.sessun.com/catalogue/sweatshirts.html
+- Shirts : https://en.sessun.com/catalogue/tops-and-bodies.html
+- Dresses : https://en.sessun.com/catalogue/dresses.html
+- Pants : https://en.sessun.com/catalogue/trousers.html
+
+Sezane
+- Tops : https://www.sezane.com/us-en/collection/t-shirts-sweatshirts-marinieres
+- Sweatshirts : https://www.sezane.com/us-en/collection/sweat-shirts-sailor-tops
+- Dresses : https://www.sezane.com/us-en/collection/dresses
+- Pants : https://www.sezane.com/us-en/collection/bottoms/trousers
+
+Splendid
+- Tops : https://splendid.com/collections/the-tee-shop
+- Sweatshirts : https://splendid.com/collections/women-categories-sweats-sweatshirts
+- Shirts : https://splendid.com/collections/women-categories-tops
+- Dresses : https://splendid.com/collections/women-categories-dresses
+- Pants : https://splendid.com/collections/bottoms
+
+Stateside
+- Tops : https://shopstateside.us/collections/tops
+- Sweatshirts : https://shopstateside.us/collections/sweats
+- Dresses : https://shopstateside.us/collections/dresses
+- Pants : https://shopstateside.us/collections/bottoms
+
+Sundry
+- Tops : https://sundryclothing.com/collections/tops
+- Sweatshirts : https://sundryclothing.com/collections/sweatshirt
+- Dresses : https://sundryclothing.com/collections/dresses
+- Pants : https://sundryclothing.com/collections/bottoms
+
+Velvet
+- Tops 1 : https://velvet-tees.com/collections/womens-tees
+- Tops 2 : https://velvet-tees.com/collections/tanks-camis
+- Sweatshirts : https://velvet-tees.com/collections/hoodies-sweatshirts
+- Shirts : https://velvet-tees.com/collections/womens-tops
+- Dresses : https://velvet-tees.com/collections/dresses
+- Pants : https://velvet-tees.com/collections/pants-shorts
+
+Veronica Beard
+- Tops : https://veronicabeard.com/collections/tops?filter.style=T-Shirts
+- Shirts : https://veronicabeard.com/collections/tops
+- Dresses : https://veronicabeard.com/collections/dresses
+- Pants : https://veronicabeard.com/collections/bottoms-pants
+
+The Great
+- Tops : https://thisisthegreat.com/collections/the-great-knits
+- Sweatshirts : https://thisisthegreat.com/collections/knit-shop-sweatshirts
+- Shirts : https://thisisthegreat.com/collections/tops
+- Dresses : https://thisisthegreat.com/collections/dresses
+- Pants : https://thisisthegreat.com/collections/knit-shop-sweatpants
+
+Z Supply
+- Tops 1 : https://zsupplyclothing.com/collections/tees-1
+- Tops 2 : https://zsupplyclothing.com/collections/tanks
+- Sweatshirts : https://zsupplyclothing.com/collections/sweatshirts-hoodies-pullovers
+- Shirts : https://zsupplyclothing.com/collections/shirts-blouses
+- Dresses : https://zsupplyclothing.com/collections/dresses
+- Pants : https://zsupplyclothing.com/collections/bottoms
+
+Wrap
+- Tops : https://www.wraplondon.com/subcats/SWAJT/jersey-tops/index.htm
+- Sweatshirts : https://www.wraplondon.com/subcats/SWAKW/knitwear/index.htm
+- Shirts : https://www.wraplondon.com/subcats/SWABL/shirts-tops/index.htm
+- Dresses : https://www.wraplondon.com/subcats/SWADRSK/dresses-skirts/index.htm
+- Pants : https://www.wraplondon.com/subcats/SWATR/jeans-trousers/index.htm
+
+Varley
+- Tops : https://www.varley.com/collections/tops
+- Sweatshirts : https://www.varley.com/collections/hoodies-and-sweatshirts
+- Dresses : https://www.varley.com/collections/dresses
+- Pants : https://www.varley.com/collections/sweatpants
+
+Athleta
+- Tops : https://athleta.gap.com/browse/tops/all-tops?cid=1032080&nav=meganav%3ATops%3ACategories%3AAll%20Tops
+- Sweatshirts : https://athleta.gap.com/browse/tops/sweatshirts-and-wraps?cid=1005761&nav=meganav%3ATops%3ACategories%3ASweatshirts
+- Dresses : https://athleta.gap.com/browse/dresses-and-jumpsuits/all-dresses-and-jumpsuits?cid=89745&mlink=1%2C1%2CMeganav_6&nav=meganav%3ADresses%3A%3A
+- Pants : https://athleta.gap.com/browse/bottoms/all-bottoms?cid=1025878&mlink=1%2C1%2CMeganav_2&nav=meganav%3ABottoms%3A%3A
+
+Greyson
+- Tops : https://greysonclothiers.com/collections/womens-t-shirts-tank-tops
+- Sweatshirts : https://greysonclothiers.com/collections/womens-hoodies
+- Shirts : https://greysonclothiers.com/collections/womens-polo-shirts
+- Dresses : https://greysonclothiers.com/collections/womens-dresses-jumpsuits
+- Pants : https://greysonclothiers.com/collections/womens-joggers
+
+Nylora
+- Tops : https://nylora.com/collections/tops
+- Sweatshirts : https://nylora.com/collections/sweatshirts-hoodies
+- Dresses : https://nylora.com/collections/dresses
+- Pants : https://nylora.com/collections/bottom
+
+The upside
+- Tops : https://www.theupside.com/shop/tops/
+- Sweatshirts : https://www.theupside.com/shop/tops/knitwear/
+- Dresses : https://www.theupside.com/shop/all-in-one/
+- Pants : https://www.theupside.com/shop/bottoms/
+
+Vuori
+- Tops 1 : https://vuoriclothing.com/collections/womens-tanks
+- Tops 2 : https://vuoriclothing.com/collections/womens-short-sleeve-tops
+- Tops 3 : https://vuoriclothing.com/collections/womens-long-sleeve-tops
+- Sweatshirts : https://vuoriclothing.com/collections/womens-hoodies-and-sweatshirts
+- Dresses : https://vuoriclothing.com/collections/womens-dresses-jumpsuits
+- Pants : https://vuoriclothing.com/collections/womens-joggers
+
+Lululemon
+- Tops 1 : https://shop.lululemon.com/c/women-t-shirts/n1wx7w
+- Tops 2 : https://shop.lululemon.com/c/women-tank-tops/n1uk4w
+- Sweatshirts : https://shop.lululemon.com/c/women-hoodies-and-sweatshirts/n1jux6
+- Dresses : https://shop.lululemon.com/c/women-dresses/n1mk31
+- Pants : https://shop.lululemon.com/c/women-sweatpants/n1m8w7
+
+Barbour
+- Tops : https://www.barbour.com/row/womens/womens-clothing/womens-t-shirts
+- Sweatshirts : https://www.barbour.com/row/womens/womens-clothing/womens-sweatshirts-hoodies
+- Shirts : https://www.barbour.com/row/womens/womens-clothing/womens-shirts-blouses
+- Dresses : https://www.barbour.com/row/womens/womens-clothing/womens-dresses
+- Pants : https://www.barbour.com/row/womens/womens-clothing/womens-trousers
+
+Eddie bauer
+- Tops 1 : https://www.eddiebauer.com/collections/womens-tops-t-shirts?ref=topnav
+- Tops 2 : https://www.eddiebauer.com/collections/womens-tops-tank-tops?ref=topnav
+- Sweatshirts : https://www.eddiebauer.com/collections/womens-tops-sweatshirts-hoodies?ref=topnav
+- Shirts : https://www.eddiebauer.com/collections/womens-tops-shirts?ref=topnav
+- Dresses : https://www.eddiebauer.com/collections/womens-dresses?ref=topnav
+- Pants : https://www.eddiebauer.com/collections/womens-bottoms?ref=topnav
+
+L.L bean
+- Tops : https://global.llbean.com/llb/shop/504209/?page=womens-tees-and-tanks&nav=gnro
+- Sweatshirts : https://global.llbean.com/llb/shop/886/?page=womens-sweatshirts&nav=gnro
+- Shirts : https://global.llbean.com/llb/shop/516735/?prefn1=refinementGender&prefv1=Womens&nav=gnro
+- Dresses : https://global.llbean.com/llb/shop/506213/?page=womens-dresses-and-skirts&nav=gnro
+- Pants : https://global.llbean.com/llb/shop/622/?page=womens-pants-and-jeans&nav=gnro
+
+Lands end
+- Tops : https://www.landsend.com/shop/womens-tops/S-xfe-xez-y5c-xec
+- Sweatshirts : https://www.landsend.com/shop/womens-sweatshirts-hoodies-tops-tees/S-xfe-16na-xez-y5c-xh1-y0d-xec
+- Shirts : https://www.landsend.com/shop/womens-shirts-blouses-tops/S-xfe-xez-y5c-yql-xec
+- Dresses : https://www.landsend.com/shop/womens-dresses/S-xfg-xez-y5c-xec
+- Pants : https://www.landsend.com/shop/womens-sweatpants-pants-bottoms/S-xff-xez-y5c-y7b-xh5-xec
+
+Prana
+- Tops : https://www.prana.com/women/tops.html
+- Sweatshirts : https://www.prana.com/women/tops/sweaters-hoodies.html
+- Dresses : https://www.prana.com/women/dresses-skirts.html
+- Pants : https://www.prana.com/women/bottoms.html
+
+Sweaty betty
+- Tops : https://www.sweatybetty.com/us/shop/tops
+- Sweatshirts : https://www.sweatybetty.com/us/shop/tops/sweatshirts-and-hoodies
+- Dresses : https://www.sweatybetty.com/us/shop/bottoms/dresses-and-jumpsuits
+- Pants : https://www.sweatybetty.com/us/shop/bottoms
+
+Splits59
+- Tops : https://www.splits59.com/collections/tanks-tees
+- Sweatshirts : https://www.splits59.com/collections/sweats-1
+- Dresses : https://www.splits59.com/collections/dresses-and-skorts
+- Pants : https://www.splits59.com/collections/lifestyle-pants
+
+Oysho
+- Tops 1 : https://www.oysho.com/gb/womens-sports-t-shirts-n4764
+- Tops 2 : https://www.oysho.com/gb/womens-sports-tops-n5484
+- Sweatshirts : https://www.oysho.com/gb/womens-sweatshirts-n4922
+- Dresses : https://www.oysho.com/gb/dresses-jumpsuits-n4954
+- Pants : https://www.oysho.com/gb/womens-pants-n4813
+
+On
+- Tops : https://www.on.com/en-us/shop/womens/apparel/tops-tshirts
+- Sweatshirts : https://www.on.com/en-us/shop/womens/apparel/hoodies-sweatshirts
+- Dresses : https://www.on.com/en-us/shop/womens/apparel/dresses
+- Pants : https://www.on.com/en-us/shop/womens/apparel/pants
+
+Spanx
+- Tops : https://spanx.com/collections/tops?collection_cursor=eyJsYXN0X3ZhbHVlIjoiMyIsImxhc3RfaWQiOjkzNDkwOTg5MzAzODcsIm9mZnNldCI6M30%3D&collection_direction=next
+- Sweatshirts : https://spanx.com/collections/airessentials?collection_cursor=eyJsYXN0X3ZhbHVlIjoiMyIsImxhc3RfaWQiOjkzNDkwNzE3MzI5NDcsIm9mZnNldCI6M30%3D&collection_direction=next
+- Dresses : https://spanx.com/collections/dresses-jumpsuits
+- Pants : https://spanx.com/collections/pants?collection_cursor=eyJsYXN0X3ZhbHVlIjoiMyIsImxhc3RfaWQiOjkzNDg2Mjc3NTkzMTUsIm9mZnNldCI6M30%3D&collection_direction=next
+
+Coldwatercreek
+- Tops : https://www.coldwatercreek.com/clothing/knit-tops-tees
+- Sweatshirts : https://www.coldwatercreek.com/clothing/sweatshirts
+- Shirts : https://www.coldwatercreek.com/clothing/shirts-blouses
+- Dresses : https://www.coldwatercreek.com/clothing/dresses
+- Pants : https://www.coldwatercreek.com/clothing/pants-shorts
+
+Tuckernuck
+- Tops : https://tnuck.com/collections/ladies-tops
+- Sweatshirts : https://tnuck.com/collections/ladies-matching-sets
+- Dresses : https://tnuck.com/collections/ladies-dresses
+- Pants : https://tnuck.com/collections/ladies-pants
+
+Jager
+- Tops 1 : https://www.marksandspencer.com/l/brands/jaeger/fs5/t-shirts-3?filter=Categories%253DSubCategory_28994397
+- Tops 2 : https://www.marksandspencer.com/l/brands/jaeger?filter=Categories%253DSubCategory_28994397%7EProduct%2520Type%253DTops
+- Sweatshirts : https://www.marksandspencer.com/l/women/knitwear/fs5/summer
+- Dresses : https://www.marksandspencer.com/l/brands/jaeger?filter=Categories%253DSubCategory_28994397%7EProduct%2520Type%253DDresses
+- Pants : https://www.marksandspencer.com/l/women/jeans
+
+Monsoon
+- Tops : https://www.monsoonlondon.com/kr/womens/womens-clothing/tops/
+- Sweatshirts : https://www.monsoonlondon.com/kr/womens/womens-clothing/knitwear/
+- Dresses : https://www.monsoonlondon.com/kr/womens/dresses/
+- Pants : https://www.monsoonlondon.com/kr/womens/womens-clothing/trousers-shorts/
+
+Hobbs
+- Tops : https://www.hobbs.com/us/clothing/tops/
+- Dresses : https://www.hobbs.com/us/clothing/dresses/
+- Pants : https://www.hobbs.com/us/clothing/pants/
+
+Chico's
+- Tops : https://www.chicos.com/store/category/tees-tanks/cat11199293
+- Sweatshirts : https://www.chicos.com/store/category/activewear/cat20059281
+- Shirts : https://www.chicos.com/store/category/blouses-shirts/cat11199294
+- Dresses : https://www.chicos.com/store/category/dresses/cat40004
+- Pants : https://www.chicos.com/store/category/pants/cat8289646
+
+Garnet hill
+- Tops : https://www.garnethill.com/clothing/categories/tops-tees/
+- Shirts : https://www.garnethill.com/clothing/categories/tops-tees/facet/f_style_uFilter/Shirts__sp__am__spBlouses?categoryId=191619
+- Dresses : https://www.garnethill.com/clothing/categories/dresses/
+- Pants : https://www.garnethill.com/clothing/categories/pants/
+
+Gerard darel
+- Tops : https://gerarddarel.com/en-us/collections/tops-t-shirts
+- Shirts : https://gerarddarel.com/en-us/collections/chemises-blouses
+- Dresses : https://gerarddarel.com/en-us/collections/robes
+- Pants : https://gerarddarel.com/en-us/collections/pantalons-jeans
+
+CCC
+- Tops : https://www.crewclothing.co.uk/womens/clothing/tops-and-tshirts/
+- Sweatshirts : https://www.crewclothing.co.uk/womens/clothing/sweatshirts-hoodies/
+- Shirts : https://www.crewclothing.co.uk/womens/clothing/shirts-and-blouses/
+- Dresses : https://www.crewclothing.co.uk/womens/clothing/womens-dresses-and-skirts/dresses/
+- Pants : https://www.crewclothing.co.uk/womens/clothing/trousers/
+
+J.jill
+- Tops : https://www.jjill.com/shop/womens-clothing/knit-tops-tees
+- Sweatshirts : https://www.jjill.com/shop/womens-clothing/knit-tops-tees
+- Shirts : https://www.jjill.com/shop/womens-clothing/shirts-blouses
+- Dresses : https://www.jjill.com/shop/womens-clothing/dresses
+- Pants : https://www.jjill.com/shop/womens-clothing/pants-jeans
+
+Boden
+- Tops : https://us.boden.com/collections/womens-tops
+- Shirts : https://us.boden.com/collections/womens-shirts-blouses
+- Dresses : https://us.boden.com/collections/womens-dresses
+- Pants : https://us.boden.com/collections/womens-pants
+
+J.mclaughlin
+- Tops : https://www.jmclaughlin.com/collections/women-tops-tee
+- Shirts : https://www.jmclaughlin.com/collections/women-tops-shirts
+- Dresses : https://www.jmclaughlin.com/collections/women-dresses
+- Pants : https://www.jmclaughlin.com/collections/women-pants
+
+vineyardvines
+- Tops : https://www.vineyardvines.com/category/womens-tees-tanks?nav=home--top_nav--Womens--womens-clothing--9
+- Sweatshirts : https://www.vineyardvines.com/category/women-sweatshirts?nav=category--top_nav--Womens--womens-clothing--3
+- Shirts : https://www.vineyardvines.com/category/Womens-Shirts-Tunics?nav=category--top_nav--Womens--womens-clothing--7
+- Dresses : https://www.vineyardvines.com/category/womens-dresses?nav=category--top_nav--Womens--womens-clothing--2
+- Pants : https://www.vineyardvines.com/category/womens-pants-denim?nav=category--top_nav--Womens--womens-clothing--8
+
+Oasis
+- Tops : https://www.oasisfashion.com/categories/womens-tops
+- Sweatshirts : https://www.oasisfashion.com/categories/womens-tops/facet/categoryTaxonomy/Hoodies%20&%20Sweatshirts
+- Shirts : https://www.oasisfashion.com/categories/womens-tops-shirts-and-blouses
+- Dresses : https://www.oasisfashion.com/categories/womens-dresses
+- Pants : https://www.oasisfashion.com/categories/womens-skirts
+
+Whitestuff
+- Tops 1 : https://www.whitestuff.com/browse/collection/womens-t-shirts
+- Tops 2 : https://www.whitestuff.com/browse/womens/tops-and-tees
+- Sweatshirts : https://www.whitestuff.com/browse/womens/knitwear
+- Shirts : https://www.whitestuff.com/browse/womens/shirts-and-blouses
+- Dresses : https://www.whitestuff.com/browse/womens/dresses
+- Pants : https://www.whitestuff.com/browse/womens/trousers-and-leggings
+
+Fatface
+- Tops : https://www.fatface.com/shop/womens/clothing/tops/t-shirts
+- Sweatshirts : https://www.fatface.com/shop/womens/clothing/sweatshirts-and-hoodies
+- Dresses : https://www.fatface.com/shop/womens/clothing/dresses
+- Pants : https://www.fatface.com/shop/womens/clothing/all-trousers
+
+Seasalt cornwall
+- Tops : https://www.seasaltcornwall.com/clothing/tops
+- Sweatshirts : https://www.seasaltcornwall.com/clothing/jumpers-cardigans
+- Shirts : https://www.seasaltcornwall.com/clothing/shirts-blouses
+- Dresses : https://www.seasaltcornwall.com/clothing/dresses
+- Pants : https://www.seasaltcornwall.com/clothing/trousers-leggings-cropped
+
+The white company
+- Tops : https://www.thewhitecompany.com/uk/Clothing/View-All-Clothing/Tops/c/tops-and-t-shirts
+- Sweatshirts : https://www.thewhitecompany.com/uk/Clothing/View-All-Clothing/c/loungewear
+- Dresses : https://www.thewhitecompany.com/uk/Clothing/View-All-Clothing/c/dresses-and-tunics
+
+Phase eight
+- Tops : https://www.phase-eight.com/row/clothing/tops/
+- Sweatshirts : https://www.phase-eight.com/row/clothing/knitwear/
+- Dresses : https://www.phase-eight.com/row/clothing/dresses/
+- Pants : https://www.phase-eight.com/row/clothing/trousers/
+
+Poetry
+- Tops : https://www.poetryfashion.co.uk/category-POETT/tshirts-tops/index.htm
+- Shirts : https://www.poetryfashion.co.uk/category-POEST/shirts-tunics/index.htm
+- Dresses : https://www.poetryfashion.co.uk/category-POEDS/dresses-skirts/index.htm
+- Pants : https://www.poetryfashion.co.uk/category-POETJ/trousers-shorts/index.htm
+
+Mint velvet
+- Tops 1 : https://mintvelvet.com/collections/t-shirts
+- Tops 2 : https://mintvelvet.com/collections/tops
+- Sweatshirts : https://mintvelvet.com/collections/sweatshirts-hoodies
+- Shirts : https://mintvelvet.com/collections/shirts-blouses
+- Dresses : https://mintvelvet.com/collections/dresses
+- Pants : https://mintvelvet.com/collections/trousers
+
+WHBM
+- Tops 1 : https://www.whitehouseblackmarket.com/store/category/tees/cat4769286
+- Tops 2 : https://www.whitehouseblackmarket.com/store/category/tops/cat210001
+- Shirts : https://www.whitehouseblackmarket.com/store/category/blouses-shirts/cat4769287
+- Dresses : https://www.whitehouseblackmarket.com/store/category/dresses/cat210002
+- Pants : https://www.whitehouseblackmarket.com/store/category/pants/cat210003
+
+Shopbop
+- Tops : https://www.shopbop.com/clothing-tops/br/v=1/13332.htm
+- Sweatshirts : https://www.shopbop.com/clothing-tops/br/v=1/13332.htm?f=MATopsStyle-Sweatshirt
+- Dresses : https://www.shopbop.com/clothing-dresses/br/v=1/13351.htm
+- Pants : https://www.shopbop.com/clothing-pants/br/v=1/13281.htm?f=MAWomensPantsStyle-Sweatpants
+
+Alo
+- Tops : https://www.aloyoga.com/collections/tops
+- Sweatshirts : https://www.aloyoga.com/collections/womens-sweatshirts-hoodies
+- Dresses : https://www.aloyoga.com/collections/dresses
+- Pants : https://www.aloyoga.com/collections/sweatpants
+
+Theory
+- Tops : https://www.theory.com/women/t-shirts-and-tanks/
+- Sweatshirts : https://www.theory.com/women/loungewear/
+- Shirts : https://www.theory.com/women/tops/
+- Dresses : https://www.theory.com/women/dresses/
+- Pants : https://www.theory.com/women/pants/
+
+Club monaco
+- Tops : https://www.clubmonaco.com/collections/womens-shirts-tops
+- Dresses : https://www.clubmonaco.com/collections/womens-dresses-jumpsuits
+- Pants : https://www.clubmonaco.com/collections/womens-pants-denim-jeans
+
+Eileen fisher
+- Tops 1 : https://www.eileenfisher.com/shop/clothing/tops-tees
+- Tops 2 : https://www.eileenfisher.com/shop/clothing/tanks-camis
+- Dresses : https://www.eileenfisher.com/shop/clothing/dresses-skirts
+- Pants : https://www.eileenfisher.com/shop/clothing/pants-jumpsuits
+
+Thread & supply
+- Tops : https://threadandsupply.com/collections/tops
+- Sweatshirts : https://threadandsupply.com/collections/pullovers
+- Dresses : https://threadandsupply.com/collections/dresses-1
+- Pants : https://threadandsupply.com/collections/pants
+
+Monrow
+- Tops : https://www.monrow.com/collections/womens-tops-1
+- Sweatshirts : https://www.monrow.com/collections/womens-sweatshirts-outerwear
+- Pants : https://www.monrow.com/collections/womens-bottoms
+
+Frame
+- Tops : https://frame-store.com/collections/tanks-tees-women
+- Shirts : https://frame-store.com/collections/tops-blouses-women
+- Dresses : https://frame-store.com/collections/dresses-women
+- Pants : https://frame-store.com/collections/pants-women
+
+Addison bay
+- Tops : https://addisonbay.com/collections/shop-all-tops
+- Sweatshirts : https://addisonbay.com/collections/sweatshirts
+- Dresses : https://addisonbay.com/collections/dresses
+- Pants : https://addisonbay.com/collections/shop-all-bottoms
+
+Wilson
+- Tops 1 : https://www.wilson.com/en-us/sportswear/women/tops/tanks
+- Tops 2 : https://www.wilson.com/en-us/sportswear/women/tops/short-sleeve-tops
+- Tops 3 : https://www.wilson.com/en-us/sportswear/women/tops/long-sleeve-tops
+- Sweatshirts : https://www.wilson.com/en-us/sportswear/women/tops/sweatshirts
+- Dresses : https://www.wilson.com/en-us/sportswear/women/dresses-jumpsuits
+- Pants : https://www.wilson.com/en-us/sportswear/women/bottoms/pants-leggings
+
+Addidas
+- Tops : https://www.adidas.com/us/women-tops?sort=newest-to-oldest
+- Sweatshirts : https://www.adidas.com/us/women-hoodies_sweatshirts
+- Dresses : https://www.adidas.com/us/women-skirts_dresses
+- Pants : https://www.adidas.com/us/women-pants
+
+Nike
+- Tops : https://www.nike.com/w/womens-tops-t-shirts-5e1x6z9om13
+- Sweatshirts : https://www.nike.com/w/womens-fleece-4xh6qz5e1x6
+- Dresses : https://www.nike.com/w/womens-skirts-and-dresses-5e1x6z8y3qp
+- Pants : https://www.nike.com/w/womens-pants-and-tights-2kq19z5e1x6
+
+Beyond yoga
+- Tops : https://beyondyoga.com/collections/tops-shop-all
+- Sweatshirts : https://beyondyoga.com/collections/sweatshirts
+- Dresses : https://beyondyoga.com/collections/shop-all-dresses-skirts-jumpsuits
+- Pants : https://beyondyoga.com/collections/bottoms-shop-all
+
+Gymshark
+- Tops : https://row.gymshark.com/collections/t-shirts-tops/womens
+- Sweatshirts : https://row.gymshark.com/collections/hoodies/womens
+- Dresses : https://row.gymshark.com/collections/all-in-one/womens
+- Pants : https://row.gymshark.com/collections/bottoms/womens
+
+Frank & Eileen
+- Tops : https://www.frankandeileen.com/collections/tees-tanks
+- Sweatshirts : https://www.frankandeileen.com/collections/sweatshirts-capelets
+- Shirts : https://www.frankandeileen.com/collections/button-ups
+- Dresses : https://www.frankandeileen.com/collections/dresses
+- Pants : https://www.frankandeileen.com/collections/bottoms
+
+Buck Mason
+- Tops 1 : https://www.buckmason.com/collections/womens-tees-and-long-sleeves
+- Tops 2 : https://www.buckmason.com/collections/womens-tanks
+- Tops 3 : https://www.buckmason.com/collections/womens-tops-and-shirts
+- Sweatshirts : https://www.buckmason.com/collections/womens-sweats
+- Dresses : https://www.buckmason.com/collections/womens-dresses
+- Pants : https://www.buckmason.com/collections/womens-bottoms
+
+ALC
+- Tops : https://alcltd.com/collections/tees-tanks
+- Sweatshirts : https://alcltd.com/collections/knitwear
+- Shirts : https://alcltd.com/collections/tops
+- Dresses : https://alcltd.com/collections/dresses
+- Pants : https://alcltd.com/collections/bottoms-jumpsuits
+
+English factory
+- Tops : https://shopenglishfactory.com/collections/tops
+- Sweatshirts : https://shopenglishfactory.com/collections/new-sweater-knits
+- Dresses : https://shopenglishfactory.com/collections/dresses
+- Pants : https://shopenglishfactory.com/collections/pants
+
+Vanessa bruno
+- Tops 1 : https://www.vanessabruno.com/clothing/shirts-tops/t-shirt.html
+- Tops 2 : https://www.vanessabruno.com/clothing/shirts-tops/top.html
+- Sweatshirts : https://www.vanessabruno.com/last-chance/knitwear.html
+- Shirts : https://www.vanessabruno.com/clothing/shirts-tops.html
+- Dresses : https://www.vanessabruno.com/clothing/dresses-jumpsuits.html
+- Pants : https://www.vanessabruno.com/clothing/trousers.html
+
+Patagonia
+- Tops : https://www.patagonia.com/shop/womens/tops/t-shirts
+- Sweatshirts : https://www.patagonia.com/shop/womens/tops/sweatshirts-hoodies
+- Shirts : https://www.patagonia.com/shop/womens/tops/button-down
+- Dresses : https://www.patagonia.com/shop/womens/dresses-jumpsuits
+- Pants : https://www.patagonia.com/shop/womens/bottoms
+
+Outdoorvoices
+- Tops : https://www.outdoorvoices.com/collections/womens-tops
+- Sweatshirts : https://www.outdoorvoices.com/collections/w-jackets
+- Dresses : https://www.outdoorvoices.com/collections/dresses
+- Pants : https://www.outdoorvoices.com/collections/w-pants
+
+Boldest
+- Tops : https://www.kolonmall.com/boldest/List/133020162237
+- Pants : https://www.kolonmall.com/boldest/List/133020161437
+
+Dickies
+- Tops : https://www.dickies.com/collections/womens-tops
+- Sweatshirts : https://www.dickies.com/en-us/collections/womens-hoodies
+- Shirts : https://www.dickies.com/en-us/collections/womens-shirt-jackets
+- Dresses : https://www.dickies.com/collections/womens-skirts-dresses
+- Pants : https://www.dickies.com/collections/womens-pants
+
+Carlhartt
+- Tops : https://www.carhartt.com/c/women-tops-tshirt
+- Sweatshirts : https://www.carhartt.com/c/women-hoodies-sweatshirts
+- Shirts : https://www.carhartt.com/c/women-tops
+- Dresses : https://www.carhartt.com/c/women-bibs-overalls
+- Pants : https://www.carhartt.com/en-eu/c/women/trousers-jeans/sweatpants/euw3000017
+
+Goldie
+- Tops : https://www.goldietees.com/collections/shop-all-whats-new
+- Sweatshirts : https://www.goldietees.com/collections/shop-all-lounge
+
+Scoth & soda
+- Tops : https://scotchandsoda.com/collections/women-clothing-tops-t-shirts
+- Sweatshirts : https://scotchandsoda.com/collections/women-clothing-hoodies-sweats
+- Shirts : https://scotchandsoda.com/collections/women-clothing-blouses-shirts
+- Dresses : https://scotchandsoda.com/collections/women-clothing-dresses-skirts
+- Pants : https://scotchandsoda.com/collections/women-clothing-pants
+
+Vince
+- Tops : https://www.vince.com/women-tees/
+- Shirts : https://www.vince.com/women-shirts-tops/
+- Dresses : https://www.vince.com/women-dresses-jumpsuits/
+- Pants : https://www.vince.com/women-pants/
+
+Good American
+- Tops : https://www.goodamerican.com/en-kr/collections/tees-tanks
+- Sweatshirts : https://www.goodamerican.com/collections/jeanius-sweats
+- Shirts : https://www.goodamerican.com/en-kr/collections/womens-tops
+- Dresses : https://www.goodamerican.com/en-kr/collections/dresses
+- Pants : https://www.goodamerican.com/en-kr/collections/bottoms
+
+Draper James
+- Tops : https://draperjames.com/collections/tops
+- Dresses : https://draperjames.com/collections/dresses
+- Pants : https://draperjames.com/collections/bottoms
+
+Ulla Johnson
+- Tops : https://ullajohnson.com/collections/tops-9975a1
+- Sweatshirts : https://ullajohnson.com/collections/knits-and-sweatshirts
+- Dresses : https://ullajohnson.com/collections/dresses-9975a1
+- Pants : https://ullajohnson.com/collections/pants-and-jumpsuits
