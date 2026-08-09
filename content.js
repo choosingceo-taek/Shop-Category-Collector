@@ -286,16 +286,15 @@ async function runStep(j) {
   if (j.phase === "spec") {
     if (typeof a.fetchDetail !== "function") { j.phase = "build"; await s(j); step(); return; }
     const total = j.items.length;
-    for (let i = j.specIdx || 0; i < total; i++) {
-      if (!alive()) return;   // extension reloaded mid-run -> stop quietly
-      const live = await g();
-      if (!live || !live.active || live.paused) { await s(j); return; }   // pause -> keep progress
-      j.specIdx = i;
-      const it = j.items[i];
-      if (!it._specDone) {
-        try {
-          const d = await a.fetchDetail(it.product_url);
-          if (d && typeof d === "object") {
+    // Fetch details a few at a time instead of one-by-one with a pause between.
+    // Sequential + sleep was minutes of wall time for a normal category, and far
+    // worse when the scan runs in a background tab: Chrome throttles timers in
+    // hidden tabs (down to about once a minute), so each sleep became the
+    // bottleneck. A small concurrency removes both problems and stays polite —
+    // it is fewer simultaneous requests than the page itself makes.
+    const LANES = 4;
+    const applyDetail = (it, d) => {
+      if (d && typeof d === "object") {
             it.fabric_composition = d.composition || "";
             // keep whichever colour source is FULLER — Cotton On's listing swatches
             // beat its weak no-JS PDP, while Walmart's PDP beats its sparse shelf.
@@ -321,14 +320,26 @@ async function runStep(j) {
             if (d.name && !it.name) it.name = d.name;
             if (d.image_url && !it.image_url) it.image_url = d.image_url;
             if (d.product_url && !/-l\d/i.test(it.product_url || "")) it.product_url = d.product_url;
-            it._compReason = d.reason || "";
-          } else { it.fabric_composition = d || ""; }
-        } catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run
-      }
-      it._specDone = true;
-      await report(`Collecting details… ${i + 1}/${total}`);   // update every item so progress is visible
-      if (i % 5 === 0) await s(j);                          // persist periodically for resume
-      await sleep(400 + Math.random() * 400);
+        it._compReason = d.reason || "";
+      } else { it.fabric_composition = d || ""; }
+    };
+
+    let done = j.specIdx || 0;
+    for (let i = j.specIdx || 0; i < total; i += LANES) {
+      if (!alive()) return;   // extension reloaded mid-run -> stop quietly
+      const live = await g();
+      if (!live || !live.active || live.paused) { await s(j); return; }   // pause -> keep progress
+      const slice = j.items.slice(i, i + LANES);
+      await Promise.all(slice.map(async it => {
+        if (it._specDone) return;
+        try { applyDetail(it, await a.fetchDetail(it.product_url)); }
+        catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run
+        it._specDone = true;
+      }));
+      done = Math.min(total, i + LANES);
+      j.specIdx = done;
+      await report(`Collecting details… ${done}/${total}`);
+      await s(j);                                   // persist each batch for resume
     }
     j.specIdx = total; j.phase = "build"; await s(j); step(); return;
   }

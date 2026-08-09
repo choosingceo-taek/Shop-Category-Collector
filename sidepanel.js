@@ -78,6 +78,8 @@
     if (!read) { now.textContent = "페이지를 읽는 중…"; add.disabled = true; return; }
     if (read.kind === "internal") {
       now.innerHTML = "브라우저 내부 페이지입니다. <span class='badge'>담을 수 없음</span>";
+      // reset the label too — otherwise it keeps whatever the last real page said
+      add.textContent = "＋ Add this page";
       add.disabled = true; clip.disabled = true; return;
     }
     add.disabled = false; clip.disabled = false;
@@ -413,7 +415,9 @@
     const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
     if (!entries.length) return toast("스캔 가능한 사이트가 없습니다");
     if (!confirm(`${entries.length}개 사이트를 순서대로 전체 스캔합니다. 시작할까요?`)) return;
-    const t = await chrome.tabs.create({ url: entries[0].url, active: false });
+    // Foreground on purpose: Chrome throttles timers and fetches in hidden tabs
+    // (down to roughly once a minute after a few minutes), which stalls a run.
+    const t = await chrome.tabs.create({ url: entries[0].url, active: true });
     const send = () => chrome.tabs.sendMessage(t.id,
       { type: "runList", listId: curList.id, name: curList.name, list: entries,
         withSpec: true, filters: {} },
