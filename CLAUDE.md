@@ -1,4 +1,4 @@
-# Shop Category Collector — 프로젝트 헌장
+# Market Lens — 프로젝트 헌장
 
 온라인 쇼핑몰의 카테고리/검색 결과를 수집해 **키워드 중심 비주얼 트렌드 리서치**의
 원천 데이터(xlsx)를 만드는 크롬 확장(MV3). 최종 비전: 카테고리 구조를 인식해
@@ -30,7 +30,7 @@
   없는 양이 나오고, 목적은 "고른 카테고리들의 리스트"이지 전수 덤프가 아니다.
   무한 스크롤 그리드는 스크롤로 다 펼쳐지는 그 한 페이지가 대상.
   전 페이지 순회 코드는 남아 있고 `singlePage:false`로 켤 수 있다.
-- 엔진 라우팅: `sites.js`의 어댑터 레지스트리 `[walmart, target, cottonon, zara, cos, massimodutti, shopify, generic]`
+- 엔진 라우팅: `sites.js`의 어댑터 레지스트리 `[walmart, target, cottonon, zara, aritzia, cos, massimodutti, shopify, generic]`
   - walmart: 커스텀 SPA 엔진 (embedded JSON 컨테이너 스코핑 + 상세 fetch)
   - target: 커스텀 SPA (?Nao=24 오프셋 페이지네이션, JSON-LD·불릿 상세, multiBrand)
   - shopify: **플랫폼 감지형** (페이지 내 CDN 마커) — Edikted 등 모든 Shopify 몰
@@ -48,8 +48,11 @@
       (하드코딩 아님). list 스크랩은 DOM 그대로, 상세만 API로 교체. `inditex` 헬퍼
   - generic: DOM 휴리스틱 + JSON-LD 병합 폴백
 - 상세 수집(옵션): 원단 조성(섬유 검증), 색상 전체 목록, 사이즈, 브랜드, 정가
-- 출력: 12컬럼 xlsx (썸네일 이미지 임베드, 정가/현재가 세일 빨강, Color Count,
-  출처 규칙 — 실측값 검정 / 미확인 "정보 확인" 빨강 + 원인)
+- 출력: **7컬럼 xlsx** — 브랜드 · 카테고리 · 상품명 · 썸네일 · URL · 원단 · 혼용률.
+  원단(섬유명)과 혼용률(비율)은 별도 컬럼. 혼용률은 페이지 텍스트를 잘라 오는 게
+  아니라 실제 발견된 `숫자% 섬유` 쌍으로 **재구성**한다(JSON-LD 안에 조성을 넣는
+  Zara류에서 마크업이 새는 것을 원천 차단). 출처 규칙 — 실측값 검정 /
+  미확인 "정보 확인" 빨강 + 원인
 - UI: **사이드 패널**(툴바 아이콘 = 리서치 컴패니언) + 페이지 좌하단 FAB.
   패널은 탭이 바뀔 때마다 페이지를 읽어 상황을 말하고 **맞는 행동 하나를 제안**한다
   (지원 쇼핑몰=전체 스캔 / 그 외=상품 담기 / 미허용 사이트=권한 요청). 스캔 중에는
@@ -60,7 +63,8 @@
   우클릭 담기는 activeTab만 사용(사전 권한 0), 패널 버튼은 클릭 시점에 해당
   오리진만 요청(`optional_host_permissions`)
 - post-scan 필터: 브랜드/주브랜드만/이름 포함·제외 (내보내기 시점 적용)
-- 테스트: `scratchpad`의 9개 스위트 139+ 케이스 (Node + jsdom, 브라우저 불필요)
+- 테스트: `scratchpad`의 Node 스위트 + Playwright로 실제 Chrome에 확장을 로드해
+  패널·카탈로그·스캔 흐름을 검증(xvfb 필요, headless는 확장 로드 불가)
 
 로드맵과 미구현 항목은 `SPEC.md` 참조.
 
@@ -79,7 +83,9 @@
   분포를 보존해야 트렌드가 보인다. (현재 팝업 필터는 내보내기 시점 적용 = 준수)
 - **ALWAYS 권한 최소.** `permissions`/`host_permissions` 추가는 스토어 심사를
   느리게 하므로, 추가 시 반드시 사유와 심사 영향을 커밋 메시지에 명시.
-  미사용 권한은 발견 즉시 제거. (현재 `permissions: ["storage", "downloads"]` — downloads는 일부 리테일러(Target)가 페이지 내 앵커 다운로드를 막아 SW 경유 저장에 필요)
+  미사용 권한은 발견 즉시 제거. (현재 `permissions: ["storage","downloads","sidePanel","contextMenus","scripting","activeTab"]` — downloads는 일부 리테일러(Target)가 앵커
+  다운로드를 막아 SW 경유 저장에 필요. 호스트 접근은 기본 0: 우클릭 담기는 activeTab,
+  패널 버튼은 클릭 시점에 해당 오리진만 `optional_host_permissions`로 요청)
 - **정량 레포트는 LLM 크레딧 없이 순수 계산으로.** 서술형 해석은 선택 레이어이며
   확장 안에 LLM을 넣지 않는다. xlsx를 Claude에 핸드오프하는 방식으로.
 - **자동 감지는 "출발점"이지 "정답"이 아니다.** 카테고리 자동 감지 → 사용자가

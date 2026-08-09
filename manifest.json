@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Shop Category Collector",
-  "version": "1.33.0",
-  "description": "쇼핑몰 카테고리를 통째로 수집해 원단·색상·가격이 담긴 Excel로 만들고, 브라우징 중 발견한 상품·이미지를 사이드 패널 컬렉션에 모으는 리서치 도구.",
+  "name": "Market Lens",
+  "version": "1.34.0",
+  "description": "참고할 브랜드 카테고리 URL을 리스트로 모으고, 그 리스트를 스캔해 브랜드·카테고리·상품명·썸네일·URL·원단·혼용률을 Excel로 뽑는 마켓 리서치 도구.",
   "permissions": [
     "storage",
     "downloads",
@@ -51,7 +51,7 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "카탈로그 열기 (스캔은 페이지 좌측 하단 아이콘)",
+    "default_title": "Market Lens 열기",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

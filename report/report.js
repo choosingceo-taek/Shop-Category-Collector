@@ -1,5 +1,5 @@
 /* Report calculations — pure, side-effect-free market-research aggregations over
-   one or more scan files exported by the Shop Category Collector extension.
+   one or more scan files exported by the Market Lens extension.
    No LLM, no network: every number here is plain computation (the charter's
    "정량 레포트는 순수 계산으로"). Exposed on window.ReportCalc for the page and
    via module.exports for the Node test suite. */
