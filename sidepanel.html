@@ -225,6 +225,32 @@
   .ent .act:hover { color:var(--ink); }
   .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
 
+  /* The dry run: what a scan would collect here, said in plain numbers. It is
+     how a shop gets fixed without the user ever opening a console. */
+  .probe { margin-top:9px; padding:10px 11px; background:var(--wash); border-radius:var(--r-s);
+    font-size:11.5px; line-height:1.5; }
+  .probe .ph { font-weight:650; display:flex; align-items:center; gap:6px; }
+  .probe .ph .dotp { width:8px; height:8px; border-radius:50%; flex:none; }
+  .probe .ph .dotp.good { background:#1f8a45; }
+  .probe .ph .dotp.warn { background:#c98a12; }
+  .probe .ph .dotp.bad  { background:#c0392b; }
+  .probe .pl { color:var(--ink2); margin-top:4px; }
+  .probe .pl b { font-weight:650; color:var(--ink); }
+  .probe .psub { color:var(--muted); font-size:10.5px; margin-top:5px; }
+  .probe .prow { display:flex; gap:6px; margin-top:8px; }
+  .probe .prow button { flex:1; font-size:11.5px; padding:6px; border-radius:var(--r-s);
+    background:var(--card); }
+  /* the whole-list dry run, one line per site */
+  .probe .crow { display:flex; align-items:baseline; gap:7px; padding:3px 0; font-size:11.5px;
+    box-shadow:inset 0 -1px 0 var(--line); }
+  .probe .crow:last-of-type { box-shadow:none; }
+  .probe .crow .cdot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .probe .crow .cn { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .probe .crow .cv { color:var(--muted); font-size:10.5px; white-space:nowrap; }
+  .probe .clist { max-height:190px; overflow-y:auto; margin-top:7px; }
+  .probe .prep { width:100%; margin-top:7px; height:110px; font:10.5px/1.45 ui-monospace,Menlo,monospace;
+    border:1px solid var(--line2); border-radius:var(--r-s); padding:7px; resize:vertical; }
+
   /* pasting is the rare path — offered beside the others, opened on demand */
   .bulkbox { margin-top:8px; }
   .bulkbox textarea { width:100%; margin-top:8px; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -363,6 +389,7 @@
               <button class="iconbtn" id="dellist" title="Delete this list" aria-label="Delete this list">🗑</button>
               <button class="xbtn" id="explisttxt" title="Export as .txt — edit it and import again">.txt</button>
               <button class="xbtn" id="explistxlsx" title="Export as .xlsx — edit it and import again">.xlsx</button>
+              <button class="xbtn" id="checkall" title="Open every site in this list, read it with the real engine, and report which ones come back short. Collects nothing.">🔍 Check all</button>
             </span>
           </div>
           <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
@@ -382,7 +409,10 @@
             <div class="addrow">
               <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)">⬆ Import list</button>
               <button id="pastetoggle" aria-expanded="false" title="Paste a block of URLs">⌨ Paste URLs</button>
+              <button id="probebtn" title="Read this page with the real engine and report what it finds">🔍 Test</button>
             </div>
+            <!-- what a scan would actually get here, without running one -->
+            <div class="probe" id="probeout" hidden></div>
             <div class="bulkbox" id="bulkbox" hidden>
               <textarea id="bulk" rows="4" placeholder="Zara
 - Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
@@ -398,6 +428,8 @@
             <button id="lfold" title="Collapse or expand every brand">Collapse</button>
           </div>
           <div id="listbody"></div>
+          <!-- verdict for the whole list, one line per site -->
+          <div class="probe" id="checkout" hidden></div>
 
         </div>
 

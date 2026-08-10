@@ -687,6 +687,52 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
     send(a ? Object.assign({ site: a.label, adapterId: a.id, hasDetail: typeof a.fetchDetail === "function", multiBrand: !!a.multiBrand }, a.context(document)) : { site: null });
     return true;
   }
+  /* Dry run on the page in front of the user.
+
+     Getting a shop working used to mean: run a scan, open the spreadsheet,
+     notice a column is wrong, open DevTools, paste a diagnostic script, copy
+     the output. That is six steps and a console for someone who does not use
+     one. This runs the REAL engine — the same scrapeList a scan calls — and
+     answers the only questions that matter: does it find products here, and
+     do they come out with a name, a picture and a price.
+
+     Read-only: it collects nothing, saves nothing, and cannot disturb a run.
+     It reads what is rendered right now, so on a lazy grid the count is the
+     first screenful; a scan scrolls and gets more. The panel says so. */
+  if (m.type === "probe") {
+    (async () => {
+      const a = adapter();
+      if (!a) return send({ ok: false, reason: "no-engine" });
+      let rows = [];
+      try { rows = a.scrapeList(document, location.href) || []; }
+      catch (e) { return send({ ok: false, reason: String((e && e.message) || e) }); }
+      const filled = f => rows.filter(r => String(r[f] || "").trim()).length;
+      const html = document.documentElement.innerHTML;
+      const platform = [
+        /cdn\.shopify\.com|\/cdn\/shop\//.test(html) && "Shopify",
+        /demandware|dwstatic/i.test(html) && "Salesforce",
+        /__NEXT_DATA__/.test(html) && "Next.js",
+        /__NUXT__/.test(html) && "Nuxt",
+      ].filter(Boolean);
+      const ctx = (() => { try { return a.context(document) || {}; } catch (e) { return {}; } })();
+      send({
+        ok: true, url: location.href,
+        adapterId: a.id, site: a.label,
+        brand: ctx.brand || "", category: ctx.category || "",
+        lazy: !!a.lazyScroll,
+        count: rows.length,
+        named: filled("name"), imaged: filled("image_url"), priced: filled("price"),
+        platform, ld: document.querySelectorAll('script[type="application/ld+json"]').length,
+        samples: rows.slice(0, 3).map(r => ({
+          name: String(r.name || "").slice(0, 70),
+          price: r.price || "",
+          img: !!r.image_url,
+          url: String(r.product_url || "").slice(0, 90),
+        })),
+      });
+    })();
+    return true;
+  }
   if (m.type === "status") { g().then(j => send(j || {})); return true; }
   // start a saved-list run in THIS tab: park the queue, then go to its first URL
   if (m.type === "runList" && m.list && m.list.length) {

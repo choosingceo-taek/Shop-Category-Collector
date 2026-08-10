@@ -593,6 +593,211 @@
     lists = lists.filter(l => l.id !== curList.id);
     curList = lists[0]; await L.save(lists); fillListSelect(); renderList(); paintNow();
   });
+  /* Dry run — "what would a scan get here?" without running one.
+
+     This is the instrument for opening up a new shop. It calls the same
+     scrapeList the scan calls, so what it reports is exactly what would land
+     in the spreadsheet, and it says which of the three columns that matter
+     (name, picture, price) came back empty. Copy report puts the whole thing
+     on the clipboard so it can be pasted straight into a message. */
+  let lastProbe = null;
+  function probeText(p) {
+    if (!p || !p.ok) return "";
+    return [
+      `PROBE ${p.url}`,
+      `engine=${p.adapterId} (${p.site})${p.lazy ? " lazy-scroll" : ""}`,
+      `platform=${(p.platform || []).join("+") || "none detected"} json-ld=${p.ld}`,
+      `brand="${p.brand}" category="${p.category}"`,
+      `products=${p.count} named=${p.named} imaged=${p.imaged} priced=${p.priced}`,
+      ...(p.samples || []).map((s, i) =>
+        `  ${i + 1}. "${s.name}" | ${s.price || "(no price)"} | ${s.img ? "img" : "NO IMG"} | ${s.url}`),
+    ].join("\n");
+  }
+  function renderProbe(p) {
+    const box = $("#probeout");
+    box.hidden = false;
+    if (!p || !p.ok) {
+      const why = p && p.reason === "no-engine"
+        ? "The engine is not in this page yet — refresh the tab (F5) and try again."
+        : `Could not read the page (${(p && p.reason) || "no answer"}).`;
+      box.innerHTML = `<div class="ph"><span class="dotp bad"></span>No reading</div>
+        <div class="pl">${esc(why)}</div>`;
+      return;
+    }
+    // A shop is "open" when products come back AND the three columns that go
+    // into the spreadsheet are filled. Anything less is named precisely.
+    const gaps = [];
+    if (!p.count) gaps.push("no products found");
+    else {
+      if (p.named < p.count) gaps.push(`${p.count - p.named} without a name`);
+      if (p.imaged < p.count) gaps.push(`${p.count - p.imaged} without a picture`);
+      if (p.priced < p.count) gaps.push(`${p.count - p.priced} without a price`);
+    }
+    const cls = !p.count ? "bad" : gaps.length ? "warn" : "good";
+    const head = !p.count ? "Nothing collected here"
+      : gaps.length ? `${p.count} products, with gaps` : `${p.count} products, all complete`;
+    const sample = (p.samples || [])[0];
+    box.innerHTML =
+      `<div class="ph"><span class="dotp ${cls}"></span>${esc(head)}</div>` +
+      `<div class="pl">Engine <b>${esc(p.adapterId)}</b>` +
+      (p.platform && p.platform.length ? ` · ${esc(p.platform.join(" + "))}` : "") +
+      (p.brand ? ` · brand <b>${esc(p.brand)}</b>` : "") +
+      (p.category ? ` · ${esc(p.category)}` : "") + `</div>` +
+      (gaps.length ? `<div class="pl">${esc(gaps.join(" · "))}</div>` : "") +
+      (sample ? `<div class="psub">e.g. “${esc(sample.name || "(no name)")}” ${esc(sample.price || "")}</div>` : "") +
+      `<div class="psub">${p.lazy ? "This grid loads as you scroll — a scan scrolls and collects more than this." : "Counted from what is rendered right now."}</div>` +
+      `<div class="prow"><button id="probecopy">Copy report</button></div>` +
+      // always in the DOM, not only on the clipboard: a panel without clipboard
+      // permission must still let the text be selected and pasted by hand
+      `<textarea class="prep" id="probetext" readonly hidden>${esc(probeText(p))}</textarea>`;
+    const c = $("#probecopy");
+    if (c) c.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(probeText(p)); toast("Report copied"); }
+      catch (e) {
+        const t = $("#probetext");
+        if (t) { t.hidden = false; t.focus(); t.select(); }
+        toast("Could not copy — select the text below");
+      }
+    });
+  }
+  $("#probebtn").addEventListener("click", async () => {
+    if (!tab || !tab.id) return;
+    const btn = $("#probebtn");
+    btn.disabled = true; btn.textContent = "🔍 Reading…";
+    const ask = () => new Promise(res => {
+      try {
+        chrome.tabs.sendMessage(tab.id, { type: "probe" }, r => {
+          void chrome.runtime.lastError; res(r || null);
+        });
+      } catch (e) { res(null); }
+    });
+    let p = await ask();
+    if (!p) {                       // no engine in the page — put one there
+      await new Promise(res => {
+        try { chrome.runtime.sendMessage({ type: "ensureEngine", tabId: tab.id }, () => { void chrome.runtime.lastError; res(); }); }
+        catch (e) { res(); }
+      });
+      await new Promise(r => setTimeout(r, 900));
+      p = await ask();
+    }
+    lastProbe = p;
+    renderProbe(p);
+    btn.disabled = false; btn.textContent = "🔍 Test";
+  });
+
+  /* Check all — the same dry run, over the whole list, unattended.
+
+     The site-by-site campaign is: does this shop give us products, and do the
+     three columns come back filled. Doing that by hand is one page load, one
+     button and one reading per URL; a starter list is hundreds. This walks the
+     list in one tab, probes each page with the real engine, and prints a line
+     per site. It COLLECTS NOTHING — no catalog rows, no spreadsheet — so it is
+     safe to run on a list you have not curated yet, and it cannot pollute the
+     weekly trend data.
+
+     Lazy grids under-report here (the probe reads what is rendered, a scan
+     scrolls first), so the signal to trust is zero-versus-some, not the exact
+     count. The footer says so. */
+  let checking = false;
+  const CHECK_TIMEOUT = 15000;
+
+  function waitForLoad(tabId, ms) {
+    return new Promise(res => {
+      let done = false;
+      const finish = v => {
+        if (done) return; done = true;
+        try { chrome.tabs.onUpdated.removeListener(onUp); } catch (e) {}
+        res(v);
+      };
+      const onUp = (id, info) => { if (id === tabId && info.status === "complete") finish(true); };
+      try { chrome.tabs.onUpdated.addListener(onUp); } catch (e) { return finish(false); }
+      setTimeout(() => finish(false), ms);
+    });
+  }
+  const probeTab = tabId => new Promise(res => {
+    try {
+      chrome.tabs.sendMessage(tabId, { type: "probe" }, r => { void chrome.runtime.lastError; res(r || null); });
+    } catch (e) { res(null); }
+  });
+
+  function verdictOf(p) {
+    if (!p || !p.ok) return { cls: "bad", note: p && p.reason === "no-engine" ? "no engine" : "no answer" };
+    if (!p.count) return { cls: "bad", note: "0 products" };
+    const miss = [];
+    if (p.named < p.count) miss.push("name");
+    if (p.imaged < p.count) miss.push("image");
+    if (p.priced < p.count) miss.push("price");
+    return miss.length
+      ? { cls: "warn", note: `${p.count} · missing ${miss.join("/")}` }
+      : { cls: "good", note: `${p.count} · complete` };
+  }
+  function renderCheck(rows, doneN, total, running) {
+    const box = $("#checkout");
+    box.hidden = false;
+    const bad = rows.filter(r => r.cls === "bad").length;
+    const warn = rows.filter(r => r.cls === "warn").length;
+    const good = rows.filter(r => r.cls === "good").length;
+    box.innerHTML =
+      `<div class="ph"><span class="dotp ${bad ? "bad" : warn ? "warn" : "good"}"></span>` +
+      `${running ? `Checking ${doneN}/${total}…` : `Checked ${doneN} of ${total}`}</div>` +
+      `<div class="pl"><b>${good}</b> ready · <b>${warn}</b> with gaps · <b>${bad}</b> not working</div>` +
+      `<div class="clist">` + rows.map(r =>
+        `<div class="crow"><span class="cdot ${r.cls === "good" ? "" : r.cls}" style="background:${
+          r.cls === "good" ? "#1f8a45" : r.cls === "warn" ? "#c98a12" : "#c0392b"}"></span>` +
+        `<span class="cn">${esc(r.brand)} · ${esc(r.label)}</span>` +
+        `<span class="cv">${esc(r.note)}</span></div>`).join("") + `</div>` +
+      `<div class="psub">Nothing was collected — this only reads. Lazy grids show fewer here than a real scan.</div>` +
+      `<div class="prow">${running
+        ? `<button id="checkstop">Stop</button>`
+        : `<button id="checkcopy">Copy report</button><button id="checkhide">Close</button>`}</div>` +
+      (running ? "" : `<textarea class="prep" id="checktext" readonly hidden>${esc(checkText(rows))}</textarea>`);
+    const stop = $("#checkstop");
+    if (stop) stop.addEventListener("click", () => { checking = false; });
+    const cp = $("#checkcopy");
+    if (cp) cp.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(checkText(rows)); toast("Report copied"); }
+      catch (e) { const t = $("#checktext"); if (t) { t.hidden = false; t.focus(); t.select(); } toast("Select the text below"); }
+    });
+    const hide = $("#checkhide");
+    if (hide) hide.addEventListener("click", () => { box.hidden = true; });
+  }
+  const checkText = rows => ["CHECK ALL — " + (curList ? curList.name : ""), ...rows.map(r =>
+    `${r.cls.toUpperCase()}\t${r.brand} · ${r.label}\t${r.note}\t${r.url}`)].join("\n");
+
+  $("#checkall").addEventListener("click", async () => {
+    if (checking) { checking = false; return; }
+    const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
+    if (!entries.length) return toast("No sites to check");
+    if (!await confirmIn(`Read ${entries.length} sites to see what a scan would get. Nothing is collected. Start?`)) return;
+    await grantAccess(entries.map(e => e.url)).catch(() => {});
+
+    checking = true;
+    const rows = [];
+    renderCheck(rows, 0, entries.length, true);
+    const t = await chrome.tabs.create({ url: entries[0].url, active: true });
+    for (let i = 0; i < entries.length && checking; i++) {
+      const e = entries[i];
+      if (i) { try { await chrome.tabs.update(t.id, { url: e.url }); } catch (x) { break; } }
+      await waitForLoad(t.id, CHECK_TIMEOUT);
+      await new Promise(r => setTimeout(r, 700));          // let the grid paint
+      let p = await probeTab(t.id);
+      if (!p) {
+        await new Promise(res => {
+          try { chrome.runtime.sendMessage({ type: "ensureEngine", tabId: t.id }, () => { void chrome.runtime.lastError; res(); }); }
+          catch (x) { res(); }
+        });
+        await new Promise(r => setTimeout(r, 800));
+        p = await probeTab(t.id);
+      }
+      const v = verdictOf(p);
+      rows.push({ brand: e.brand || hostOf(e.url), label: e.label || "", url: e.url, cls: v.cls, note: v.note });
+      renderCheck(rows, rows.length, entries.length, checking && rows.length < entries.length);
+    }
+    checking = false;
+    renderCheck(rows, rows.length, entries.length, false);
+    try { await chrome.tabs.remove(t.id); } catch (e) {}
+  });
+
   $("#lq").addEventListener("input", e => { listQuery = e.target.value; renderList(); });
   $("#lfold").addEventListener("click", () => {
     const brands = [...new Set(((curList && curList.entries) || [])
