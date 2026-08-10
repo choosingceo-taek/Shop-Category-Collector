@@ -287,7 +287,9 @@
   `https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip`
   압축을 풀면 폴더가 한 겹 더 생기므로 `manifest.json`이 직접 든 안쪽 폴더를 로드해야 한다.
   버전 번호도 같이 알려 리로드 반영 여부를 사용자가 확인할 수 있게 한다.
-- 배포 방향: 팀 배포는 Chrome 웹스토어 Unlisted 게시(개인 크롬 환경).
+- 배포 방향: 팀 배포는 Chrome 웹스토어 **Unlisted** 게시. Private은 개발자
+  계정이 Google Workspace 조직 소속일 때만 가능한데 **이 회사는 Microsoft
+  기반**이라 선택지에서 빠진다(2026-08 확인).
   **자동 업데이트가 되는 길은 두 개뿐**이다 — 웹스토어, 또는 관리형 크롬이
   자체 호스팅 CRX를 강제 설치하는 것. 개발자 모드로 로드한 폴더는 크롬이
   절대 갱신하지 않는다(디스크의 파일이 곧 확장이다). 그래서 `update.js`는
