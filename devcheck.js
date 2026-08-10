@@ -22,6 +22,13 @@
      devcheck("26SS tops")      // only that list, by name
      devcheck(null, 20)         // stop after 20 sites
      devcheckStop()             // stop a run in progress
+     devhealth()                // what scans ALREADY recorded — no walking
+
+   Since v1.67 the scans record all of this by themselves: every Scan all
+   leaves a verdict per URL in storage, failing sites get an automatic page
+   photograph (the diagnose-generic facts), and a run with failures downloads
+   a sitecheck_….txt on its own. devhealth() reads that record instantly;
+   devcheck() is only for probing a list WITHOUT running a real scan.
 */
 (() => {
   const PROBE_WAIT = 15000;     // how long to allow one page load
@@ -119,5 +126,22 @@
     return rows;
   };
 
-  console.log("devcheck ready. run:  devcheck()   |   devcheck(\"My references\")   |   devcheckStop()");
+  // What the real scans already found out — read from storage, zero browsing.
+  self.devhealth = async function devhealth() {
+    const all = await new Promise(r => chrome.storage.local.get("wpb_sitehealth", o => r(o.wpb_sitehealth || {})));
+    const recs = Object.values(all).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    if (!recs.length) return console.log("no scan has recorded anything yet — run a scan (or devcheck)");
+    const by = m => recs.filter(r => r.mark === m).length;
+    console.log(`${recs.length} scanned collections — ✅ ${by("✅")} ready · ⚠️ ${by("⚠️")} gaps · ❌ ${by("❌")} broken`);
+    console.table(recs.map(r => ({ "": r.mark, brand: r.brand, category: r.label, engine: r.adapter,
+      found: r.count, when: new Date(r.ts).toISOString().slice(0, 16), url: (r.url || "").slice(0, 60) })));
+    const bad = recs.filter(r => r.mark !== "✅");
+    if (bad.length) console.log("--- paste this ---\n" + bad.map(r =>
+      `${r.mark} ${r.brand} · ${r.label}\n   ${r.count} found (name ${r.named} · image ${r.imaged} · price ${r.priced}) | engine=${r.adapter}\n   ${r.url}` +
+      (r.diag ? `\n   diag: ${JSON.stringify(r.diag)}` : "")).join("\n") + "\n--- end ---");
+    self.devhealthRows = recs;
+    return recs;
+  };
+
+  console.log("devcheck ready. run:  devcheck()   |   devcheck(\"My references\")   |   devhealth()   |   devcheckStop()");
 })();

@@ -206,6 +206,231 @@ async function catalogSave(j, a, kept, total, queue) {
   return scan;
 }
 
+/* ---- automatic site diagnosis -------------------------------------------
+
+   Opening a shop up used to be a console job: run devcheck(), then paste
+   diagnose-generic.js into the failing page and copy the output. Both steps
+   are now automatic. Every scan already exercises the real engine, so the
+   scan ITSELF records a per-site verdict (found / gaps / broken), and when a
+   site comes up broken it photographs the page structure right there — the
+   same facts the diagnose script gathered by hand. A Scan all that hits
+   failures downloads one `sitecheck_….txt` next to the Excel; sending that
+   file is the entire manual step that remains.
+
+   Read-only by design: the diagnosis never changes what a scan collects,
+   never blocks the run (every piece is wrapped), and adds nothing when all
+   sites pass — designers only ever see the file when something needs fixing. */
+
+const HEALTH = "wpb_sitehealth";     // { [collectionSig]: record }, latest per collection
+const HEALTH_MAX = 300;              // oldest records fall off
+
+const kvGet = key => new Promise(r => {
+  if (!alive()) return r(null);
+  try { chrome.storage.local.get(key, o => r(chrome.runtime.lastError ? null : (o[key] || null))); }
+  catch (e) { r(null); }
+});
+const kvSet = (key, v) => new Promise(r => {
+  if (!alive()) return r();
+  try { chrome.storage.local.set({ [key]: v }, () => r()); } catch (e) { r(); }
+});
+
+// What the developer needs to know about a page the engine could not read:
+// platform, structured data, where the repetition is, and one real tile.
+// Everything is truncated — this is a photograph, not a mirror.
+function selfDiagnose() {
+  const out = { url: String(location.href).slice(0, 200), title: String(document.title || "").slice(0, 80) };
+  const clip = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
+  try {
+    const html = document.documentElement.innerHTML;
+    out.platform = [
+      (/cdn\.shopify\.com|\/cdn\/shop\//.test(html)) && "Shopify",
+      (/demandware\.static|dwstatic/i.test(html)) && "SFCC",
+      (/Magento|\/mage\//i.test(html)) && "Magento",
+      (/__NEXT_DATA__/.test(html)) && "Next.js",
+      (/__NUXT__/.test(html)) && "Nuxt",
+    ].filter(Boolean);
+  } catch (e) {}
+  try {
+    // JSON-LD: which node types exist, and does an ItemList carry the products?
+    const types = {}; let listLen = 0, sample = null;
+    document.querySelectorAll('script[type="application/ld+json"]').forEach(sc => {
+      let d; try { d = JSON.parse(sc.textContent); } catch (e) { return; }
+      ([].concat(Array.isArray(d) ? d : (d["@graph"] || [d]))).forEach(n => {
+        if (!n || typeof n !== "object") return;
+        const t = [].concat(n["@type"] || []).join(",") || "?";
+        types[t] = (types[t] || 0) + 1;
+        if (/ItemList/i.test(t) && Array.isArray(n.itemListElement)) {
+          listLen += n.itemListElement.length;
+          if (!sample) {
+            const it = (n.itemListElement[0] && (n.itemListElement[0].item || n.itemListElement[0])) || {};
+            sample = { name: clip(it.name, 60), url: clip(it.url || it["@id"], 90) };
+          }
+        }
+      });
+    });
+    out.ld = { types, itemList: listLen, sample };
+  } catch (e) {}
+  try {
+    // Where do the links point? Digits collapse so /p/12345 and /p/67890 count
+    // as one shape — the top shapes are the product-URL pattern candidates.
+    const shapes = {};
+    document.querySelectorAll("a[href]").forEach(aEl => {
+      let p; try { p = new URL(aEl.href, location.href).pathname; } catch (e) { return; }
+      const shape = p.replace(/\d+/g, "N").split("/").slice(0, 4).join("/");
+      if (shape.length > 1) shapes[shape] = (shapes[shape] || 0) + 1;
+    });
+    out.linkShapes = Object.entries(shapes).sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([k, n]) => `${k} ×${n}`);
+  } catch (e) {}
+  try {
+    // Repeated-structure candidates: a parent with several same-tag children
+    // that each hold a link and an image is almost certainly the grid.
+    const grids = [];
+    document.querySelectorAll("body *").forEach(el => {
+      const kids = el.children;
+      if (!kids || kids.length < 4 || grids.length >= 3) return;
+      const tag = kids[0].tagName;
+      let alike = 0, tiles = 0;
+      for (const k of kids) {
+        if (k.tagName !== tag) continue;
+        alike++;
+        if (k.querySelector("a[href]") && k.querySelector("img, [style*=background-image]")) tiles++;
+      }
+      if (alike >= 4 && tiles >= 3) {
+        grids.push({
+          parent: el.tagName.toLowerCase() + clip(el.className && ("." + String(el.className).split(/\s+/).slice(0, 2).join(".")), 60),
+          children: alike, tilesWithLinkAndImg: tiles,
+        });
+        if (!out.tile) {
+          // one real tile, attribute values shortened so a base64 src can't bloat it
+          out.tile = clip(kids[0].outerHTML.replace(/="([^"]{80})[^"]*"/g, '="$1…"'), 1400);
+        }
+      }
+    });
+    out.grids = grids;
+  } catch (e) {}
+  try {
+    // which image attributes this theme uses (the lazy-loading fingerprint)
+    const attrs = {};
+    document.querySelectorAll("img").forEach(img => {
+      for (const at of img.attributes) {
+        if (/^(src|srcset|data-[\w-]*(src|image|lazy|bg)[\w-]*)$/i.test(at.name) && at.value)
+          attrs[at.name] = (attrs[at.name] || 0) + 1;
+      }
+    });
+    out.imgAttrs = attrs;
+  } catch (e) {}
+  try {
+    const PRICE_RE = /(?:[$₩€£¥]\s?\d[\d,]*(?:\.\d{1,2})?|\d[\d,]*(?:\.\d{1,2})?\s?(?:원|USD|EUR|GBP))/;
+    let leaves = 0, sample = "";
+    document.querySelectorAll("span,div,p,b,strong,em,ins,del").forEach(el => {
+      if (el.children.length > 1 || leaves >= 500) return;
+      const t = clip(el.textContent, 40);
+      if (t && t.length <= 40 && PRICE_RE.test(t)) { leaves++; if (!sample) sample = t; }
+    });
+    out.priceLeaves = { count: leaves, sample };
+  } catch (e) {}
+  // hard cap: a record is a note, not a page dump
+  try { if (JSON.stringify(out).length > 4000 && out.tile) out.tile = out.tile.slice(0, 400) + "…"; } catch (e) {}
+  return out;
+}
+
+function healthMark(rec) {
+  if (!rec.count) return "❌";
+  return (rec.named < rec.count || rec.imaged < rec.count || rec.priced < rec.count) ? "⚠️" : "✅";
+}
+function healthNote(rec) {
+  if (!rec.count) return "0 products";
+  const miss = [];
+  if (rec.named < rec.count) miss.push(`name×${rec.count - rec.named}`);
+  if (rec.imaged < rec.count) miss.push(`image×${rec.count - rec.imaged}`);
+  if (rec.priced < rec.count) miss.push(`price×${rec.count - rec.priced}`);
+  return miss.length ? `${rec.count} found · missing ${miss.join(" ")}` : `${rec.count} found · complete`;
+}
+
+// Called by the build phase, when this URL's items are final. Never throws
+// into the scan; a failed diagnosis loses a diagnosis, not a spreadsheet.
+async function recordHealth(j, a, ent) {
+  try {
+    const filled = f => j.items.filter(it => String(it[f] || "").trim()).length;
+    const rec = {
+      url: j.startUrl || location.href, sig: j.sig || collectionSig(location.href),
+      adapter: a.id, brand: (ent && ent.brand) || "", label: (ent && ent.label) || "",
+      count: j.items.length, named: filled("name"), imaged: filled("image_url"), priced: filled("price"),
+      ts: Date.now(),
+    };
+    rec.mark = healthMark(rec);
+    // Photograph the page only when something is wrong AND we are still looking
+    // at the scanned collection (single-page scans stay on it; a paginated run
+    // may have walked off it, and diagnosing the wrong page would mislead).
+    if (rec.mark !== "✅" && collectionSig(location.href) === rec.sig) rec.diag = selfDiagnose();
+    const all = (await kvGet(HEALTH)) || {};
+    all[rec.sig] = rec;
+    const keys = Object.keys(all);
+    if (keys.length > HEALTH_MAX) {
+      keys.sort((x, y) => (all[x].ts || 0) - (all[y].ts || 0))
+        .slice(0, keys.length - HEALTH_MAX).forEach(k => delete all[k]);
+    }
+    await kvSet(HEALTH, all);
+  } catch (e) { /* diagnosis must never cost a scan */ }
+}
+
+/* One text file per list run, ONLY when something failed: the verdict for
+   every URL plus the stored page photograph of each failure — the exact
+   output the developer used to assemble by hand with devcheck + diagnose
+   scripts. The designer's part is just "send this file". */
+async function queueHealthExport(q) {
+  try {
+    const list = (q && q.list) || [];
+    if (!list.length) return;
+    const all = (await kvGet(HEALTH)) || {};
+    const recs = list.map(ent => {
+      const r = all[collectionSig(ent.url || "")];
+      return r ? Object.assign({}, r, { brand: r.brand || ent.brand || "", label: r.label || ent.label || "" })
+               : { url: ent.url, brand: ent.brand || "", label: ent.label || "", mark: "❌", note_override: "never scanned (no engine reached this page)" };
+    });
+    const bad = recs.filter(r => r.mark !== "✅");
+    if (!bad.length) return;                        // all good — no extra file
+    const n = m => recs.filter(r => r.mark === m).length;
+    const lines = [];
+    lines.push(`Market Lens site check — ${q.name || "list"} — ${new Date().toISOString().slice(0, 10)}`);
+    lines.push(`${recs.length} sites: ✅ ${n("✅")} ready · ⚠️ ${n("⚠️")} gaps · ❌ ${n("❌")} broken`);
+    lines.push("");
+    lines.push("Some sites did not come out clean. Nothing is wrong with your Excel —");
+    lines.push("rows that were collected are all there. To get the rest working,");
+    lines.push("send this whole file to the developer. It contains no personal data,");
+    lines.push("only what the failing pages are built from.");
+    lines.push("");
+    for (const r of bad) {
+      lines.push(`${r.mark} ${r.brand || "?"} · ${r.label || ""}`.trimEnd());
+      lines.push(`   ${r.note_override || healthNote(r)}${r.adapter ? ` | engine=${r.adapter}` : ""}`);
+      lines.push(`   ${r.url}`);
+      if (r.diag) lines.push("   diag: " + JSON.stringify(r.diag));
+      lines.push("");
+    }
+    const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filename = `sitecheck_${tag}_${stamp}.txt`;
+    const text = lines.join("\n");
+    const b64 = btoa(unescape(encodeURIComponent(text)));
+    const saved = await new Promise(res => {
+      try {
+        chrome.runtime.sendMessage({ type: "downloadFile", filename, b64, mime: "text/plain" },
+          r => res(!chrome.runtime.lastError && !!(r && r.ok)));
+      } catch (e) { res(false); }
+    });
+    if (!saved) {
+      const blob = new Blob([text], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement("a");
+      el.href = url; el.download = filename;
+      document.body.appendChild(el); el.click(); el.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+    await report(`${bad.length} site(s) need attention — details saved as ${filename}`);
+  } catch (e) { /* the report is a bonus — never fail the run over it */ }
+}
+
 /* Save the whole list run as ONE workbook.
 
    A list is "26SS tops" — four brands' top categories that belong in one
@@ -271,6 +496,7 @@ async function queueAdvance() {
     q.active = false; q.finishedAt = Date.now();
     await setQueue(q);
     await queueExport(q);          // job is still active here, so progress shows
+    await queueHealthExport(q);    // failures (if any) leave as one sitecheck txt
     await closeJob();
     return false;
   }
@@ -518,6 +744,13 @@ async function runStep(j) {
 
   // -------- phase: build (export) --------
   if (j.phase === "build") {
+    // The scan doubles as the site check: verdict + (on failure) a page
+    // photograph, recorded before anything below can throw.
+    {
+      const q0 = await getQueue();
+      const ent0 = (q0 && q0.active && j.queued) ? (q0.list[q0.idx] || null) : null;
+      await recordHealth(j, a, ent0);
+    }
     await report("Building Excel… (embedding thumbnails)");
     // if composition was never collected, mark the cause so the cell can explain it
     if (!j.withSpec) j.items.forEach(it => { if (!it.fabric_composition && !it._compReason) it._compReason = "not_collected"; });
@@ -764,6 +997,11 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
       // stopping early still hands over what was collected, in one file — then
       // the job is closed so the half-finished URL doesn't carry on scanning
       if (q && (q.rows || []).length) await queueExport(q);
+      // Stopping early still hands over the failure report — but only for the
+      // URLs that actually finished (idx points at the one that was cut short;
+      // calling an interrupted scan "broken" would send the developer chasing
+      // a site that works).
+      if (q) await queueHealthExport(Object.assign({}, q, { list: (q.list || []).slice(0, q.idx) }));
       const d = await g(); if (d) { d.active = false; await s(d); }
     })();
     return true;
