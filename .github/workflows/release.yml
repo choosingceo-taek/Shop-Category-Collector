@@ -1,0 +1,132 @@
+# Publish Market Lens to the Chrome Web Store, automatically.
+#
+# WHY THIS FILE EXISTS
+# Chrome silently updates an extension from exactly two places: the Web Store,
+# or an enterprise-managed browser force-installing a hosted CRX. A folder
+# loaded in developer mode is never updated by Chrome — the files on disk ARE
+# the extension. So "the team always runs the newest build" means publishing to
+# the store on every release, and doing that by hand is the step that gets
+# skipped. This does it on push.
+#
+# ONE-TIME SETUP (see STORE.md for the click-by-click version)
+#   1. Pay the $5 developer fee once and upload the first ZIP by hand — that
+#      upload is what mints the extension id.
+#   2. Create an OAuth client (Desktop app) in Google Cloud, enable the
+#      "Chrome Web Store API", and generate a refresh token.
+#   3. Add four repository secrets:
+#        CWS_EXTENSION_ID  CWS_CLIENT_ID  CWS_CLIENT_SECRET  CWS_REFRESH_TOKEN
+# With those in place every push that bumps manifest.json's version ships.
+#
+# No third-party actions are used on purpose: publishing holds credentials that
+# can push code to every team member's browser, so the only things in the chain
+# are GitHub's own checkout and curl.
+name: Release to Chrome Web Store
+
+on:
+  push:
+    branches: [claude/main-session-cudnkx]
+    paths-ignore: ["**/*.md", "scratchpad/**"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Who receives it
+        default: default
+        type: choice
+        options: [default, trustedTesters]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version being shipped
+        id: v
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('manifest.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Shipping $VERSION"
+
+      - name: Build the ZIP
+        run: sh pack.sh
+
+      # Always keep the built ZIP on the run, so there is a downloadable build
+      # even when the store step is skipped or the review is still pending.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: market-lens-${{ steps.v.outputs.version }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - name: Stop here if the store credentials are not set up yet
+        id: gate
+        env:
+          ID: ${{ secrets.CWS_EXTENSION_ID }}
+        run: |
+          if [ -z "$ID" ]; then
+            echo "ready=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::Store secrets are not configured — built the ZIP only."
+          else
+            echo "ready=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload and publish
+        if: steps.gate.outputs.ready == 'yes'
+        env:
+          ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          TARGET: ${{ inputs.target || 'default' }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          ZIP="dist/market-lens-$VERSION.zip"
+
+          TOKEN=$(curl -sS -X POST https://oauth2.googleapis.com/token \
+            -d "client_id=$CLIENT_ID" \
+            -d "client_secret=$CLIENT_SECRET" \
+            -d "refresh_token=$REFRESH_TOKEN" \
+            -d "grant_type=refresh_token" \
+            | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+
+          echo "Uploading $ZIP"
+          UP=$(curl -sS -X PUT \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-goog-api-version: 2" \
+            -T "$ZIP" \
+            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$ID")
+          echo "$UP"
+          # A version that already exists is the one failure worth naming: it
+          # means manifest.json was not bumped, so the team would silently stay
+          # on the old build.
+          python3 - "$UP" <<'PY'
+          import json, sys
+          r = json.loads(sys.argv[1])
+          state = r.get("uploadState")
+          if state not in ("SUCCESS", "IN_PROGRESS"):
+              errs = r.get("itemError") or []
+              print("Upload failed:", json.dumps(errs, indent=2))
+              if any("version" in str(e).lower() for e in errs):
+                  print("-> Bump the version in manifest.json; the store keeps one build per version.")
+              sys.exit(1)
+          PY
+
+          echo "Publishing to $TARGET"
+          PUB=$(curl -sS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-goog-api-version: 2" \
+            -H "Content-Length: 0" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$ID/publish?publishTarget=$TARGET")
+          echo "$PUB"
+          python3 - "$PUB" <<'PY'
+          import json, sys
+          r = json.loads(sys.argv[1])
+          st = r.get("status") or []
+          if "OK" not in st and "ITEM_PENDING_REVIEW" not in st:
+              print("Publish failed:", json.dumps(r, indent=2)); sys.exit(1)
+          print("Published:", st, r.get("statusDetail"))
+          PY

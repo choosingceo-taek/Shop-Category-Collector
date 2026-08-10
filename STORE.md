@@ -108,9 +108,78 @@ sh pack.sh
 
 ## 6. 업데이트 루틴 (게시 이후)
 
-1. `manifest.json` 버전 올리기 (예: 1.40.0 → 1.41.0)
+수동으로 하면:
+
+1. `manifest.json` 버전 올리기 (예: 1.65.1 → 1.66.0)
 2. `sh pack.sh`
 3. 대시보드 → 패키지 → 새 ZIP 업로드 → 제출
 4. 심사 통과 후 몇 시간 내 팀 전체 크롬이 자동 업데이트
 
 수동 ZIP 배포(개발자 모드 로드)는 이때부터 개발/테스트용으로만 쓴다.
+
+## 7. 배포 자동화 — 커밋하면 알아서 올라가게
+
+`.github/workflows/release.yml`이 이미 들어 있다. 브랜치에 푸시가 들어오면
+ZIP을 만들어 웹스토어에 올리고 게시까지 한다. **위 3번(사람이 대시보드에
+올리는 단계)이 없어진다.** 남는 일은 버전 올리기 하나뿐이다.
+
+비밀값 네 개를 저장소에 넣기 전까지는 **ZIP만 만들고 조용히 넘어간다** —
+설정 전이라고 빨간 실패가 뜨지 않는다.
+
+### 한 번만 하는 준비
+
+**① 확장 ID 얻기** — 5장까지 따라 해서 **첫 ZIP은 손으로 한 번 올린다**.
+그 업로드가 확장 ID를 만든다(대시보드 주소의 `.../detail/<32자>` 부분).
+
+**② API 자격 증명 만들기** (Google Cloud Console, 무료)
+1. 프로젝트 하나 만들기
+2. **API 및 서비스 → 라이브러리 → "Chrome Web Store API" 사용 설정**
+3. **사용자 인증 정보 → OAuth 클라이언트 ID → 데스크톱 앱** → 클라이언트 ID·시크릿 기록
+4. OAuth 동의 화면은 **외부/테스트** 로 두고 본인 계정을 테스트 사용자로 추가
+5. 리프레시 토큰 발급 — 브라우저에서 아래 주소를 열고 코드를 받는다:
+   ```
+   https://accounts.google.com/o/oauth2/auth?response_type=code
+     &scope=https://www.googleapis.com/auth/chromewebstore
+     &client_id=<클라이언트ID>
+     &redirect_uri=urn:ietf:wg:oauth:2.0:oob
+     &access_type=offline&prompt=consent
+   ```
+   받은 코드를 토큰으로 교환:
+   ```
+   curl -d "client_id=<ID>" -d "client_secret=<시크릿>" \
+        -d "code=<코드>" -d "grant_type=authorization_code" \
+        -d "redirect_uri=urn:ietf:wg:oauth:2.0:oob" \
+        https://oauth2.googleapis.com/token
+   ```
+   응답의 `refresh_token`이 필요한 값이다(한 번만 나오므로 바로 저장).
+
+**③ 저장소 비밀값 넣기** — GitHub 저장소 → Settings → Secrets and variables
+→ Actions → New repository secret, 네 개:
+
+| 이름 | 값 |
+|---|---|
+| `CWS_EXTENSION_ID` | ①에서 얻은 32자 ID |
+| `CWS_CLIENT_ID` | ②-3의 클라이언트 ID |
+| `CWS_CLIENT_SECRET` | ②-3의 시크릿 |
+| `CWS_REFRESH_TOKEN` | ②-5의 refresh_token |
+
+### 이후의 흐름
+
+```
+manifest.json 버전 ↑  →  git push  →  (자동) ZIP 빌드 → 업로드 → 게시
+                                        → 심사 → 팀 크롬이 자동 업데이트
+```
+
+- **버전을 올리지 않으면 실패한다.** 스토어는 버전당 빌드 하나만 받는다.
+  실패 로그에 "버전을 올리라"고 명시된다 — 조용히 옛 빌드에 머무는 것보다 낫다.
+- 문서(`*.md`)만 고친 푸시는 워크플로가 돌지 않는다.
+- Actions 탭에서 **Run workflow**로 수동 실행도 되고, 이때 `trustedTesters`를
+  고르면 지정한 테스터에게만 먼저 나간다.
+- 심사가 걸려 있어도 그 실행의 **Artifacts**에 ZIP이 남는다 — 급하면 그걸로
+  수동 배포하면 된다.
+
+### 왜 서드파티 액션을 안 쓰나
+
+게시 자격 증명은 **팀 전원의 브라우저에 코드를 밀어 넣을 수 있는 권한**이다.
+남의 액션을 체인에 넣으면 그 액션의 공급망이 우리 팀의 공급망이 된다.
+그래서 GitHub 공식 checkout/artifact와 `curl`만 쓴다.
