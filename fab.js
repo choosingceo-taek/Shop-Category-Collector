@@ -1,22 +1,39 @@
-/* On-page floating scan button (FAB) — dark frosted-glass control panel.
-   Injected bottom-left on every supported page. Clicking the icon opens a
-   control panel (not an instant scan): detail-collection + filters, plus a live
-   progress gauge, the current brand/category, and start / pause-resume /
-   reset — always present. The panel STAYS open while a run is going so progress
-   is visible in place; the icon itself turns frosted glass while active. Because
-   pagination reloads the page, this script re-injects per page and re-renders
-   from the stored job, re-opening the panel automatically during a run.
+/* The grab button — collecting URLs happens on the page, not in the panel.
 
-   Rendered inside a Shadow DOM so site CSS can't restyle it. */
+   A designer finds the categories worth watching while browsing, one tab at a
+   time. Asking them to look away to a side panel to file each one breaks that
+   rhythm, so the act of collecting sits where the browsing is: a small round
+   button in the bottom-right corner. Press it and the page is already named —
+   brand and category read from the shop itself, both editable right there —
+   and the lists appear as coloured chips. Tapping a chip drops the page in.
+   That is the whole interaction: see something, grab it, keep browsing.
+
+   The panel keeps what it is good at: holding several lists and organising
+   what has been grabbed. Running a scan lives there too.
+
+   Rendered in a Shadow DOM so no site's CSS can reach it. */
 (function () {
   "use strict";
   if (window.__wpbFabInjected) return;
   window.__wpbFabInjected = true;
 
   const JOB = "wpb_job";
-  const OPTS = "wpb_opts";
-  const COLLAPSED = "wpb_fab_collapsed";      // remembers a user-collapse across page navs
+  const LAST = "wpb_lastlist";           // the list a grab defaults to
+  const HIDDEN = "wpb_fab_hidden";       // user tucked the button away
+  const L = () => self.ScanLists || null;
   const engine = () => self.WPB_ENGINE || null;
+
+  /* Colours carry meaning: a list keeps the same colour everywhere, derived
+     from its name, so the chip you reach for is recognisable by shape and
+     colour before you have read it. The palette is the warm set the panel
+     uses — clay, sage, sky, plum, amber, blush. */
+  const HUES = ["#C08552", "#7E9E7A", "#7C9CC4", "#9A85BE", "#C9A227", "#D98070"];
+  const hueOf = name => {
+    const s = String(name || "").toLowerCase();
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return HUES[h % HUES.length];
+  };
 
   const host = document.createElement("div");
   host.id = "wpb-fab-host";
@@ -26,377 +43,334 @@
   :host { all: initial; }
   * { box-sizing: border-box; }
   #wrap {
-    position: fixed; left: 16px; bottom: 16px; z-index: 2147483647;
-    font: 12.5px/1.4 -apple-system, system-ui, sans-serif;
-    display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    position: fixed; right: 18px; bottom: 18px; z-index: 2147483647;
+    font: 13px/1.45 -apple-system, system-ui, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+    color: #1D1B18;
   }
+  button { all: unset; box-sizing: border-box; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; }
 
-  /* ---------- the floating icon / status pill ---------- */
+  /* ---------- the button ---------- */
   #fab {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(18,20,26,.92); color: #f4f4f7;
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 999px; padding: 8px;
-    box-shadow: 0 6px 20px rgba(0,0,0,.35);
-    max-width: 320px; transition: padding .15s ease, background .2s ease;
-    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    position: relative; width: 52px; height: 52px; border-radius: 50%;
+    background: #1D1B18; color: #F7F4EE;
+    box-shadow: 0 6px 22px rgba(29,27,24,.32), 0 1px 3px rgba(29,27,24,.2);
+    transition: transform .18s cubic-bezier(.2,.9,.3,1.2), box-shadow .18s ease;
   }
-  /* active -> frosted translucent glass showing live work */
-  #fab.running, #fab.paused {
-    padding: 8px 14px;
-    background: rgba(28,30,38,.55);
-    border-color: rgba(255,255,255,.22);
-    -webkit-backdrop-filter: blur(16px) saturate(1.3);
-    backdrop-filter: blur(16px) saturate(1.3);
+  #fab:hover { transform: translateY(-2px) scale(1.04); }
+  #fab:active { transform: scale(.94); }
+  #fab svg { width: 24px; height: 24px; display: block; }
+  #fab.saved { background: #4E7C59; }
+  /* a scan is running elsewhere — the button says so without taking over */
+  #fab.busy { background: #C08552; }
+  #fab.busy::after {
+    content: ""; position: absolute; inset: -4px; border-radius: 50%;
+    border: 2px solid rgba(192,133,82,.45); border-top-color: transparent;
+    animation: spin 1s linear infinite;
   }
-  #fab.done { padding: 8px 14px; }
-  button { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex;
-    align-items: center; justify-content: center; border-radius: 999px; }
-  #main { width: 30px; height: 30px; flex: 0 0 auto; }
-  #main:hover { background: rgba(255,255,255,.12); }
-  #main svg { width: 20px; height: 20px; display: block; }
-  #label { display: none; white-space: nowrap; font-weight: 600; }
-  #fab.idle:hover #label, #fab.open #label { display: inline; padding-right: 6px; }
-  #status { display: none; max-width: 220px; overflow: hidden;
-    text-overflow: ellipsis; white-space: nowrap; }
-  #fab.running #status, #fab.paused #status, #fab.done #status { display: inline; }
-  #fab.running #main, #fab.paused #main { display: none; }
-  #spin { display: none; width: 15px; height: 15px; flex: 0 0 auto;
-    border: 2px solid rgba(255,255,255,.3); border-top-color: #ff6fae;
-    border-radius: 50%; animation: r .9s linear infinite; }
-  #fab.running #spin { display: inline-block; }
-  @keyframes r { to { transform: rotate(360deg); } }
-
-  /* ---------- the control panel ---------- */
-  /* the panel floats ABOVE the icon (absolute, so it doesn't push the pill) and
-     scales/fades out of the icon's corner — as if it flows from the icon. */
-  #panel {
-    position: absolute; left: 0; bottom: 54px;
-    display: flex; flex-direction: column;
-    width: 320px; max-width: 88vw;
-    max-height: calc(100vh - 84px);          /* headroom so it rarely needs to scroll */
-    background: rgba(20,21,26,.9); color: #f2f2f7;
-    border: 1px solid rgba(255,255,255,.10);
-    border-radius: 18px; overflow: hidden;
-    box-shadow: 0 16px 44px rgba(0,0,0,.5);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
-    backdrop-filter: blur(24px) saturate(1.4);
-    transform-origin: 0 100%;                /* bottom-left = the icon */
-    transform: scale(.86) translateY(12px);
-    opacity: 0; visibility: hidden; pointer-events: none;
-    transition: transform .2s cubic-bezier(.2,.8,.2,1.1), opacity .16s ease, visibility 0s .2s;
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #count {
+    position: absolute; top: -3px; right: -3px; min-width: 20px; height: 20px;
+    padding: 0 5px; border-radius: 999px; background: #D9634A; color: #fff;
+    font-size: 11px; font-weight: 700; display: none;
+    align-items: center; justify-content: center;
+    box-shadow: 0 0 0 2px rgba(255,255,255,.9);
   }
-  #panel.show {
-    transform: none; opacity: 1; visibility: visible; pointer-events: auto;
-    transition: transform .2s cubic-bezier(.2,.8,.2,1.1), opacity .16s ease;
+  #count.on { display: inline-flex; }
+
+  /* the "+1" that flies off the chip you tapped */
+  #pop {
+    position: absolute; right: 26px; bottom: 52px; pointer-events: none;
+    font-weight: 800; font-size: 15px; color: #4E7C59; opacity: 0;
   }
-  .head { flex: 0 0 auto; display: flex; align-items: center;
-    justify-content: space-between; padding: 12px 14px 6px; }
-  .head b { font-size: 13.5px; font-weight: 700; }
-  #x { color: #cdcdd4; width: 24px; height: 24px; font-size: 15px;
-    background: rgba(255,255,255,.08); }
-  #x:hover { background: rgba(255,255,255,.16); }
-  .body { flex: 1 1 auto; overflow-y: auto; padding: 2px 14px 12px; }
-  .body::-webkit-scrollbar { width: 6px; }
-  .body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 6px; }
+  #pop.go { animation: rise .8s ease-out; }
+  @keyframes rise {
+    0% { opacity: 0; transform: translateY(6px) scale(.8); }
+    25% { opacity: 1; transform: translateY(-4px) scale(1.05); }
+    100% { opacity: 0; transform: translateY(-34px) scale(1); }
+  }
 
-  /* progress / context card */
-  .card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
-    border-radius: 12px; padding: 10px 11px; margin-bottom: 9px; }
-  .crow { display: flex; justify-content: space-between; gap: 10px; margin: 2px 0;
-    font-size: 11.5px; }
-  .crow .k { color: #9a9aa4; }
-  .crow .v { color: #f2f2f7; font-weight: 600; text-align: right;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
-  #progBar { height: 7px; border-radius: 999px; background: rgba(255,255,255,.12);
-    overflow: hidden; margin: 8px 0 5px; }
-  #progFill { height: 100%; width: 0%; border-radius: 999px;
-    background: linear-gradient(90deg,#7b61ff,#ff6fae); transition: width .3s ease; }
-  #progFill.indet { width: 38% !important; animation: slide 1.1s ease-in-out infinite; }
-  @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
-  #progText { font-size: 11px; color: #c5c5cd; }
+  /* ---------- the card ---------- */
+  #card {
+    width: 306px; max-width: calc(100vw - 36px);
+    background: #F7F4EE; border-radius: 22px;
+    box-shadow: 0 20px 50px rgba(29,27,24,.26), 0 2px 8px rgba(29,27,24,.12);
+    overflow: hidden;
+    transform-origin: 100% 100%;
+    transform: scale(.9) translateY(10px); opacity: 0;
+    visibility: hidden; pointer-events: none;
+    transition: transform .2s cubic-bezier(.2,.9,.3,1.15), opacity .15s ease, visibility 0s .2s;
+  }
+  #card.show { transform: none; opacity: 1; visibility: visible; pointer-events: auto;
+    transition: transform .2s cubic-bezier(.2,.9,.3,1.15), opacity .15s ease; }
 
-  /* switch toggle */
-  .switchrow { display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; padding: 7px 2px; cursor: pointer; }
-  .switchrow .t { font-size: 12.5px; }
-  .switchrow .t small { display: block; color: #9a9aa4; font-size: 10.5px; margin-top: 1px; }
-  .switch { position: relative; width: 42px; height: 24px; flex: 0 0 auto; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .switch i { position: absolute; inset: 0; border-radius: 999px;
-    background: rgba(255,255,255,.18); transition: background .2s; }
-  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px;
-    width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; }
-  .switch input:checked + i { background: linear-gradient(90deg,#7b61ff,#ff6fae); }
-  .switch input:checked + i::after { transform: translateX(18px); }
+  .top { display: flex; align-items: center; justify-content: space-between;
+    padding: 15px 16px 9px; }
+  .top .ttl { font-size: 12px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: #8A857C; }
+  #x { width: 26px; height: 26px; border-radius: 50%; color: #8A857C;
+    background: rgba(29,27,24,.06); font-size: 14px; }
+  #x:hover { background: rgba(29,27,24,.12); }
 
-  #note { display: none; background: rgba(255,196,84,.12); color: #ffcf80;
-    border-radius: 10px; padding: 8px; font-size: 11px; margin: 5px 0; }
-  #filters { border: 1px solid rgba(255,255,255,.10); border-radius: 11px;
-    padding: 2px 11px; margin: 7px 0; background: rgba(255,255,255,.04); }
-  #filters[data-active="1"] { border-color: rgba(255,111,174,.55); background: rgba(255,111,174,.08); }
-  #filters summary { cursor: pointer; font-size: 12px; font-weight: 600;
-    color: #e6e6ea; padding: 9px 2px; list-style: none;
-    display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  #filters summary::-webkit-details-marker { display: none; }
-  #fsum .badge { color: #ff9ec7; font-weight: 700; }
-  .chev { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px;
-    background: rgba(255,255,255,.12); color: #e6e6ea; font-size: 11px;
-    display: inline-flex; align-items: center; justify-content: center;
-    transition: transform .18s ease; }
-  #filters[open] .chev { transform: rotate(180deg); }
-  #filters[data-active="1"] .chev { background: rgba(255,111,174,.3); color: #ff9ec7; }
-  .f { margin: 7px 0; }
-  .f label { display: block; margin-bottom: 3px; color: #9a9aa4; font-size: 11px; }
-  .f input[type=text] { width: 100%; padding: 7px; border: 1px solid rgba(255,255,255,.14);
-    border-radius: 8px; font-size: 12px; background: rgba(0,0,0,.25); color: #f2f2f7; }
-  .f small { color: #77777f; font-size: 10px; }
-  .chk { display: flex; gap: 8px; align-items: center; margin: 7px 0; font-size: 12px; }
-  #fclear { display: block; width: 100%; padding: 7px; margin: 4px 0 8px;
-    font-size: 11.5px; color: #ffb0b0; background: rgba(255,92,92,.12); border-radius: 8px; }
+  /* what will be filed — the two fields Excel groups by, editable in place */
+  .fields { padding: 0 16px 4px; }
+  .fld { display: block; margin-bottom: 8px; }
+  .fld span { display: block; font-size: 10.5px; letter-spacing: .07em;
+    text-transform: uppercase; color: #A8A29A; margin: 0 0 4px 12px; }
+  .fld input {
+    all: unset; box-sizing: border-box; display: block; width: 100%;
+    padding: 11px 13px; border-radius: 13px; background: #fff;
+    font: 600 13.5px/1.3 inherit; color: #1D1B18;
+    box-shadow: inset 0 0 0 1px rgba(29,27,24,.09);
+  }
+  .fld input:focus { box-shadow: inset 0 0 0 2px #1D1B18; }
+  .fld input::placeholder { color: #C4BFB6; font-weight: 500; }
 
-  .act { display: flex; width: 100%; min-width: 0; max-width: 100%;
-    padding: 10px 8px; font-weight: 700; font-size: 12px; line-height: 1.25;
-    border-radius: 11px; justify-content: center; text-align: center;
-    white-space: normal; word-break: keep-all; margin-top: 8px; }
-  .act[disabled] { opacity: .4; cursor: default; }
-  /* accent matches the panel mood (same violet→pink as the progress bar/switch) */
-  #run { background: linear-gradient(90deg,#7b61ff,#c15fd6); color: #fff; }
-  #run:not([disabled]):hover { filter: brightness(1.1); }
-  .actrow { display: flex; gap: 8px; }
-  .actrow .act { flex: 1 1 0; margin-top: 8px; }
-  #pr2 { background: rgba(255,255,255,.12); color: #f2f2f7; }
-  #pr2:not([disabled]):hover { background: rgba(255,255,255,.2); }
-  #reset2 { background: rgba(255,92,92,.16); color: #ff8a8a; }
-  #reset2:hover { background: rgba(255,92,92,.26); }
-  #hint { color: #77777f; font-size: 10.5px; margin-top: 8px; text-align: center; }
+  /* the lists, as chips you drop the page into */
+  .into { padding: 8px 16px 4px; font-size: 10.5px; letter-spacing: .07em;
+    text-transform: uppercase; color: #A8A29A; }
+  #chips { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 16px 14px;
+    max-height: 168px; overflow-y: auto; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 13px; border-radius: 999px; background: #fff;
+    box-shadow: inset 0 0 0 1px rgba(29,27,24,.1);
+    font-size: 12.5px; font-weight: 600; color: #1D1B18;
+    transition: transform .14s ease, box-shadow .14s ease, background .14s ease;
+  }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+  .chip .n { font-size: 11px; font-weight: 700; color: #A8A29A; }
+  .chip:hover { transform: translateY(-1px); box-shadow: inset 0 0 0 1px rgba(29,27,24,.28); }
+  .chip:active { transform: scale(.96); }
+  .chip.hit { background: #1D1B18; color: #F7F4EE; box-shadow: none; }
+  .chip.hit .n { color: rgba(247,244,238,.7); }
+  .chip.has { background: #EDE8DE; }
+  .chip.new { color: #8A857C; box-shadow: inset 0 0 0 1px rgba(29,27,24,.1); font-weight: 600; }
+
+  /* state line — already in a list, or the last thing that happened */
+  #msg { padding: 0 16px 15px; font-size: 12px; color: #8A857C; display: none; }
+  #msg.on { display: block; }
+  #msg b { color: #1D1B18; }
+
+  .foot { border-top: 1px solid rgba(29,27,24,.08); padding: 10px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(29,27,24,.02); }
+  .foot button { font-size: 11.5px; color: #8A857C; }
+  .foot button:hover { color: #1D1B18; }
+  #run { font-weight: 700; color: #1D1B18; }
+  #run[disabled] { opacity: .35; cursor: default; }
 </style>
 <div id="wrap">
-  <div id="panel">
-    <div class="head"><b>Collect Products</b><button id="x" title="Close">✕</button></div>
-    <div class="body">
-      <div class="card">
-        <div class="crow" id="pretailRow" style="display:none"><span class="k">Retailer</span><span class="v" id="pretail">—</span></div>
-        <div class="crow"><span class="k">Brand</span><span class="v" id="pbrand">—</span></div>
-        <div class="crow"><span class="k">Category</span><span class="v" id="pcat">—</span></div>
-        <div id="progBar"><div id="progFill"></div></div>
-        <div id="progText">Ready — press Scan</div>
-        <div id="ctx" style="display:none"></div>
-      </div>
-      <div id="note">No dedicated support for this site — only basic info (thumbnail, name, price, URL) is collected. Colour / fabric / design stay as "정보 확인".</div>
-      <details id="filters">
-        <summary><span id="fsum">Filters (optional)</span><span class="chev">▾</span></summary>
-        <div class="f"><label>Name includes</label>
-          <input type="text" id="fInclude" placeholder="e.g. Women, Legging">
-          <small>Keep only items containing these words · comma-separated</small></div>
-        <div class="f"><label>Name excludes</label>
-          <input type="text" id="fExclude" placeholder="e.g. Men's, Juniors">
-          <small>Drop items containing these words · comma-separated</small></div>
-        <button id="fclear">✕ Clear filters</button>
-      </details>
-      <button id="run" class="act">Scan This Page → Excel</button>
-      <div class="actrow">
-        <button id="pr2" class="act" disabled>⏸ Pause</button>
-        <button id="reset2" class="act">↺ Reset</button>
-      </div>
-      <div id="hint">Keeps running after you start, even if you close this.</div>
+  <div id="card">
+    <div class="top"><div class="ttl">Grab this page</div><button id="x" title="Close">✕</button></div>
+    <div class="fields">
+      <label class="fld"><span>Brand</span><input id="fbrand" placeholder="Brand" autocomplete="off"></label>
+      <label class="fld"><span>Category</span><input id="flabel" placeholder="Category" autocomplete="off"></label>
+    </div>
+    <div class="into">Into which list</div>
+    <div id="chips"></div>
+    <div id="msg"></div>
+    <div class="foot">
+      <button id="run">▶ Scan this page</button>
+      <button id="hide" title="Hide the button on this site">Hide button</button>
     </div>
   </div>
-  <div id="fab" class="idle">
-    <span id="spin"></span>
-    <button id="main" title="Collect products — open options and run controls">
-      <svg viewBox="0 0 24 24" fill="none">
-        <!-- product grid being scanned + collected -->
-        <rect x="3" y="3.5" width="7" height="7" rx="1.6" fill="#fff"/>
-        <rect x="3" y="13" width="7" height="7" rx="1.6" fill="#fff" fill-opacity=".5"/>
-        <rect x="12.5" y="3.5" width="7" height="7" rx="1.6" fill="#fff" fill-opacity=".5"/>
-        <!-- magnifier scanning the products -->
-        <circle cx="15.3" cy="15.1" r="4.3" fill="none" stroke="#ff8fc4" stroke-width="2"/>
-        <line x1="18.5" y1="18.3" x2="21.4" y2="21.2" stroke="#ff8fc4" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-    </button>
-    <span id="label">Scan</span>
-    <span id="status"></span>
-  </div>
+  <button id="fab" title="Grab this page">
+    <span id="pop">+1</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.4"></circle>
+      <path d="M15.8 15.8 21 21"></path>
+      <path d="M11 8.2v5.6M8.2 11h5.6"></path>
+    </svg>
+    <span id="count"></span>
+  </button>
 </div>`;
 
-  const el = id => sh.getElementById(id);
-  const fab = el("fab");
-  const panel = el("panel");
-  const terms = id => (el(id).value || "").split(",").map(s => s.trim()).filter(Boolean);
-  const isFinished = job => !!(job && job.status && /\b(?:done|complete|finished|failed|error)\b/i.test(job.status) && !(job && job.active));
-  const setStore = (k, v) => { try { chrome.storage.local.set({ [k]: v }); } catch (e) {} };
+  const $ = s => sh.querySelector(s);
+  const esc = s => String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-  let lastJob = null;
-  let doneTimer = null;
+  let lists = [], lastId = "", job = null, open = false, dirty = false;
 
-  // --- derive a 0..100 progress + label from the stored job ---
-  function progress(job) {
-    if (!job) return { pct: 0, text: "Ready — press Scan", indet: false };
-    const items = (job.items && job.items.length) || 0;
-    if (isFinished(job)) return { pct: 100, text: job.status, indet: false };
-    if (job.phase === "spec") {
-      const t = items, i = job.specIdx || 0;
-      return { pct: t ? 62 + Math.round((i / t) * 33) : 62, text: `Collecting details… ${i}/${t}`, indet: false };
-    }
-    if (job.phase === "build") return { pct: 97, text: "Building Excel… (embedding images)", indet: true };
-    // list phase
-    if (job.resultCount) return { pct: Math.min(58, Math.round((items / job.resultCount) * 58)), text: `Collecting… ${items}/${job.resultCount}`, indet: false };
-    if (job.totalPages) return { pct: Math.min(58, Math.round(((job.pagesDone || 0) / job.totalPages) * 58)), text: `Page ${job.pagesDone || 0}/${job.totalPages} · ${items} items`, indet: false };
-    return { pct: 12, text: `Collecting… ${items} items (p${job.pagesDone || 0})`, indet: !!(job.active) };  // total unknown -> indeterminate
-  }
-
-  function setPillClass(c) { fab.classList.remove("idle", "open", "running", "paused", "done"); fab.classList.add(c); }
-  function paintPill(job) {
-    clearTimeout(doneTimer);
-    const active = job && job.active, paused = active && job.paused;
-    if (paused) { setPillClass("paused"); el("status").textContent = job.status || "Paused"; }
-    else if (active) { setPillClass("running"); el("status").textContent = job.status || "Scanning…"; }
-    else if (isFinished(job)) { setPillClass("done"); el("status").textContent = job.status; doneTimer = setTimeout(() => setPillClass("idle"), 8000); }
-    else { setPillClass("idle"); }
-  }
-  function paintPanel(job) {
-    const active = job && job.active, paused = active && job.paused;
-    el("run").disabled = !!active;
-    el("pr2").disabled = !active;
-    el("pr2").textContent = paused ? "▶ Resume" : "⏸ Pause";
-    const p = progress(job);
-    el("progFill").style.width = p.pct + "%";
-    el("progFill").classList.toggle("indet", !!p.indet);
-    el("progText").textContent = paused ? "⏸ Paused — press Resume to continue" : p.text;
-  }
-  function paint(job) {
-    lastJob = job || null;
-    paintPanel(lastJob);
-    if (!panel.classList.contains("show")) paintPill(lastJob);
-  }
-
-  // brand + category for the panel header (from the active adapter)
-  function fillContext() {
-    const eng = engine();
-    let a = null; try { a = eng && eng.adapter && eng.adapter(); } catch (e) {}
-    if (!a) { el("pretailRow").style.display = "none"; el("pbrand").textContent = "—"; el("pcat").textContent = "Open a supported store"; return; }
-    let c = {}; try { c = a.context(document) || {}; } catch (e) {}
-    const pages = c.totalPages ? `${c.totalPages}p total` : "auto-detect pages";
-    // Multi-brand retailers (Walmart/Target/Macy's…) show Retailer + Brand; a
-    // single-brand store (Cotton On, indie labels) shows just Brand.
-    if (a.multiBrand) {
-      el("pretailRow").style.display = "";
-      el("pretail").textContent = a.label || "—";
-      el("pbrand").textContent = c.brand || "—";
-    } else {
-      el("pretailRow").style.display = "none";
-      el("pbrand").textContent = c.brand || a.label || "—";
-    }
-    el("pcat").textContent = c.category || "—";
-    el("ctx").textContent = `${a.label} · ${pages} (page ${c.page || 1})`;   // kept for reference
-    const hasDetail = typeof a.fetchDetail === "function";
-    el("note").style.display = hasDetail ? "none" : "block";
-  }
-  // reflect whether any filter is set — a stale filter silently dropping most
-  // results was a real footgun, so make it loud: badge + accent + auto-expand.
-  function refreshFilterState() {
-    const active = el("fInclude").value.trim() || el("fExclude").value.trim();
-    el("filters").setAttribute("data-active", active ? "1" : "0");
-    el("fsum").innerHTML = active
-      ? 'Filters <span class="badge">● active — some items excluded</span>'
-      : "Filters (optional)";
-    if (active) el("filters").open = true;
-  }
-  function prefill() {
-    try {
-      chrome.storage.local.get(OPTS, o => {
-        const opts = (o && o[OPTS]) || {};
-        const f = opts.filters || {};
-        el("fInclude").value = (f.nameInclude || []).join(", ");
-        el("fExclude").value = (f.nameExclude || []).join(", ");
-        refreshFilterState();
-      });
-    } catch (e) {}
-  }
-  function openPanel(remember) {
-    prefill(); fillContext(); paintPanel(lastJob);
-    panel.classList.add("show");
-    setPillClass("open");
-    if (remember !== false) setStore(COLLAPSED, false);
-  }
-  function closePanel(remember) {
-    panel.classList.remove("show");
-    paintPill(lastJob);
-    if (remember !== false) setStore(COLLAPSED, true);
-  }
-
-  el("main").addEventListener("click", e => {
-    e.stopPropagation();
-    if (panel.classList.contains("show")) closePanel(); else openPanel();
+  const alive = () => { try { return !!(chrome.runtime && chrome.runtime.id); } catch (e) { return false; } };
+  const get = keys => new Promise(r => {
+    if (!alive()) return r({});
+    try { chrome.storage.local.get(keys, o => r(chrome.runtime.lastError ? {} : (o || {}))); }
+    catch (e) { r({}); }
   });
-  el("x").addEventListener("click", e => { e.stopPropagation(); closePanel(); });
+  const set = obj => new Promise(r => {
+    if (!alive()) return r();
+    try { chrome.storage.local.set(obj, () => r()); } catch (e) { r(); }
+  });
 
-  el("run").addEventListener("click", async e => {
-    e.stopPropagation();
-    const eng = engine(); if (!eng) return;
-    const j = await eng.getJob();
-    if (j && j.active) return;
-    const filters = {
-      nameInclude: terms("fInclude"),
-      nameExclude: terms("fExclude"),
+  // What this page is, according to the shop itself. Falls back to the domain
+  // and the page title — never to a guess dressed up as a fact.
+  function readPage() {
+    const a = (engine() && engine().adapter && engine().adapter()) || null;
+    let ctx = null;
+    try { ctx = a && a.context ? a.context(document) : null; } catch (e) {}
+    if (a) ctx = Object.assign({ platform: !!a.platform }, ctx || {});
+    const host = location.hostname;
+    const api = L();
+    const brand = api ? api.brandFor(ctx, a && a.label, host)
+      : String((ctx && ctx.brand) || host);
+    const label = api
+      ? (api.cleanLabel((ctx && ctx.category) || document.title, brand, host) || host)
+      : String((ctx && ctx.category) || document.title || host).slice(0, 60);
+    return { brand, label, url: location.href, scannable: !!a };
+  }
+
+  const listOf = id => lists.find(l => l.id === id) || null;
+  const inList = (l, url) => {
+    const api = L(); if (!api) return false;
+    const k = api.normUrl(url);
+    return (l.entries || []).some(e => api.normUrl(e.url) === k);
+  };
+
+  function renderChips() {
+    const url = location.href;
+    const box = $("#chips");
+    box.innerHTML = lists.map(l =>
+      `<button class="chip${inList(l, url) ? " has" : ""}" data-id="${esc(l.id)}" type="button">
+         <i class="dot" style="background:${hueOf(l.name)}"></i>${esc(l.name)}
+         <span class="n">${(l.entries || []).length}</span>
+       </button>`).join("") +
+      `<button class="chip new" id="newlist" type="button">＋ New list</button>`;
+    box.querySelectorAll(".chip[data-id]").forEach(b =>
+      b.addEventListener("click", () => grab(b.dataset.id, b)));
+    const nl = box.querySelector("#newlist");
+    if (nl) nl.addEventListener("click", makeList);
+
+    // Say where this page already lives — grabbing it twice is a no-op, and
+    // silence about that reads as a broken button.
+    const already = lists.filter(l => inList(l, url)).map(l => l.name);
+    const msg = $("#msg");
+    if (already.length) {
+      msg.innerHTML = `Already in <b>${esc(already.join(", "))}</b> — tap a chip to update its name.`;
+      msg.classList.add("on");
+    } else if (!dirty) {
+      msg.classList.remove("on");
+    }
+  }
+
+  function paintCount() {
+    const l = listOf(lastId) || lists[0];
+    const n = l ? (l.entries || []).length : 0;
+    const c = $("#count");
+    c.textContent = n > 99 ? "99+" : String(n);
+    c.classList.toggle("on", n > 0);
+  }
+
+  async function load() {
+    const api = L();
+    lists = api ? await api.load() : [];
+    const o = await get(LAST);
+    lastId = o[LAST] || (lists[0] && lists[0].id) || "";
+    paintCount();
+    if (open) renderChips();
+  }
+
+  async function makeList() {
+    const name = prompt("New list name", "");
+    if (name == null) return;
+    const clean = String(name).trim();
+    if (!clean) return;
+    const api = L(); if (!api) return;
+    lists.push({ id: "l" + Date.now(), name: clean, entries: [], createdAt: Date.now() });
+    await api.save(lists);
+    renderChips();
+  }
+
+  /* Drop the page into a list. The brand and category used are whatever the
+     two fields say at this moment, so an edit is part of the same gesture. */
+  async function grab(listId, chipEl) {
+    const api = L(); if (!api) return;
+    const l = listOf(listId); if (!l) return;
+    const entry = {
+      brand: $("#fbrand").value.trim() || readPage().brand,
+      label: $("#flabel").value.trim() || readPage().label,
+      url: location.href,
+      scannable: true,      // it is a web page we are standing on — of course it can be scanned
     };
-    setStore(OPTS, { withSpec: true, filters });   // detail collection is always on
-    setStore(COLLAPSED, false);                 // keep the panel open through the run
-    eng.startJob({ withSpec: true, filters });
-    // stay open and show progress in place
-    paint({ active: true, paused: false, phase: "list", items: [], status: "Starting…" });
-  });
+    const m = api.mergeEntries(l.entries || [], [entry]);
+    l.entries = m.list;
+    await api.save(lists);
+    lastId = listId;
+    await set({ [LAST]: listId });
 
-  async function togglePause() {
-    const eng = engine(); if (!eng) return;
-    const j = await eng.getJob();
-    if (j && j.active && j.paused) eng.resumeJob(); else if (j && j.active) eng.pauseJob();
+    if (chipEl) {
+      chipEl.classList.add("hit");
+      setTimeout(() => chipEl.classList.remove("hit"), 420);
+    }
+    const pop = $("#pop");
+    pop.textContent = m.added ? "+1" : "✓";
+    pop.classList.remove("go"); void pop.offsetWidth; pop.classList.add("go");
+    $("#fab").classList.add("saved");
+    setTimeout(() => $("#fab").classList.remove("saved"), 700);
+
+    dirty = true;
+    const msg = $("#msg");
+    msg.innerHTML = m.added
+      ? `Grabbed into <b>${esc(l.name)}</b> — ${(l.entries || []).length} sites.`
+      : `Updated in <b>${esc(l.name)}</b>.`;
+    msg.classList.add("on");
+    paintCount(); renderChips();
+    setTimeout(() => { if (open) close(); dirty = false; }, 950);
   }
-  el("pr2").addEventListener("click", e => { e.stopPropagation(); togglePause(); });
-  // clear the filter inputs + persist the cleared state (shared by Clear filters & Reset)
-  function clearFilters() {
-    el("fInclude").value = ""; el("fExclude").value = "";
-    setStore(OPTS, { withSpec: true, filters: {} });
-    refreshFilterState();
+
+  function openCard() {
+    const p = readPage();
+    $("#fbrand").value = p.brand;
+    $("#flabel").value = p.label;
+    dirty = false;
+    renderChips();
+    $("#card").classList.add("show");
+    open = true;
   }
-  // Reset = discard the job AND clear the filters, so nothing carries into the next run
-  function doReset() { const eng = engine(); if (eng) eng.resetJob(); clearFilters(); paint(null); }
-  el("reset2").addEventListener("click", e => { e.stopPropagation(); doReset(); });
+  function close() { $("#card").classList.remove("show"); open = false; }
 
-  // keep the filter badge in sync as the user edits, and let them clear in one tap
-  ["fInclude", "fExclude"].forEach(id => {
-    el(id).addEventListener("input", refreshFilterState);
-    el(id).addEventListener("change", refreshFilterState);
+  $("#fab").addEventListener("click", () => (open ? close() : openCard()));
+  $("#x").addEventListener("click", close);
+  $("#hide").addEventListener("click", async () => {
+    close();
+    host.style.display = "none";
+    await set({ [HIDDEN]: true });
   });
-  el("fclear").addEventListener("click", e => { e.stopPropagation(); clearFilters(); });
-
-  // click outside closes the panel — but NOT while a job is active: the panel
-  // must stay open during a run so 일시정지 is always one tap away.
-  document.addEventListener("click", e => {
-    if (!panel.classList.contains("show") || e.target === host) return;
-    if (lastJob && lastJob.active) return;            // keep it open mid-run
-    closePanel();
+  // Scanning belongs to the panel, but the page you are looking at is the one
+  // case where starting from here saves a round trip.
+  $("#run").addEventListener("click", () => {
+    const e = engine(); if (!e) return;
+    close();
+    try { e.startJob({ withSpec: true, filters: {} }); } catch (x) {}
   });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && open) close(); });
 
-  try {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === "local" && changes[JOB]) paint(changes[JOB].newValue);
-    });
-  } catch (e) {}
+  // A scan running anywhere shows on the button; its controls stay in the panel.
+  function paintJob() {
+    const on = !!(job && job.active);
+    $("#fab").classList.toggle("busy", on && !job.paused);
+    $("#run").disabled = on;
+    $("#run").textContent = on ? "Scanning…" : "▶ Scan this page";
+  }
 
-  function mount() {
-    (document.body || document.documentElement).appendChild(host);
+  if (alive()) {
     try {
-      chrome.storage.local.get([JOB, COLLAPSED], o => {
-        const job = o && o[JOB];
-        paint(job);
-        // during an active run, always re-open the panel so progress + 일시정지
-        // stay visible across the page reloads that pagination triggers.
-        if (job && job.active) openPanel(false);
+      chrome.storage.onChanged.addListener((ch, area) => {
+        if (area !== "local") return;
+        if (ch[JOB]) { job = ch[JOB].newValue || null; paintJob(); }
+        if (ch.wpb_lists) { load(); }
       });
     } catch (e) {}
   }
-  if (document.body) mount();
-  else document.addEventListener("DOMContentLoaded", mount, { once: true });
+
+  (async () => {
+    const o = await get([JOB, HIDDEN]);
+    if (o[HIDDEN]) return;                    // user tucked it away
+    job = o[JOB] || null;
+    document.documentElement.appendChild(host);
+    await load();
+    paintJob();
+  })();
 })();

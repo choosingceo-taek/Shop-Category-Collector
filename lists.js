@@ -284,8 +284,59 @@
     return m;
   }
 
+  /* ---- naming a grabbed page ---------------------------------------------
+
+     Both places that file a page — the on-page grab button and the panel —
+     must name it identically, or the same shop lands in two Excel groups.
+     The rules live here so there is one of them. */
+
+  // "shop.lululemon.com" -> "Lululemon". The brand is the grouping key in
+  // Excel and the LAB, so a raw hostname must never reach a cell.
+  const SUFFIX = new Set(["com", "net", "org", "co", "uk", "us", "au", "kr", "jp", "cn",
+    "de", "fr", "es", "it", "nl", "se", "dk", "no", "fi", "pl", "ca", "nz", "in", "io", "eu"]);
+  function brandFromHost(host) {
+    const parts = String(host || "").toLowerCase().replace(/^www\./, "").split(".");
+    while (parts.length > 1 && SUFFIX.has(parts[parts.length - 1])) parts.pop();
+    const name = parts[parts.length - 1] || String(host || "");
+    return name.split(/[-_]/).filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || String(host || "");
+  }
+
+  /* A category label fit for a list row: the page title minus the boilerplate
+     tail every shop appends ("Women's T-shirts | ZARA United States" ->
+     "Women's T-shirts"). Only segments that repeat the brand/domain or are
+     pure storefront wording are dropped, so a real category that happens to
+     contain a dash survives untouched. */
+  function cleanLabel(raw, brand, host) {
+    const norm = x => String(x || "").toLowerCase().replace(/[^a-z0-9가-힣]+/g, "");
+    const bn = norm(brand);
+    const stem = norm(String(host || "").replace(/^www\./, "").split(".")[0]);
+    const segs = String(raw || "").replace(/\s+/g, " ").trim()
+      .split(/\s*[|·]\s*|\s+[-—–]\s+/).filter(Boolean);
+    while (segs.length > 1) {
+      const last = segs[segs.length - 1], ln = norm(last);
+      const boiler = /^(official (web ?)?(site|store)|online (shop|store)|shop online|united states|korea|대한민국)$/i.test(last.trim());
+      if (boiler || (bn && ln.includes(bn)) || (stem && ln.includes(stem))) segs.pop();
+      else break;
+    }
+    return segs.join(" · ").slice(0, 60);
+  }
+
+  // A platform name is not a brand. "Shopify store" as a brand splits one shop
+  // across Excel groups, so the engine's label is used only when it names a
+  // real shop; otherwise the domain does.
+  const PLATFORM_LABEL = /^(shopify store|generic site.*)$/i;
+  function brandFor(ctx, adapterLabel, host) {
+    if (ctx && ctx.brand) return String(ctx.brand);
+    const label = String((ctx && ctx.site) || adapterLabel || "");
+    const isPlatform = (ctx && ctx.platform) || PLATFORM_LABEL.test(label);
+    if (label && !isPlatform) return label;
+    return brandFromHost(host);
+  }
+
   const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl,
-    toText, toGrid, GRID_HEADER, tierOf, tierMap, load, save, KEY };
+    toText, toGrid, GRID_HEADER, tierOf, tierMap, load, save, KEY,
+    brandFromHost, cleanLabel, brandFor, PLATFORM_LABEL };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.ScanLists = API;
 })(typeof self !== "undefined" ? self : this);

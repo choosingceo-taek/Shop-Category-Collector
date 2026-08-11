@@ -16,19 +16,20 @@
      destinations (LAB, the run); everything else is line work. */
   :root {
     color-scheme: light;
-    /* iOS grouped-list palette: a light grey ground so the white cards read
-       as separate groups on their own, without a border doing the work. */
-    --bg:#f2f2f7; --card:#fff; --ink:#000; --ink2:#3c3c43; --muted:#8e8e93;
-    --line:#e3e3e8; --line2:#d1d1d6; --hard:#111; --wash:#f2f2f7;
-    --overlay:rgba(0,0,0,.45);
-    /* One accent, and only for state: a run in progress, the row being
-       scanned. Nothing decorative is coloured — the brand dots in the list
-       are data, not decoration. */
-    --accent:#b4551a; --accent2:#d2691e;
-    --cta:#111; --cta-ink:#fff; --cta-hi:#000;
+    /* A grouped-list palette warmed off pure grey. Neutral grey plus square
+       corners read as a form to fill in; the same layout on a warm ground
+       with generous corners reads as something to handle. The structure is
+       unchanged — only the temperature and the radii. */
+    --bg:#efece5; --card:#fff; --ink:#1d1b18; --ink2:#4a453e; --muted:#8a857c;
+    --line:#e6e1d8; --line2:#d8d2c7; --hard:#1d1b18; --wash:#f4f1ea;
+    --overlay:rgba(29,27,24,.45);
+    /* Colour is spent on state, never on decoration: a run in progress, the
+       row being scanned. The brand dots in the list are data, not ornament. */
+    --accent:#b4551a; --accent2:#c08552;
+    --cta:#1d1b18; --cta-ink:#f7f4ee; --cta-hi:#000;
     --serif: ui-serif, Georgia, "Times New Roman", "Apple SD Gothic Neo", serif;
-    --r:10px;                       /* iOS card corner */
-    --r-s:8px;                      /* controls */
+    --r:16px;                       /* card corner — soft enough to hold */
+    --r-s:12px;                     /* controls */
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
@@ -91,9 +92,26 @@
   #v-collector .fs.sites { flex:1; min-height:0; display:flex; flex-direction:column; }
   #listbody { flex:1; min-height:80px; overflow-y:auto; overscroll-behavior:contain;
     margin:0 -4px; padding:0 4px; }
-  .runbar { flex:none; background:var(--card); border-top:1px solid var(--line2);
-    padding:10px 14px calc(10px + env(safe-area-inset-bottom)); }
-  .runbar .runrow { margin-bottom:0; }
+  .runbar { flex:none; background:var(--card); border-top:1px solid var(--line);
+    padding:10px 14px calc(12px + env(safe-area-inset-bottom)); }
+  /* The transport: run · hold · stop, as three round controls. Run carries
+     the label because it is the one you press on purpose; the other two only
+     matter once something is running, and they say so by waking up. */
+  .runbar .runrow { display:flex; align-items:center; gap:9px; margin-bottom:0; }
+  .rbtn { display:inline-flex; align-items:center; justify-content:center; gap:9px;
+    height:46px; width:46px; flex:none; padding:0; border-radius:999px;
+    background:var(--wash); border:1px solid var(--line2); color:var(--ink);
+    transition:background .15s ease, color .15s ease, transform .12s ease, opacity .15s ease; }
+  .rbtn svg { width:21px; height:21px; fill:currentColor; flex:none; }
+  .rbtn em { font-style:normal; font-weight:650; font-size:13.5px; letter-spacing:-.01em; }
+  .rbtn.go { flex:1; width:auto; padding:0 18px; justify-content:flex-start;
+    background:var(--cta); color:var(--cta-ink); border-color:var(--cta); }
+  .rbtn.go:hover:not(:disabled) { background:var(--cta-hi); }
+  .rbtn:hover:not(:disabled) { border-color:var(--hard); transform:translateY(-1px); }
+  .rbtn:active:not(:disabled) { transform:scale(.96); }
+  .rbtn:disabled { opacity:.32; cursor:default; }
+  /* a hold in effect is a state, so it is the one thing here that takes colour */
+  .rbtn.held { background:var(--accent2); border-color:var(--accent2); color:#fff; opacity:1; }
 
   /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
   /* The capture card: what is about to be filed, spelled out. Brand and
@@ -113,22 +131,14 @@
     letter-spacing:.09em; text-transform:uppercase; border:1px solid var(--line2);
     border-radius:var(--r); color:var(--muted); flex:none; }
   .now .badge.ok { border-color:var(--hard); color:var(--ink); }
-  /* Capture and run are different acts, so they cannot be the same black
-     block stacked twice — the eye reads two identical buttons as one control
-     it has to stop and parse. Capture is the outlined one; solid ink stays
-     with the run and with LAB. */
-  /* iOS buttons are set in plain sentence case at a readable size — the
-     uppercase micro-tracking we used before reads as a label, not a tap
-     target. Capture stays the outlined twin of the filled run button. */
-  #addbtn { width:100%; padding:11px; font-size:13.5px; font-weight:600;
-    letter-spacing:-.01em; background:var(--card); color:var(--ink);
-    border:1.5px solid var(--hard); border-radius:var(--r-s); }
-  #addbtn:hover:not(:disabled) { background:var(--hard); color:#fff; }
-  #addbtn:disabled { background:none; color:var(--muted); border-color:var(--line2); }
-  .addrow { display:flex; gap:6px; margin-top:7px; }
-  .addrow button { flex:1; font-size:12px; font-weight:600; padding:8px 6px;
+  /* Three equal ways to put sites in: this page, a sheet, a pasted block.
+     Grabbing one page is normally done on the page itself, at the round
+     button in its corner — so none of these is the loud one here. */
+  .addrow { display:flex; gap:6px; margin-top:0; }
+  .addrow button { flex:1; font-size:12px; font-weight:600; padding:9px 6px;
     border-radius:var(--r-s); background:var(--wash); border-color:transparent; }
-  .addrow button[aria-expanded="true"] { background:var(--ink); color:#fff; }
+  .addrow button:disabled { background:var(--wash); color:var(--muted); }
+  .addrow button[aria-expanded="true"] { background:var(--ink); color:var(--cta-ink); }
 
   .listwrap { padding:0 14px 20px; }
   .panelcard { background:none; border:0; padding:0; margin:0; }
@@ -373,12 +383,15 @@
             <select id="listsel" title="Choose a list" hidden></select>
           </div>
 
-          <!-- Putting sites in: one page, a whole sheet, or a pasted block.
-               Three doors to the same room, so they stand together. -->
+          <!-- Grabbing one page happens ON the page, at the round button in
+               its bottom-right corner — that is where the browsing is. What
+               is left here is bringing sites in by the sheet or the block,
+               plus a quiet fallback for the pages the button cannot reach
+               (a site the extension has no access to yet). -->
           <div class="adder">
             <div class="now" id="now">Reading the page…</div>
-            <button id="addbtn" class="solid">＋ Add this page</button>
             <div class="addrow">
+              <button id="addbtn" title="Add the page you are on (the round button on the page does this too)">＋ This page</button>
               <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)">⬆ Import list</button>
               <button id="pastetoggle" aria-expanded="false" title="Paste a block of URLs">⌨ Paste URLs</button>
             </div>
@@ -415,12 +428,21 @@
             <button id="listview" class="grow">View</button>
           </div>
         </div>
-        <!-- One button is the whole control surface (user request): idle it
-             starts the run, running it stops and saves. Every scan reads the
-             first page only, capped at what one screen of research needs —
-             no knobs to learn, nothing to set wrong. -->
-        <div class="runrow">
-          <button id="runlist" class="solid">▶ Scan all</button>
+        <!-- Three round controls, nothing else: run, hold, stop. Icons
+             because the bar is a transport, not a form — and because at this
+             size a glyph is read faster than a word. Every scan reads the
+             first page only, so there is nothing to configure here. -->
+        <div class="runrow" role="group" aria-label="Scan controls">
+          <button id="runlist" class="rbtn go" title="Scan every site in this list" aria-label="Scan all">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+            <em id="runlabel">Scan all</em>
+          </button>
+          <button id="jpause" class="rbtn" title="Hold the run — it keeps its place" aria-label="Pause">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5h3v13H9zM14 5.5h3v13h-3z"/></svg>
+          </button>
+          <button id="jreset" class="rbtn" title="Stop the run and save what was collected" aria-label="Stop">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+          </button>
         </div>
       </div>
     </section>

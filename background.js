@@ -83,7 +83,7 @@ refreshUpdate(false);
    puts the engine in the page. Ping before injecting — a static content script
    is already there on supported sites, and injecting twice would run the
    queue-resume logic twice. */
-const ENGINE_FILES = ["exceljs.min.js", "excel.js", "sites.js", "content.js", "fab.js"];
+const ENGINE_FILES = ["exceljs.min.js", "excel.js", "sites.js", "lists.js", "content.js", "fab.js"];
 
 function pingTab(tabId, ms) {
   return new Promise(res => {
