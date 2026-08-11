@@ -39,26 +39,27 @@
   .primary { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
 
   header { position:sticky; top:0; z-index:5; background:var(--card);
-    border-bottom:1px solid var(--line); padding:13px 20px 12px; }
+    border-bottom:1px solid var(--line); padding:9px 20px 9px; }
   h1 { letter-spacing:-.02em; }
   .top { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
   h1 { font-size:17px; margin:0; font-weight:650; letter-spacing:-.01em; }
   .stats { color:var(--muted); font-size:12.5px; }
-  .filters { display:flex; gap:10px; margin-top:13px; flex-wrap:wrap; align-items:stretch; }
+  .filters { display:flex; gap:8px; margin-top:9px; flex-wrap:wrap; align-items:stretch; }
   .filters input[type=search] { min-width:210px; width:100%; }
   /* a labelled box: the group names itself on its own top border, so a wall
      of nine dropdowns becomes five named jobs */
-  .fs { position:relative; display:flex; gap:6px; align-items:center; flex-wrap:wrap;
-    background:var(--wash); border:0; border-radius:var(--r); padding:14px 10px 10px; }
+  .fs { position:relative; display:flex; gap:5px; align-items:center; flex-wrap:wrap;
+    background:var(--wash); border:0; border-radius:var(--r-s); padding:5px 9px; }
   .fs.grow { flex:1; min-width:230px; }
-  .fs > .lg { position:absolute; top:3px; left:12px; font-size:9px; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--muted); }
-  .fs select, .fs button { font-size:12.5px; padding:6px 9px; }
+  .fs > .lg { position:static; font-size:9px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); margin-right:2px; }
+  .fs select, .fs button { font-size:12px; padding:4px 8px; }
+  .fs input[type=search] { padding:4px 9px; font-size:12px; }
   .selbar { display:none; align-items:center; gap:10px; margin-top:10px; padding:9px 12px;
     background:var(--wash); border-radius:var(--r); font-size:13px; }
   .selbar.on { display:flex; }
 
-  main { padding:16px 20px 60px; }
+  main { padding:11px 20px 50px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:13px; }
   .c { border:0; border-radius:var(--r); background:var(--card); overflow:hidden;
     display:flex; flex-direction:column; position:relative;
@@ -81,25 +82,26 @@
   /* LAB */
   /* the view controls are a card of their own, so they sit on the ground the
      same way every analysis below them does */
-  .labbar { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;
-    background:var(--card); border-radius:var(--r); padding:12px 14px;
+  .labbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;
+    background:var(--card); border-radius:var(--r); padding:7px 12px;
     box-shadow:0 1px 2px rgba(0,0,0,.05); }
-  .labbar .selwrap { min-width:140px; }
-  .labbar .cap { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.1em;
-    color:var(--muted); margin-bottom:3px; }
+  .labbar .selwrap { display:flex; align-items:center; gap:6px; }
+  .labbar .cap { font-size:9px; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--muted); }
+  .labbar select { font-size:12px; padding:4px 8px; }
   /* Each analysis is its own card on the grey ground — the heading belongs to
      the card, so nothing needs a rule under it to say where a section ends. */
-  .sec { background:var(--card); border-radius:var(--r); padding:14px 16px 16px;
-    margin-bottom:14px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
-  #v-lab h3 { font-size:14px; margin:0 0 11px; padding:0; border:0;
+  .sec { background:var(--card); border-radius:var(--r); padding:11px 14px 12px;
+    margin-bottom:10px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+  #v-lab h3 { font-size:13.5px; margin:0 0 8px; padding:0; border:0;
     font-weight:650; letter-spacing:-.01em; }
   #v-lab h3 .sub { font-weight:400; color:var(--muted); font-size:11.5px; margin-left:7px; }
-  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:11px; }
-  .tile { border:0; border-radius:var(--r); padding:13px 14px; background:var(--card);
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:9px; }
+  .tile { border:0; border-radius:var(--r); padding:9px 12px; background:var(--card);
     box-shadow:0 1px 2px rgba(0,0,0,.05); }
-  .tile .tl { font-size:11px; color:var(--muted); }
-  .tile .tv { font-size:22px; font-weight:650; letter-spacing:-.02em; margin-top:2px; }
-  .tile .ts { font-size:11px; color:var(--muted); margin-top:1px; }
+  .tile .tl { font-size:10.5px; color:var(--muted); }
+  .tile .tv { font-size:19px; font-weight:650; letter-spacing:-.02em; margin-top:1px; }
+  .tile .ts { font-size:10.5px; color:var(--muted); margin-top:0; }
   .legend { display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; }
   .legend .lg { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--ink2); }
   .legend .lg i { width:10px; height:10px; border-radius:2px; display:inline-block; }
@@ -222,26 +224,30 @@
   /* The list scope: chips, so how many lists there are and how big each one
      is stays visible without opening anything. Same language as the side
      panel, because it is the same object being chosen. */
-  .scoperail { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-    padding:11px 20px; background:var(--card); border-bottom:1px solid var(--line); }
-  .scopechips { display:flex; gap:6px; flex-wrap:wrap; }
-  .scopechips button { display:inline-flex; align-items:center; gap:7px;
+  /* SCOPE — which research question this whole screen is about. It rides in
+     the title row because it qualifies everything below it, and a band of its
+     own was a third horizontal stripe before any content began. */
+  .scoperail { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .scoperail .cap { color:var(--muted); }
+  .scopechips { display:flex; gap:5px; flex-wrap:wrap; }
+  .scopechips button { display:inline-flex; align-items:center; gap:6px;
     border:1px solid var(--line2); background:var(--card); color:var(--ink2);
-    border-radius:999px; padding:6px 13px; font-size:12.5px; font-weight:600; }
+    border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; }
   .scopechips button:hover { border-color:var(--ink); color:var(--ink); }
   .scopechips button .n { font-size:11px; font-weight:700; color:var(--muted); }
   .scopechips button.on { background:var(--ink); border-color:var(--ink); color:#fff; }
   .scopechips button.on .n { color:rgba(255,255,255,.7); }
   .scopechips button .dot { width:8px; height:8px; border-radius:50%; }
-  .tabs { display:flex; gap:3px; padding:10px 20px 12px; background:var(--card);
+  /* One line. The subtitle told you what you would find on arrival — useful
+     the first day, a paragraph to skip every day after. */
+  .tabs { display:flex; gap:3px; padding:7px 20px 8px; background:var(--card);
     border-bottom:1px solid var(--line); }
-  .tab { display:flex; align-items:center; gap:8px; border:0; border-radius:var(--r-s);
-    background:var(--wash); padding:8px 13px; color:var(--ink2); font-weight:600; }
-  .tab .ti { font-size:15px; line-height:1; }
-  .tab .tt { display:flex; flex-direction:column; align-items:flex-start; line-height:1.25;
-    text-align:left; }
-  .tab .tt i { font-style:normal; font-size:10px; font-weight:400; color:var(--muted);
-    letter-spacing:.02em; }
+  .tab { display:flex; align-items:center; gap:7px; border:0; border-radius:var(--r-s);
+    background:var(--wash); padding:6px 12px; color:var(--ink2); font-weight:600;
+    font-size:13px; }
+  .tab .ti { font-size:14px; line-height:1; }
+  .tab .tt { display:flex; align-items:center; line-height:1.2; text-align:left; }
+  .tab .tt i { display:none; }
   .tab.on { background:var(--ink); color:#fff; }
   .tab.on .tt i { color:rgba(255,255,255,.65); }
 
@@ -272,8 +278,14 @@
 </head>
 <body>
   <header>
+    <!-- Title, scope and tally on one line: all three answer the same
+         question — what am I looking at — and each had a band of its own. -->
     <div class="top">
       <h1>LAB</h1>
+      <div class="scoperail" id="scoperail" hidden>
+        <span class="cap">Scope</span>
+        <div class="scopechips" id="scopechips"></div>
+      </div>
       <span class="stats" id="stats">Loading…</span>
     </div>
     <div class="filters">
@@ -334,17 +346,6 @@
       <button id="selnone">Clear selection</button>
     </div>
   </header>
-  <!-- Which list this whole screen is about.
-
-       A list is one research question — Young Women's is not Kids, and a
-       trend line that averages the two describes neither. So the scope sits
-       ABOVE the tabs: it governs the charts, the arrivals feed, the brand
-       rail and the product grid at once, rather than being a filter the user
-       has to remember to set again on each tab. -->
-  <div class="scoperail" id="scoperail" hidden>
-    <span class="cap">List</span>
-    <div class="scopechips" id="scopechips"></div>
-  </div>
   <!-- Each tab says what it IS before you click it: icon, name, and the
        one-line answer to "what will I see there". -->
   <nav class="tabs">

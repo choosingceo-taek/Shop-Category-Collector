@@ -46,22 +46,31 @@
      carries the controls. Nothing needs a border — the card against the grey
      ground is the grouping, which is why a Settings screen stays readable at
      a glance no matter how many rows it holds. */
-  .fs { background:var(--card); border-radius:var(--r); padding:12px;
-    margin:0 0 18px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
-  .fhead { display:flex; align-items:center; gap:9px; margin:0 0 11px -2px; }
-  .fhead .ftools { margin-left:auto; display:flex; gap:5px; align-items:center; }
-  .fico { width:29px; height:29px; display:flex; align-items:center; justify-content:center;
-    background:var(--wash); border-radius:7px; font-size:14px; flex:none; }
+  .fs { background:var(--card); border-radius:var(--r); padding:10px 11px;
+    margin:0 0 12px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+  /* SCOPE — what this research question is watching. A micro-label rather
+     than a titled card header: the word is there to name the thing once, not
+     to be read again every time the panel opens, and the list of URLs is what
+     the space belongs to. */
+  .fhead { display:flex; align-items:center; gap:8px; margin:0 0 7px; height:18px; }
+  .fhead .ftools { margin-left:auto; display:flex; gap:3px; align-items:center; }
+  .fico { display:none; }
   .fhead .ft { min-width:0; }
-  .fhead b { font-size:14px; font-weight:650; letter-spacing:-.01em; }
-  .xbtn { font-size:11px; padding:4px 9px; border-radius:999px; background:var(--wash);
-    border-color:transparent; color:var(--ink2); }
+  .fhead b { font-size:10px; font-weight:700; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); }
+  .xbtn { font-size:10px; padding:2px 7px; border-radius:999px; background:var(--wash);
+    border-color:transparent; color:var(--muted); }
+  .xbtn:hover { color:var(--ink); }
   .cap { text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
   .row { display:flex; gap:6px; align-items:center; }
   .grow { flex:1; min-width:0; }
 
-  header { padding:12px 14px 12px; background:var(--bg); }
-  .brandline { display:flex; align-items:center; gap:8px; }
+  /* One row, not two: the lens sits beside the segmented control rather than
+     on a line of its own. The top of a narrow panel is the most expensive
+     space there is, and it was being spent on an icon. */
+  header { padding:9px 12px; background:var(--bg); display:flex;
+    align-items:center; gap:9px; }
+  .brandline { display:flex; align-items:center; flex:none; }
   .lens { width:20px; height:20px; flex:none; color:var(--ink); display:block; }
   .lens svg { width:100%; height:100%; display:block; }
   .lens.busy { color:var(--accent); animation:pulse 1.1s ease-in-out infinite; }
@@ -72,9 +81,9 @@
   h1 { font-size:13px; margin:0; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
   /* Segmented control, the iOS way of choosing between two views: one track,
      the chosen one lifted onto a white pill. */
-  .tabs { display:flex; gap:2px; margin-top:10px; background:#e4e4e9; border-radius:9px;
-    padding:2px; }
-  .tab { flex:1; border:0; background:none; padding:6px 0 7px; font-size:12px;
+  .tabs { display:flex; gap:2px; flex:1; min-width:0; background:#e4e4e9;
+    border-radius:9px; padding:2px; }
+  .tab { flex:1; border:0; background:none; padding:5px 0 6px; font-size:12px;
     font-weight:600; color:var(--ink2); border-radius:7px; letter-spacing:-.01em; }
   .tab.on { background:var(--card); color:var(--ink);
     box-shadow:0 1px 3px rgba(0,0,0,.12); }
@@ -93,18 +102,18 @@
   #listbody { flex:1; min-height:80px; overflow-y:auto; overscroll-behavior:contain;
     margin:0 -4px; padding:0 4px; }
   .runbar { flex:none; background:var(--card); border-top:1px solid var(--line);
-    padding:10px 14px calc(12px + env(safe-area-inset-bottom)); }
+    padding:8px 12px calc(9px + env(safe-area-inset-bottom)); }
   /* The transport: run · hold · stop, as three round controls. Run carries
      the label because it is the one you press on purpose; the other two only
      matter once something is running, and they say so by waking up. */
   .runbar .runrow { display:flex; align-items:center; gap:9px; margin-bottom:0; }
-  .rbtn { display:inline-flex; align-items:center; justify-content:center; gap:9px;
-    height:46px; width:46px; flex:none; padding:0; border-radius:999px;
+  .rbtn { display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    height:38px; width:38px; flex:none; padding:0; border-radius:999px;
     background:var(--wash); border:1px solid var(--line2); color:var(--ink);
     transition:background .15s ease, color .15s ease, transform .12s ease, opacity .15s ease; }
-  .rbtn svg { width:21px; height:21px; fill:currentColor; flex:none; }
-  .rbtn em { font-style:normal; font-weight:650; font-size:13.5px; letter-spacing:-.01em; }
-  .rbtn.go { flex:1; width:auto; padding:0 18px; justify-content:flex-start;
+  .rbtn svg { width:18px; height:18px; fill:currentColor; flex:none; }
+  .rbtn em { font-style:normal; font-weight:650; font-size:13px; letter-spacing:-.01em; }
+  .rbtn.go { flex:1; width:auto; padding:0 15px; justify-content:flex-start;
     background:var(--cta); color:var(--cta-ink); border-color:var(--cta); }
   .rbtn.go:hover:not(:disabled) { background:var(--cta-hi); }
   .rbtn:hover:not(:disabled) { border-color:var(--hard); transform:translateY(-1px); }
@@ -117,7 +126,7 @@
   /* The capture card: what is about to be filed, spelled out. Brand and
      category are what the spreadsheet groups by, so they are the two lines
      the user reads before pressing Add — not the raw address. */
-  .adder { margin:2px 0 10px; }
+  .adder { margin:0 0 7px; }
   .now { display:flex; align-items:flex-start; gap:9px; padding:10px 11px; margin-bottom:9px;
     background:var(--wash); border:0; border-radius:var(--r-s);
     font-size:11.5px; color:var(--ink2); line-height:1.45; }
@@ -134,28 +143,28 @@
   /* Three equal ways to put sites in: this page, a sheet, a pasted block.
      Grabbing one page is normally done on the page itself, at the round
      button in its corner — so none of these is the loud one here. */
-  .addrow { display:flex; gap:6px; margin-top:0; }
-  .addrow button { flex:1; font-size:12px; font-weight:600; padding:9px 6px;
+  .addrow { display:flex; gap:5px; margin-top:0; }
+  .addrow button { flex:1; font-size:11.5px; font-weight:600; padding:6px 4px;
     border-radius:var(--r-s); background:var(--wash); border-color:transparent; }
   .addrow button:disabled { background:var(--wash); color:var(--muted); }
   .addrow button[aria-expanded="true"] { background:var(--ink); color:var(--cta-ink); }
 
-  .listwrap { padding:0 14px 20px; }
+  .listwrap { padding:0 12px 10px; }
   .panelcard { background:none; border:0; padding:0; margin:0; }
   .panelcard > .cap { display:block; color:var(--muted); margin-bottom:8px; }
-  .lhead { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
+  .lhead { display:flex; align-items:center; gap:7px; margin-bottom:7px; }
   /* Lists as chips: every list and its size readable at rest, one tap to
      switch, and a "＋" that is a list rather than an unlabelled icon. */
   .lchips { display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0; }
-  .lchips button { font-size:12px; letter-spacing:-.01em; padding:5px 11px;
+  .lchips button { font-size:11.5px; letter-spacing:-.01em; padding:4px 10px;
     border-radius:999px; font-weight:600; background:var(--wash);
     border-color:transparent; }
   .lchips button .n { font-weight:400; opacity:.6; margin-left:5px; }
   .lchips button.on { background:var(--hard); color:var(--bg); border-color:var(--hard); }
   .lchips button.add { font-weight:400; color:var(--muted); }
   .iconbtn { background:var(--wash); border-color:transparent; }
-  .iconbtn { width:30px; height:30px; padding:0; display:inline-flex; align-items:center;
-    justify-content:center; flex:none; font-size:13px; border-radius:50%; }
+  .iconbtn { width:22px; height:22px; padding:0; display:inline-flex; align-items:center;
+    justify-content:center; flex:none; font-size:11px; border-radius:50%; }
   .runrow { display:flex; gap:6px; margin-bottom:8px; }
   .upnote { border:1px solid rgba(80,200,120,.45); border-radius:var(--r); padding:10px 12px;
     margin-bottom:10px; font-size:12px; line-height:1.55; }
@@ -170,15 +179,17 @@
   .runctl .danger { color:#b4462f; border-color:rgba(180,70,47,.35); }
   /* LAB — the destination. On a white ground the strongest mark available is
      solid ink, and it is spent here rather than scattered. */
-  .labbtn { display:block; text-align:left; margin:2px 14px 16px;
-    width:calc(100% - 28px); padding:15px 17px; border:0; border-radius:var(--r);
+  /* The way out to the LAB — still the only solid ink block, but one line
+     tall. Its subtitle listed the tabs you find on arrival, which is a thing
+     to read every single time for a destination you already know. */
+  .labbtn { display:block; text-align:left; margin:0 12px 10px;
+    width:calc(100% - 24px); padding:10px 14px; border:0; border-radius:var(--r-s);
     background:var(--hard); color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.18); }
   .labbtn:hover { background:#000; }
   .labbtn .lbmain { display:flex; align-items:center; justify-content:space-between;
-    font-size:20px; font-weight:700; letter-spacing:-.02em; }
-  .labbtn .lbgo { font-size:17px; opacity:.55; font-weight:400; }
-  .labbtn .lbsub { display:block; font-size:11.5px; opacity:.7; margin-top:2px;
-    letter-spacing:-.01em; }
+    font-size:15px; font-weight:700; letter-spacing:-.01em; }
+  .labbtn .lbgo { font-size:15px; opacity:.55; font-weight:400; }
+  .labbtn .lbsub { display:none; }
   .capline { display:flex; align-items:center; justify-content:space-between; gap:8px;
     font-size:11px; color:var(--muted); margin-bottom:12px; }
   .capline select { width:auto; flex:0 0 auto; font-size:11px; padding:3px 6px; }
@@ -196,27 +207,30 @@
      brand a foldable block carrying its own colour and count. The colour is
      derived from the brand name, so the same brand keeps the same mark
      everywhere without anything being stored. */
-  .lsearch { display:flex; gap:6px; align-items:center; margin:2px 0 10px; }
-  .lsearch input { flex:1; min-width:0; font-size:12.5px; padding:8px 11px;
+  .lsearch { display:flex; gap:5px; align-items:center; margin:0 0 6px; }
+  .lsearch input { flex:1; min-width:0; font-size:12px; padding:5px 10px;
     border-radius:999px; background:var(--wash); border-color:transparent; }
-  .lsearch button { font-size:11.5px; padding:6px 11px; border-radius:999px;
+  .lsearch button { font-size:11px; padding:4px 9px; border-radius:999px;
     background:var(--wash); border-color:transparent; }
-  .lsum { font-size:11px; color:var(--muted); margin:0 2px 9px; }
+  .lsum { font-size:10.5px; color:var(--muted); margin:0 2px 5px; }
   .grp { margin-bottom:10px; border:0; border-radius:var(--r-s);
     background:var(--wash); overflow:hidden; }
   .grp .gname { display:flex; align-items:center; gap:7px; width:100%; text-align:left;
-    padding:9px 11px; border:0; border-radius:0; background:none; font-size:11.5px;
+    padding:5px 8px; border:0; border-radius:0; background:none; font-size:11.5px;
     font-weight:700; color:var(--ink); }
   .grp .gname:hover { background:#ececef; }
-  .grp .gdot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .grp .gdot { width:8px; height:8px; border-radius:50%; flex:none; }
   .grp .gnm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .grp .gn { color:var(--muted); font-weight:400; font-size:11px; }
   .grp .gcar { color:var(--muted); font-size:9px; flex:none; transition:transform .15s; }
   .grp.fold .gcar { transform:rotate(-90deg); }
   .grp.fold .gbody { display:none; }
   .grp .gbody { padding:0; }
-  .ent { display:flex; align-items:center; gap:8px; padding:8px 9px; margin-top:3px;
-    background:var(--wash); border:1px solid transparent; border-radius:var(--r); }
+  /* A watched URL, one line. The row is the point of the whole panel, so it
+     is what the space goes to — everything above it earns its height or is
+     shrunk until it does. */
+  .ent { display:flex; align-items:center; gap:6px; padding:4px 8px; margin-top:2px;
+    background:var(--wash); border:1px solid transparent; border-radius:var(--r-s); }
   .ent:hover { border-color:var(--line); }
   .ent.cur { background:var(--card); border-color:var(--accent); }
   .ent.done { opacity:.42; }
@@ -224,13 +238,13 @@
   /* One line per site: the category, under its brand's group heading. The
      address is identity, not reading matter — it lives in the row's tooltip
      (user request: the list shows brand and category, nothing else). */
-  .ent .lb { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ent .lb { font-size:11.5px; line-height:1.45; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   /* Scan is the norm and needs no label; only the exceptions are marked. */
   .ent .tag { font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
     border:1px solid var(--line2); border-radius:var(--r); padding:1px 6px; flex:none; }
   .ent .tag.q { border-style:dashed; }
   .ent .tag.on { display:none; }
-  .ent .act { border:0; background:none; color:var(--muted); padding:2px 4px; font-size:11px; flex:none; }
+  .ent .act { border:0; background:none; color:var(--muted); padding:1px 3px; font-size:10.5px; flex:none; }
   .ent .act:hover { color:var(--ink); }
   .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
 
@@ -367,7 +381,7 @@
           <!-- Named for what it is FOR. "Sites" describes the rows; the point
                is the set of category pages this research question watches
                week after week — so the card says Watchlist. -->
-          <div class="fhead"><span class="fico">🗂️</span><span class="ft"><b>Watchlist</b></span>
+          <div class="fhead"><span class="ft"><b>Scope</b></span>
             <!-- the list's OWN tools: rename it, delete it, take it out.
                  Putting sites IN is a different job and lives with Add. -->
             <span class="ftools" id="ltools">

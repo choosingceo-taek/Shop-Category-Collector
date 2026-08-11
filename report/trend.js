@@ -426,10 +426,10 @@
         tail.slice(0, -1).some(p => p.counts.get(k));
       const rising = path.length >= 2 && path.every((v, i) => i === 0 || v > path[i - 1]);
       if (!seenBefore) {
-        rows.push({ key: k, kind: "new", reason: "이번 구간에 처음 등장",
+        rows.push({ key: k, kind: "new", reason: "first seen this period",
           count: cnt, share: path[path.length - 1], path, lift: path[path.length - 1] });
       } else if (rising) {
-        rows.push({ key: k, kind: "rising", reason: `${path.length}구간 연속 상승`,
+        rows.push({ key: k, kind: "rising", reason: `up ${path.length} periods running`,
           count: cnt, share: path[path.length - 1], path,
           lift: Math.round((path[path.length - 1] - path[0]) * 10) / 10 });
       }
