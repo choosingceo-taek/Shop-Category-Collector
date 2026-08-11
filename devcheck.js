@@ -137,8 +137,9 @@
       found: r.count, when: new Date(r.ts).toISOString().slice(0, 16), url: (r.url || "").slice(0, 60) })));
     const bad = recs.filter(r => r.mark !== "✅");
     if (bad.length) console.log("--- paste this ---\n" + bad.map(r =>
-      `${r.mark} ${r.brand} · ${r.label}\n   ${r.count} found (name ${r.named} · image ${r.imaged} · price ${r.priced}) | engine=${r.adapter}\n   ${r.url}` +
-      (r.diag ? `\n   diag: ${JSON.stringify(r.diag)}` : "")).join("\n") + "\n--- end ---");
+      `${r.mark} ${r.brand} · ${r.label}\n   ${r.count} found (name ${r.named} · image ${r.imaged} · price ${r.priced}${r.withSpec ? ` · fabric ${r.fabric}` : ""}) | engine=${r.adapter}\n   ${r.url}` +
+      (r.diag ? `\n   diag: ${JSON.stringify(r.diag)}` : "") +
+      (r.diagDetail ? `\n   pdp: ${JSON.stringify(r.diagDetail)}` : "")).join("\n") + "\n--- end ---");
     self.devhealthRows = recs;
     return recs;
   };

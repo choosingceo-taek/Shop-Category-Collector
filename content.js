@@ -337,7 +337,12 @@ function selfDiagnose() {
 
 function healthMark(rec) {
   if (!rec.count) return "❌";
-  return (rec.named < rec.count || rec.imaged < rec.count || rec.priced < rec.count) ? "⚠️" : "✅";
+  if (rec.named < rec.count || rec.imaged < rec.count || rec.priced < rec.count) return "⚠️";
+  // Fabric is judged only as ALL-or-nothing, and only when details were
+  // collected: single products legitimately state no blend, but a whole site
+  // at zero means the extraction is broken — the user's core column.
+  if (rec.withSpec && rec.count && rec.fabric === 0) return "⚠️";
+  return "✅";
 }
 function healthNote(rec) {
   if (!rec.count) return "0 products";
@@ -345,7 +350,66 @@ function healthNote(rec) {
   if (rec.named < rec.count) miss.push(`name×${rec.count - rec.named}`);
   if (rec.imaged < rec.count) miss.push(`image×${rec.count - rec.imaged}`);
   if (rec.priced < rec.count) miss.push(`price×${rec.count - rec.priced}`);
+  if (rec.withSpec && rec.count && rec.fabric === 0) miss.push("fabric×all");
   return miss.length ? `${rec.count} found · missing ${miss.join(" ")}` : `${rec.count} found · complete`;
+}
+
+/* When a whole site's fabric column came back empty, photograph ONE product
+   page the same way diagnose-pdp.js did by hand: does the served PDP contain
+   %-fibre wording at all, what does its JSON-LD carry, and (Shopify) does the
+   .js endpoint's description mention it. That answer decides the fix — parse
+   better vs. the data genuinely not being served — without anyone opening a
+   console. Fetch-based and bounded; failure returns nothing. */
+async function diagnoseDetail(item) {
+  const out = { url: String(item.product_url || "").slice(0, 160) };
+  const clip = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n);
+  const grab = async (u, asText) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await fetch(u, { credentials: "include", signal: ctrl.signal });
+      return { status: res.status, body: res.ok ? await res.text() : "" };
+    } catch (e) { return { status: 0, body: "" }; } finally { clearTimeout(timer); }
+  };
+  try {
+    const pdp = await grab(item.product_url);
+    out.pdpStatus = pdp.status;
+    if (pdp.body) {
+      const doc = new DOMParser().parseFromString(pdp.body, "text/html");
+      const types = {};
+      let material = "";
+      doc.querySelectorAll('script[type="application/ld+json"]').forEach(sc => {
+        let d; try { d = JSON.parse(sc.textContent); } catch (e) { return; }
+        [].concat(Array.isArray(d) ? d : (d["@graph"] || [d])).forEach(n => {
+          if (!n || typeof n !== "object") return;
+          types[[].concat(n["@type"] || []).join(",") || "?"] = 1;
+          if (!material && n.material) material = clip(n.material, 80);
+        });
+      });
+      out.ld = { types: Object.keys(types), material };
+      // every place the served page says "<number>%" near words — the raw
+      // sightings the composition parser would have to read
+      const text = (doc.body && doc.body.textContent || "").replace(/\s+/g, " ");
+      out.pctRuns = (text.match(/[^%\d]{0,30}\d{1,3}\s?%[^\d]{0,40}/g) || [])
+        .map(s => clip(s, 70)).filter(s => /[A-Za-z가-힣]/.test(s)).slice(0, 4);
+    }
+    if (/\/products\//i.test(item.product_url)) {          // Shopify-shaped
+      try {
+        const u = new URL(item.product_url); u.search = ""; u.hash = "";
+        const js = await grab(u.origin + u.pathname.replace(/\/$/, "") + ".js");
+        out.js = { status: js.status };
+        if (js.body) {
+          try {
+            const p = JSON.parse(js.body);
+            const desc = String(p.description || "");
+            out.js.descLen = desc.length;
+            out.js.descPct = (desc.match(/\d{1,3}\s?%/g) || []).length;
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return out;
 }
 
 // Called by the build phase, when this URL's items are final. Never throws
@@ -357,6 +421,7 @@ async function recordHealth(j, a, ent) {
       url: j.startUrl || location.href, sig: j.sig || collectionSig(location.href),
       adapter: a.id, brand: (ent && ent.brand) || "", label: (ent && ent.label) || "",
       count: j.items.length, named: filled("name"), imaged: filled("image_url"), priced: filled("price"),
+      fabric: filled("fabric_composition"), withSpec: !!j.withSpec,
       ts: Date.now(),
     };
     rec.mark = healthMark(rec);
@@ -364,6 +429,12 @@ async function recordHealth(j, a, ent) {
     // at the scanned collection (single-page scans stay on it; a paginated run
     // may have walked off it, and diagnosing the wrong page would mislead).
     if (rec.mark !== "✅" && collectionSig(location.href) === rec.sig) rec.diag = selfDiagnose();
+    // A site whose fabric came back empty for EVERY product gets one product
+    // page photographed too — that is where the blend would live, and it is
+    // the page the developer used to inspect by hand (Edikted, Alo).
+    if (rec.withSpec && rec.count && rec.fabric === 0 && j.items[0] && j.items[0].product_url) {
+      rec.diagDetail = await diagnoseDetail(j.items[0]);
+    }
     const all = (await kvGet(HEALTH)) || {};
     all[rec.sig] = rec;
     const keys = Object.keys(all);
@@ -406,6 +477,7 @@ async function queueHealthExport(q) {
       lines.push(`   ${r.note_override || healthNote(r)}${r.adapter ? ` | engine=${r.adapter}` : ""}`);
       lines.push(`   ${r.url}`);
       if (r.diag) lines.push("   diag: " + JSON.stringify(r.diag));
+      if (r.diagDetail) lines.push("   pdp: " + JSON.stringify(r.diagDetail));
       lines.push("");
     }
     const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);
@@ -917,7 +989,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
   if (m.type === "reset" || m.type === "cancel") { resetJob().then(() => send({ ok: true })); return true; }
   if (m.type === "context") {
     const a = adapter();
-    send(a ? Object.assign({ site: a.label, adapterId: a.id, hasDetail: typeof a.fetchDetail === "function", multiBrand: !!a.multiBrand }, a.context(document)) : { site: null });
+    send(a ? Object.assign({ site: a.label, adapterId: a.id, platform: !!a.platform, hasDetail: typeof a.fetchDetail === "function", multiBrand: !!a.multiBrand }, a.context(document)) : { site: null });
     return true;
   }
   /* Dry run on the page in front of the user.

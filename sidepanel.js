@@ -112,6 +112,39 @@
       .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || String(host || "");
   }
 
+  /* The brand a page belongs to. An adapter label can be a real brand (Zara,
+     Aritzia) or the PLATFORM the shop runs on ("Shopify store") — and filing
+     Edikted under "Shopify store" split its Excel and its list group wrong.
+     Platform labels never name a brand; the domain does. */
+  function brandOfRead(r) {
+    const c = r && r.ctx;
+    if (c && c.brand) return c.brand;                          // the page said so
+    if (c && c.site && !c.platform) return c.site;             // a branded adapter
+    const ad = r && r.adapter;
+    if (ad && ad.label && !ad.platform) return ad.label;
+    return brandFromHost(r && r.host);
+  }
+
+  /* A category label fit for the list: the page title minus the boilerplate
+     tail every shop appends ("Women's T-shirts | ZARA United States" →
+     "Women's T-shirts"). Only segments that repeat the brand/site name (or are
+     pure storefront wording) are dropped, so a real category that happens to
+     contain a dash survives untouched. */
+  function cleanLabel(raw, brand, host) {
+    const norm = x => String(x || "").toLowerCase().replace(/[^a-z0-9가-힣]+/g, "");
+    const bn = norm(brand);
+    const stem = norm(String(host || "").replace(/^www\./, "").split(".")[0]);
+    const segs = String(raw || "").replace(/\s+/g, " ").trim()
+      .split(/\s*[|·]\s*|\s+[-—–]\s+/).filter(Boolean);
+    while (segs.length > 1) {
+      const last = segs[segs.length - 1], ln = norm(last);
+      const boiler = /^(official (web ?)?(site|store)|online (shop|store)|shop online|united states|korea|대한민국)$/i.test(last.trim());
+      if (boiler || (bn && ln.includes(bn)) || (stem && ln.includes(stem))) segs.pop();
+      else break;
+    }
+    return segs.join(" · ").slice(0, 60);
+  }
+
   // ---- current page ---------------------------------------------------------
   function askAdapter(tabId) {
     return new Promise(res => {
@@ -164,10 +197,9 @@
     /* Show the two fields that will actually be filed — brand and category —
        rather than one packed line. These are what Excel and LAB group by, so
        seeing them wrong here is the moment to fix them (✎ on the row). */
-    const brand = (read.ctx && read.ctx.site) || (read.adapter && read.adapter.label) ||
-      brandFromHost(read.host);
-    const cat = (read.ctx && read.ctx.category) ||
-      (tab && tab.title || "").replace(/\s*[|·—-]\s*[^|·—-]*$/, "").trim().slice(0, 60) || read.host;
+    const brand = brandOfRead(read);
+    const cat = cleanLabel((read.ctx && read.ctx.category) || (tab && tab.title || ""), brand, read.host)
+      || read.host;
     now.innerHTML = `<span class="bdot" style="background:${brandColor(brand)}"></span>` +
       `<span class="txt"><span class="host">${esc(brand)}</span>` +
       `<span class="sub">${esc(cat)}</span>` +
@@ -185,7 +217,28 @@
       await L.save(lists);
     }
     curList = lists.find(x => curList && x.id === curList.id) || lists[0];
+    repairNames();
     return await repairScannable();
+  }
+
+  /* Entries saved before v1.68 can carry a platform label as their brand
+     ("Shopify store" — which then groups the list AND fills the Excel brand
+     column) and a raw page title as their label. Re-derive both, the same way
+     a fresh Add would. Runs on every load; already-clean entries don't move. */
+  function repairNames() {
+    const PLATFORM_BRANDS = new Set(["shopify store", "generic site (basic info only)"]);
+    let changed = 0;
+    lists.forEach(l => (l.entries || []).forEach(e => {
+      if (!/^https?:/i.test(e.url || "")) return;
+      let brand = e.brand || "";
+      if (!brand.trim() || PLATFORM_BRANDS.has(brand.trim().toLowerCase())) {
+        brand = brandFromHost(hostOf(e.url));
+      }
+      const label = cleanLabel(e.label, brand, hostOf(e.url)) || e.label;
+      if (brand !== e.brand || label !== e.label) { e.brand = brand; e.label = label; changed++; }
+    }));
+    if (changed) L.save(lists);
+    return changed;
   }
 
   /* Ask for the origins a set of URLs needs, in one prompt.
@@ -251,9 +304,10 @@
   async function addCurrentPage() {
     if (!tab || !tab.url || !read || read.kind === "internal") return;
     const a = read.ctx, ad = read.adapter;
+    const brand = brandOfRead(read);
     const entry = {
-      brand: (a && a.site) || (ad && ad.label) || brandFromHost(read.host),
-      label: (a && a.category) || (tab.title || "").replace(/\s*[|·—-]\s*[^|·—-]*$/, "").trim().slice(0, 60) || read.host,
+      brand,
+      label: cleanLabel((a && a.category) || (tab.title || ""), brand, read.host) || read.host,
       url: tab.url,
     };
     /* Everything the user adds is meant to be scanned — that is the whole
@@ -296,9 +350,8 @@
     const running = !!(queue && queue.active);
     const scannableCount = entries.filter(e => e.scannable !== false).length;
     $("#runlist").dataset.empty = scannableCount ? "0" : "1";
-    $("#runlist").disabled = !scannableCount || running;
-    $("#runlist").textContent = scannableCount && scannableCount !== entries.length
-      ? `▶ Scan all (${scannableCount})` : "▶ Scan all";
+    $("#runlist").dataset.n = scannableCount === entries.length ? "" : String(scannableCount);
+    paintLive();     // the one run button reads list count + job + queue state
 
     // The filter only earns its space once the list is long enough to scroll.
     $("#lsearch").hidden = entries.length < 7;
@@ -342,14 +395,11 @@
       <div class="gbody">${rows.map(({ e, i }) => {
         const qi = qIdx(e);
         const cls = running ? (qi > -1 && qi < queue.idx ? " done" : qi === queue.idx ? " cur" : "") : "";
-        // The address is the identity but not the reading matter — show the
-        // path, which is what tells two categories of one brand apart.
-        let where = e.url;
-        try { const u = new URL(e.url); where = (u.pathname + u.search).slice(0, 70) || u.host; } catch (x) {}
-        return `<div class="ent${cls}" data-i="${i}">
+        // Brand and category are the reading matter (user request); the address
+        // is identity only, so it lives in the tooltip and the ↗ button.
+        return `<div class="ent${cls}" data-i="${i}" title="${esc(e.url)}">
           <div class="txt">
-            <div class="lb">${esc(e.label || e.url)}</div>
-            <span class="u">${esc(where)}</span>
+            <div class="lb">${esc(e.label || hostOf(e.url) || e.url)}</div>
           </div>
           ${e.scannable === false ? '<span class="tag">Ref</span>'
             : e.scannable ? '<span class="tag on">Scan</span>'
@@ -488,15 +538,20 @@
     // reads as "still working" long after the scan is done
     $("#livetext").textContent = on ? (job.status || "Working…") : "";
     $("#dot").classList.toggle("busy", on && !job.paused);
-    /* The controls never move or vanish — a button that disappears makes the
-       user hunt for it mid-run. State shows as enabled/disabled instead. */
+    /* ONE button, always in the same place (user request — no Pause, no
+       Reset, no per-URL cap to set). Idle it starts the run; while anything
+       runs it becomes Stop, which saves what was collected. A button that
+       changes its verb in place is still one button — nothing to hunt for. */
     const running = !!(queue && queue.active);
     const busy = on || running;
-    const paused = !!(job && job.paused);
-    $("#runlist").disabled = busy || $("#runlist").dataset.empty === "1";
-    $("#jpause").disabled = !on;
-    $("#jpause").textContent = paused ? "▶ Resume" : "⏸ Pause";
-    $("#jreset").disabled = !busy;
+    const btn = $("#runlist");
+    if (busy) {
+      btn.disabled = false;
+      btn.textContent = "■ Stop";
+    } else {
+      btn.disabled = btn.dataset.empty === "1";
+      btn.textContent = btn.dataset.n ? `▶ Scan all (${btn.dataset.n})` : "▶ Scan all";
+    }
   }
 
   // ---- products -------------------------------------------------------------
@@ -730,6 +785,29 @@
   });
 
   $("#runlist").addEventListener("click", async () => {
+    /* While anything runs this button is Stop: end the run and keep the work.
+       The question is asked at the moment it matters, and the safe answer
+       (save what was collected) is the default action. */
+    if ((job && job.active) || (queue && queue.active)) {
+      const running = !!(queue && queue.active);
+      const rows = (queue && (queue.rows || []).length) || 0;
+      const ok = await confirmIn(running && rows
+        ? `Stop the run?\nThe ${rows} products collected so far will be saved to Excel.`
+        : "Stop the scan?\nProducts already in the catalog are kept.");
+      if (!ok) return;
+      const clearStorage = () => chrome.storage.local.get(QUEUE, o => {
+        const q = o && o[QUEUE];
+        if (q) { q.active = false; q.rows = []; chrome.storage.local.set({ [QUEUE]: q }); }
+      });
+      if (running && rows) {
+        return sendEngine("queueStop", r => {
+          if (!r) { clearStorage(); return toast("Stopped (tab was gone — nothing saved)"); }
+          toast("Stopping — saving what was collected to Excel");
+        });
+      }
+      clearStorage();
+      return sendEngine("reset", () => toast("Stopped"));
+    }
     const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
     if (!entries.length) return toast("No scannable sites in this list");
     if (!await confirmIn(`Scan ${entries.length} sites one after another. Start?`)) return;
@@ -746,9 +824,11 @@
     // page the extension isn't injected into) the run must say so instead of
     // retrying invisibly forever.
     let tries = 0;
+    // No maxItems sent: the engine's own default applies — the first page,
+    // capped at the slice one research pass actually reads (user request:
+    // always the first page, no count to choose).
     const send = () => chrome.tabs.sendMessage(t.id,
       { type: "runList", listId: curList.id, name: curList.name, list: entries,
-        maxItems: parseInt($("#maxitems").value, 10) || 0,
         withSpec: true, filters: {} },
       r => {
         if (chrome.runtime.lastError || !r) {
@@ -763,41 +843,6 @@
       });
     setTimeout(send, 1500);
   });
-  // One toggle. The scan keeps its place, so resuming never re-scrapes a page.
-  $("#jpause").addEventListener("click", () => {
-    if (job && job.paused) return sendEngine("resume");
-    sendEngine("pause", () => toast("Paused — press Resume to continue"));
-  });
-
-  /* Reset — stop the run and clear its state.
-
-     "Stop and save" used to be a second button next to this one. A pair where
-     one keeps the work and the other destroys it is a pair nobody dares press,
-     so there is one button now and the question is asked at the moment it
-     matters — with the safe answer (keep what was collected) as the default
-     action. The tab's queueStop handler stops the queue, writes the one
-     spreadsheet, and closes the job; storage is the fallback for a dead tab. */
-  $("#jreset").addEventListener("click", async () => {
-    const running = !!(queue && queue.active);
-    const rows = (queue && (queue.rows || []).length) || 0;
-    const ok = await confirmIn(running && rows
-      ? `Stop the run?\nThe ${rows} products collected so far will be saved to Excel.`
-      : "Reset the run state?\nProducts already in the catalog are kept.");
-    if (!ok) return;
-    const clearStorage = () => chrome.storage.local.get(QUEUE, o => {
-      const q = o && o[QUEUE];
-      if (q) { q.active = false; q.rows = []; chrome.storage.local.set({ [QUEUE]: q }); }
-    });
-    if (running && rows) {
-      return sendEngine("queueStop", r => {
-        if (!r) { clearStorage(); return toast("Stopped (tab was gone — nothing saved)"); }
-        toast("Stopping — saving what was collected to Excel");
-      });
-    }
-    clearStorage();
-    sendEngine("reset", () => toast("Reset"));
-  });
-
   $("#listxlsx").addEventListener("click", () => {
     const rows = productsOfList(curList && curList.id);
     const tag = (curList.name || "list").replace(/[^\w가-힣]+/g, "_");

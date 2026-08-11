@@ -147,7 +147,7 @@
   // "Material: 95% Polyester, 5% Spandex" label style AND a bare percentage
   // run "95% Polyester 5% Spandex"; validated by a fiber/percentage check so
   // "Material: Imported" style noise never passes.
-  const FIBER_RE = /\d\s*%|\b(cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide|jersey|fleece)\b/i;
+  let FIBER_RE = /\d\s*%|\b(cotton|polyester|spandex|elastane|rayon|viscose|modal|nylon|acrylic|wool|linen|lyocell|tencel|cashmere|silk|bamboo|polyamide|jersey|fleece)\b/i;
 
   // Every fibre we will name. Used to REBUILD the composition from the
   // "<pct>% <fibre>" pairs actually present, instead of returning a raw slice of
@@ -158,6 +158,16 @@
   const FIBER_LIST = "metallised fibre|metallic fibre|triacetate|polyamide|polyester|elastane|" +
     "cashmere|viscose|acrylic|acetate|lyocell|spandex|alpaca|angora|bamboo|cotton|feather|" +
     "leather|mohair|tencel|linen|modal|nylon|rayon|ramie|cupro|hemp|jute|silk|wool|down";
+  /* Korean fibre names — Alo's /ko-kr/ storefront (and any Korean shop) states
+     the blend as "폴리에스터 87% 스판덱스 13%". The single-syllable fibres
+     (면·마·견·울) appear INSIDE ordinary words (화면, 겨울…), so they only
+     count when not glued to another Hangul syllable on either side. */
+  const KO_FIBER_LIST = "폴리에스테르|폴리에스터|폴리아마이드|폴리아미드|엘라스테인|" +
+    "스판덱스|캐시미어|비스코스|아세테이트|라이오셀|리오셀|아크릴|레이온|나일론|텐셀|" +
+    "린넨|리넨|모달|양모|알파카|앙고라|모헤어|(?<![가-힣])(?:울|면|마|견)";
+  const FIBER_ANY = FIBER_LIST + "|" + KO_FIBER_LIST;
+  // the validity check accepts Korean fibre names too, so "소재: 면 100%" passes
+  FIBER_RE = new RegExp(FIBER_RE.source + "|" + KO_FIBER_LIST, "i");
   const titleFibre = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim()
     .replace(/\b\w/g, c => c.toUpperCase());
 
@@ -165,21 +175,39 @@
   // qualifier word is allowed ("100% Organic cotton"); promo wording ("50% off")
   // is excluded because the pair must end on a real fibre name.
   function fiberPairs(text) {
+    const src = String(text || "");
     // The tail guard is "not followed by a letter" rather than \b: sites run the
     // pairs together with no separator ("95% cotton5% elastane"), and \b fails
     // between a letter and a digit, which silently dropped the first fibres.
     const re = new RegExp(
-      "(\\d{1,3})\\s?%\\s?(?:(?!off|sale|discount|extra|savings?)([A-Za-z]+)\\s+)?(" + FIBER_LIST + ")(?![A-Za-z])",
+      "(\\d{1,3})\\s?%\\s?(?:(?!off|sale|discount|extra|savings?)([A-Za-z]+)\\s+)?(" + FIBER_ANY + ")(?![A-Za-z가-힣])",
       "gi");
-    const out = [];
+    // Reversed order — "폴리에스터 87%" / "Cotton 95%". The fibre must sit
+    // DIRECTLY against its number, and a following off/sale/할인 disqualifies
+    // it, so "selected cotton 50% off" never reads as a blend.
+    const rev = new RegExp(
+      "(" + FIBER_ANY + ")(?![A-Za-z가-힣])\\s?:?\\s?(\\d{1,3})\\s?%(?!\\s?(?:off|sale|discount|할인))",
+      "gi");
+    /* "폴리에스터 87% 스판덱스 13%" and "95% cotton 5% elastane" both contain
+       the OTHER direction's shape in their middle ("87% 스판덱스" / "cotton
+       5%"), so the two readings are parsed separately and the one that
+       accounts for more pairs wins — the wrong direction only ever catches a
+       fragment. Ties go to %-first, the shape western shops use. */
+    const fwd = [];
     let m;
-    while ((m = re.exec(String(text || "")))) {
+    while ((m = re.exec(src))) {
       const pct = parseInt(m[1], 10);
       if (!(pct > 0 && pct <= 100)) continue;
       const qual = m[2] && /^(organic|recycled|virgin|merino|pima|supima|bci)$/i.test(m[2]) ? m[2] + " " : "";
-      out.push({ pct, fiber: titleFibre(qual + m[3]) });
+      fwd.push({ pct, fiber: titleFibre(qual + m[3]) });
     }
-    return out;
+    const bwd = [];
+    while ((m = rev.exec(src))) {
+      const pct = parseInt(m[2], 10);
+      if (!(pct > 0 && pct <= 100)) continue;
+      bwd.push({ pct, fiber: titleFibre(m[1]) });
+    }
+    return bwd.length > fwd.length ? bwd : fwd;
   }
 
   /* Rebuild a clean composition string from those pairs.
@@ -226,7 +254,7 @@
     // Labelled region. Read a WIDER window than we return: the pairs get rebuilt
     // from it, so a blend split across the label ("95% cotton … 5% elastane")
     // survives, while markup that shared the window is discarded by the rebuild.
-    const lab = t.match(/(?:fabric material|material|fabric content|fabric composition|composition|fabric)\s*[:\-]?\s*([^\n]{3,300})/i);
+    const lab = t.match(/(?:fabric material|material|fabric content|fabric composition|composition|fabric|소재|혼용률|원단|조성)\s*[:\-]?\s*([^\n]{3,300})/i);
     if (lab) {
       const built = normalizeComposition(lab[1]);
       if (built) return built;
@@ -250,7 +278,23 @@
     const QUAL = new RegExp(SEG + "(?:[ ,/&+]+" + SEG + ")*", "i");
     for (const line of t.split(/\n/)) {
       const m = line.match(QUAL);
-      if (m) return normalizeComposition(m[0]) || m[0].trim();
+      // rebuild from the whole line first: the pair scanner reads run-together
+      // pairs ("95% cotton5% elastane") that the \b-bounded match clips
+      if (m) return normalizeComposition(line) || normalizeComposition(m[0]) || m[0].trim();
+    }
+    // Multilingual / reversed-order pass — fiberPairs also reads "폴리에스터
+    // 87%" and "Cotton 95%", so rebuild from every line whose pairs are real
+    // and keep the parts ("겉감: … / 안감: …" arrive as separate lines).
+    // Promo lines are skipped whole (a discount line never states a blend) and
+    // the parts are capped, so a body-text fallback can't chain a whole page.
+    {
+      const parts = [];
+      for (const line of t.split(/\n/)) {
+        if (/\b(off|sale|discount)\b|할인|세일/i.test(line)) continue;
+        const built = normalizeComposition(line);
+        if (built && !parts.includes(built)) { parts.push(built); if (parts.length >= 3) break; }
+      }
+      if (parts.length) return parts.join("; ");
     }
     // last resort — any %-run that happens to contain a fiber word somewhere
     const runs = t.match(/\d{1,3}\s?%\s?[A-Za-z]+(?:[ ,/&+]+\d{1,3}\s?%\s?[A-Za-z]+)*/g) || [];
@@ -1267,6 +1311,7 @@
     return {
       id: "generic",
       label: "Generic site (basic info only)",
+      platform: true,      // a fallback engine, not a brand — never a grouping name
       match: () => true,   // catch-all; manifest.json's host allowlist is the real gate
       context, scrapeList, totalPages, resultCount, nextPageUrl, buildWorkbook, isResultsPage,
       templateUrl: null,
@@ -1469,31 +1514,76 @@
       };
     }
 
-    async function fetchDetail(url) {
-      const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
-      // one bulk pull covers the whole collection; only what it misses is fetched
-      if (_listUrl) {
-        const map = await loadBulk(_listUrl);
-        const hit = map && map.get(handleOf(url));
-        if (hit) return parseCollectionProduct(hit);
-      }
-      let jsUrl;
-      try {
-        const u = new URL(url); u.search = ""; u.hash = "";
-        if (!/\/products\//i.test(u.pathname)) return empty("not_found");
-        jsUrl = u.origin + u.pathname.replace(/\/$/, "") + ".js";
-      } catch (e) { return empty("error"); }
+    /* The PDP itself, as the composition's last resort.
+
+       Plenty of themes (Edikted's "FABRIC & CARE" accordion among them) render
+       the blend on the product page WITHOUT putting it in the description that
+       products.json / the .js endpoint return — which left every row red even
+       though the words are right there for a shopper. Structured data first
+       (JSON-LD material/description), then the page text, both through the
+       fiber-validated parser, so nothing that isn't a real blend passes. */
+    async function compFromPdp(url) {
       try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 12000);
         let res;
-        try { res = await fetch(jsUrl, { credentials: "include", signal: ctrl.signal }); }
+        try { res = await fetch(url, { credentials: "include", signal: ctrl.signal }); }
         finally { clearTimeout(timer); }
-        if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
-        return parseProductJson(await res.json(), "");
-      } catch (e) {
-        return empty((e && e.name === "AbortError") ? "timeout" : "error");
+        if (!res.ok) return "";
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        let comp = "";
+        doc.querySelectorAll('script[type="application/ld+json"]').forEach(sc => {
+          if (comp) return;
+          let d; try { d = JSON.parse(sc.textContent); } catch (e) { return; }
+          for (const n of [].concat(Array.isArray(d) ? d : (d["@graph"] || [d]))) {
+            if (!n || typeof n !== "object") continue;
+            comp = compositionFromText(String(n.material || "")) ||
+                   compositionFromText(String(n.description || ""));
+            if (comp) return;
+          }
+        });
+        return comp || compositionFromText((doc.body && doc.body.textContent) || "");
+      } catch (e) { return ""; }
+    }
+
+    async function fetchDetail(url) {
+      const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
+      /* One bulk pull covers the whole collection — but it is enrichment, not
+         a verdict. When its body_html states no blend, the chain keeps going
+         (.js only when bulk never saw the handle, then the PDP itself);
+         stopping at the bulk answer is what left Edikted's and Alo's fabric
+         columns red while the PDPs displayed the composition all along. */
+      let out = null;
+      if (_listUrl) {
+        const map = await loadBulk(_listUrl);
+        const hit = map && map.get(handleOf(url));
+        if (hit) out = parseCollectionProduct(hit);
       }
+      if (!out) {
+        let jsUrl;
+        try {
+          const u = new URL(url); u.search = ""; u.hash = "";
+          if (!/\/products\//i.test(u.pathname)) return empty("not_found");
+          jsUrl = u.origin + u.pathname.replace(/\/$/, "") + ".js";
+        } catch (e) { return empty("error"); }
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 12000);
+          let res;
+          try { res = await fetch(jsUrl, { credentials: "include", signal: ctrl.signal }); }
+          finally { clearTimeout(timer); }
+          if (!res.ok) out = empty(res.status === 404 ? "not_found" : "blocked");
+          else out = parseProductJson(await res.json(), "");
+        } catch (e) {
+          out = empty((e && e.name === "AbortError") ? "timeout" : "error");
+        }
+      }
+      if (!out.composition) {
+        const comp = await compFromPdp(url);
+        if (comp) { out.composition = comp; out.reason = ""; }
+      }
+      return out;
     }
 
     function context(doc) {
@@ -1510,6 +1600,9 @@
     return {
       id: "shopify",
       label: "Shopify store",
+      // The label names the PLATFORM, not a brand — the panel must never file
+      // a list entry (or an Excel brand column) under "Shopify store".
+      platform: true,
       /* Modern Shopify themes (Edikted's among them) render the grid as you
          scroll: at load only the first viewport of tiles exists in the DOM, so
          scraping straight away collected a handful of products or none at all.

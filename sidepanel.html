@@ -93,9 +93,7 @@
     margin:0 -4px; padding:0 4px; }
   .runbar { flex:none; background:var(--card); border-top:1px solid var(--line2);
     padding:10px 14px calc(10px + env(safe-area-inset-bottom)); }
-  .runbar .runrow { margin-bottom:7px; }
-  .runbar .runctl { margin-bottom:0; }
-  .runbar .runctl select { flex:0 0 auto; width:auto; font-size:12px; padding:8px 6px; }
+  .runbar .runrow { margin-bottom:0; }
 
   /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
   /* The capture card: what is about to be filed, spelled out. Brand and
@@ -213,9 +211,10 @@
   .ent.cur { background:var(--card); border-color:var(--accent); }
   .ent.done { opacity:.42; }
   .ent .txt { flex:1; min-width:0; }
+  /* One line per site: the category, under its brand's group heading. The
+     address is identity, not reading matter — it lives in the row's tooltip
+     (user request: the list shows brand and category, nothing else). */
   .ent .lb { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ent .u { font-size:10px; color:var(--muted); overflow:hidden; text-overflow:ellipsis;
-    white-space:nowrap; display:block; }
   /* Scan is the norm and needs no label; only the exceptions are marked. */
   .ent .tag { font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
     border:1px solid var(--line2); border-radius:var(--r); padding:1px 6px; flex:none; }
@@ -416,19 +415,12 @@
             <button id="listview" class="grow">View</button>
           </div>
         </div>
+        <!-- One button is the whole control surface (user request): idle it
+             starts the run, running it stops and saves. Every scan reads the
+             first page only, capped at what one screen of research needs —
+             no knobs to learn, nothing to set wrong. -->
         <div class="runrow">
           <button id="runlist" class="solid">▶ Scan all</button>
-        </div>
-        <div class="runctl">
-          <button id="jpause">⏸ Pause</button>
-          <button id="jreset" class="danger" title="Stop the run and clear its state">↺ Reset</button>
-          <select id="maxitems" title="Products taken from one URL" aria-label="Max products per URL">
-            <option value="30">30</option>
-            <option value="60" selected>60</option>
-            <option value="100">100</option>
-            <option value="200">200</option>
-            <option value="0">All</option>
-          </select>
         </div>
       </div>
     </section>
