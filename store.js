@@ -139,6 +139,51 @@
     return (!s || IMG_PLACEHOLDER.test(s) || !/^https?:/i.test(s)) ? "" : s;
   }
 
+  /* A brand value that is not actually a brand.
+
+     Brand is the grouping key in Excel, in the LAB and in every report, so a
+     wrong one does not just look untidy — it splits one shop into dozens of
+     one-product "brands" and the trend numbers underneath become meaningless.
+     Three things have been stored in that field that are not brands:
+
+       a style code   Shopify's `vendor` is free text and Edikted fills it
+                      with S23548_NAVY-AND-WHITE, unique per product
+       a hostname     shop.lululemon.com, gap.com — an early fallback
+       a platform     "Shopify store", "Generic site (basic info only)"
+
+     Each is recognisable by shape rather than by a list of known bad values,
+     so shops nobody has looked at are covered too. The replacement is the
+     shop's own domain — a fact, and the same name the list entry carries.
+
+     Cleaned on write AND on read, the way placeholder images are: the rows
+     that older scans already poisoned are repaired the next time the LAB
+     opens, with no migration to run and no re-scan to sit through. */
+  const STYLE_CODE = /^(?=.*\d)[A-Za-z0-9]+[_-][A-Za-z0-9_-]*$/;   // S23548_NAVY-AND-WHITE
+  const HOSTNAME = /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}$/i; // shop.lululemon.com
+  function hostBrand(url) {
+    const api = self.ScanLists;
+    let host = "";
+    try { host = new URL(String(url || "")).hostname; } catch (e) { host = ""; }
+    if (!host) return "";
+    return api && api.brandFromHost ? api.brandFromHost(host) : host.replace(/^www\./, "");
+  }
+  function cleanBrand(brand, url) {
+    const b = String(brand == null ? "" : brand).trim();
+    if (!b) return "";
+    const api = self.ScanLists;
+    const isPlatform = api && api.PLATFORM_LABEL ? api.PLATFORM_LABEL.test(b)
+      : /^(shopify store|generic site.*)$/i.test(b);
+    if (isPlatform) return hostBrand(url) || "";
+    if (HOSTNAME.test(b)) {
+      return (api && api.brandFromHost ? api.brandFromHost(b.replace(/^https?:\/\//, "")) : b) || b;
+    }
+    // A style code has no spaces, carries a digit and a separator. Real brand
+    // names with digits ("Rag & Bone", "3.1 Phillip Lim", "Ninety Percent")
+    // all contain a space, so they never match.
+    if (!/\s/.test(b) && STYLE_CODE.test(b)) return hostBrand(url) || "";
+    return b;
+  }
+
   // Merge an incoming row over the stored one. A re-scan should refresh prices
   // and fill gaps WITHOUT wiping a field the new scan happened to miss —
   // otherwise a partial run degrades good data already in the catalog.
@@ -146,9 +191,12 @@
     const out = Object.assign({}, oldRec || {}, {});
     // a stored placeholder counts as a gap, so a real photo can land in it
     if (out.image_url) out.image_url = cleanImage(out.image_url);
+    // a style-code "brand" counts as a gap too, so a real one can land in it
+    if (out.brand) out.brand = cleanBrand(out.brand, out.product_url || out.url);
     Object.keys(incoming).forEach(k => {
       let v = incoming[k];
       if (k === "image_url") v = cleanImage(v);
+      if (k === "brand") v = cleanBrand(v, incoming.product_url || incoming.url || out.product_url);
       if (v === "" || v == null) return;             // never overwrite with blank
       out[k] = v;
     });
@@ -205,7 +253,18 @@
   const all = store => open().then(db =>
     req2p(db.transaction(store, "readonly").objectStore(store).getAll()));
 
-  const allProducts = () => all("products");
+  /* Every reader of the catalog — LAB, the new-in feed, the brand rail, the
+     report, "export this list" — comes through here, so repairing on read is
+     what makes the fix retroactive: rows collected before the vendor rule
+     existed stop showing up as their own one-product brands. */
+  const allProducts = () => all("products").then(rows => {
+    (rows || []).forEach(r => {
+      if (!r) return;
+      const fixed = cleanBrand(r.brand, r.product_url || r.url);
+      if (fixed !== r.brand) r.brand = fixed;
+    });
+    return rows;
+  });
   const allScans = () => all("scans");
   const allProjects = () => all("projects");
   const allSnapshots = () => all("snapshots").then(r => r.sort((a, b) => a.start - b.start));
@@ -287,7 +346,7 @@
 
   const API = { open, putScan, allProducts, allScans, allProjects, allSnapshots,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
-    clearAll, productKey, merge, dedupe, cleanImage };
+    clearAll, productKey, merge, dedupe, cleanImage, cleanBrand };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;
 })(typeof self !== "undefined" ? self : this);

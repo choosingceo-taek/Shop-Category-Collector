@@ -14,7 +14,11 @@
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  let items = [];             // everything in the catalog
+  let allItems = [];          // everything in the catalog
+  let items = [];             // …narrowed to the list this screen is about
+  let lists = [];             // saved scan lists, for the scope rail
+  let scopeId = "";           // "" = the whole catalog
+  const SCOPE_KEY = "wpb_labscope";
   let projects = [];
   let snapshots = [];         // frozen weekly numbers (survive product cleanup)
   let merged = 0;             // rows collapsed as the same product
@@ -29,7 +33,13 @@
      so the weekly aggregate is written down separately and never shrinks. That
      is what makes the long view possible: a year from now the charts still have
      every week, at a few KB each, whether or not the products are still here. */
+  /* The frozen weekly record is catalog-wide, and it is only written while the
+     whole catalog is in view. Writing it from a single list's rows would file
+     that list's numbers under the catalog's own week and quietly corrupt the
+     long view — so a scoped screen reads its weeks from the products it has,
+     and leaves the record alone. */
   async function rollup() {
+    if (scopeId) return;
     const scanned = items.filter(i => i && i.source !== "clip" && i.addedAt);
     if (!scanned.length) return;
     const oldest = Math.min(...scanned.map(i => i.addedAt));
@@ -40,13 +50,83 @@
     } catch (e) { /* snapshots are an optimisation — never block the view */ }
   }
 
+  /* Narrow everything on this screen to one list.
+
+     A product records which list(s) collected it (store.merge unions listIds,
+     since two lists may legitimately watch the same category), so the scope is
+     a filter on data we already hold — nothing needs re-scanning. Everything
+     downstream reads `items`, so the charts, the arrivals feed, the brand rail
+     and the product grid all narrow together. */
+  const inScope = i => !scopeId || [].concat((i && i.listIds) || []).includes(scopeId);
+  function applyScope() {
+    items = allItems.filter(inScope);
+    // The catalog-wide frozen weeks describe a different population, so a
+    // scoped LAB computes from its own products instead of borrowing them.
+    labSnapshots = scopeId ? [] : snapshots;
+  }
+  let labSnapshots = [];
+
+  function renderScope() {
+    const rail = $("#scoperail"), box = $("#scopechips");
+    const counts = new Map(lists.map(l =>
+      [l.id, allItems.filter(i => [].concat(i.listIds || []).includes(l.id)).length]));
+    // With no list saved there is nothing to choose between — the rail would
+    // be a control with one option, which is just noise.
+    rail.hidden = lists.length < 1;
+    box.innerHTML =
+      `<button data-id="" class="${scopeId ? "" : "on"}">All lists` +
+      `<span class="n">${allItems.length}</span></button>` +
+      lists.map(l => `<button data-id="${esc(l.id)}" class="${scopeId === l.id ? "on" : ""}">` +
+        `<span class="dot" style="background:${listColor(l.name)}"></span>${esc(l.name)}` +
+        `<span class="n">${counts.get(l.id) || 0}</span></button>`).join("");
+    box.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      if (b.dataset.id === scopeId) return;
+      scopeId = b.dataset.id;
+      try { chrome.storage.local.set({ [SCOPE_KEY]: scopeId }); } catch (e) {}
+      applyScope();
+      curWeekStart = null; curBrand = ""; curCat = ""; curFeedBrand = "";
+      renderScope(); fillFilters(); redrawAll();
+    }));
+  }
+  // same derivation the panel and the grab button use, so a list keeps its
+  // colour wherever it appears
+  const LIST_HUES = ["#C08552", "#7E9E7A", "#7C9CC4", "#9A85BE", "#C9A227", "#D98070"];
+  function listColor(name) {
+    const s = String(name || "").toLowerCase();
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return LIST_HUES[h % LIST_HUES.length];
+  }
+
+  function redrawAll() {
+    render();
+    if (!$("#v-lab").hidden) renderLab();
+    if (!$("#v-new").hidden) renderNew();
+    if (!$("#v-brands").hidden) renderBrands();
+    paintStats();
+  }
+
+  function paintStats() {
+    const brands = new Set(items.map(i => i.brand).filter(Boolean)).size;
+    const dated = items.filter(i => i.launched_at).length;
+    const where = scopeId
+      ? ((lists.find(l => l.id === scopeId) || {}).name || "this list") + " · "
+      : "";
+    $("#stats").textContent = items.length
+      ? where + `${items.length.toLocaleString()} products · ${brands} brands` +
+        (merged && !scopeId ? ` · ${merged} duplicates merged` : "") +
+        (dated ? ` · ${dated} with a published date` : "")
+      : (scopeId ? where + "nothing collected yet" : "Nothing collected yet");
+  }
+
   async function load() {
     // one product, one row — see store.dedupe for what counts as the same product
     const raw = await S.allProducts();
     /* Tier comes from the imported brand sheet and is applied HERE, by brand
        name, rather than being stamped during a scan. That way importing the
        sheet once labels everything collected months ago — no re-scan. */
-    try { tiers = window.ScanLists.tierMap(await window.ScanLists.load()); } catch (e) { tiers = {}; }
+    try { lists = await window.ScanLists.load(); } catch (e) { lists = []; }
+    try { tiers = window.ScanLists.tierMap(lists); } catch (e) { tiers = {}; }
     // repair rows the pre-fix scans stored with a placeholder "photo"
     raw.forEach(i => {
       if (!i) return;
@@ -54,23 +134,26 @@
       i.tier = tiers[String(i.brand || "").trim().toLowerCase()] || "";
     });
     const dd = S.dedupe(raw);
-    items = dd.rows; merged = dd.merged;
+    allItems = dd.rows; merged = dd.merged;
+    try {
+      const o = await new Promise(r => chrome.storage.local.get(SCOPE_KEY, x => r(x || {})));
+      scopeId = o[SCOPE_KEY] || "";
+    } catch (e) { scopeId = ""; }
+    // a list that was deleted leaves a scope pointing at nothing — fall back
+    if (scopeId && !lists.some(l => l.id === scopeId)) scopeId = "";
     projects = await S.allProjects();
     try { snapshots = await S.allSnapshots(); } catch (e) { snapshots = []; }
+    applyScope();
     await rollup();
+    applyScope();               // rollup may have refreshed the frozen weeks
+    renderScope();
     fillFilters();
     fillProjects();
     render();
     if (!$("#v-lab").hidden) renderLab();
     if (!$("#v-new").hidden) renderNew();
     if (!$("#v-brands").hidden) renderBrands();
-    const brands = new Set(items.map(i => i.brand).filter(Boolean)).size;
-    const dated = items.filter(i => i.launched_at).length;
-    $("#stats").textContent = items.length
-      ? `${items.length.toLocaleString()} products · ${brands} brands` +
-        (merged ? ` · ${merged} duplicates merged` : "") +
-        (dated ? ` · ${dated} with a published date` : "")
-      : "Nothing collected yet";
+    paintStats();
   }
 
   function fillFilters() {
@@ -395,8 +478,10 @@
   });
 
   // ---- scan lists tab -------------------------------------------------------
+  // `lists` is the same array the scope rail reads, so editing a list here
+  // updates the rail rather than leaving two copies to drift apart.
   const L = window.ScanLists;
-  let lists = [], curList = null;
+  let curList = null;
 
   function tabTo(view) {
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.view === view));
@@ -426,7 +511,7 @@
       months: parseInt($("#labmonths").value, 10) || 6,
       granularity: $("#labgran").value,
       dim: $("#labdim").value,
-      snapshots,
+      snapshots: labSnapshots,
     });
     wireTierChips($("#labbody"), renderLab);
   }
@@ -683,6 +768,9 @@
       await L.save(lists);
     }
     curList = lists.find(x => x.id === (curList && curList.id)) || lists[0];
+    // a list renamed, added or deleted here changes what the scope rail offers
+    if (scopeId && !lists.some(l => l.id === scopeId)) { scopeId = ""; applyScope(); }
+    renderScope();
   }
   function fillListSelect() {
     const sel = $("#listsel");

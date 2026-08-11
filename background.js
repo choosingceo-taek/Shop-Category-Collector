@@ -43,6 +43,9 @@ try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); } cat
 // can't reach it (it runs in the page's origin), so it posts finished scans
 // here and the worker upserts them — which is also what lets the catalog tab
 // and the side panel read the same data with no file passing.
+// lists.js first: the store repairs brand names on write, using the one set of
+// naming rules that lives there.
+try { importScripts("lists.js"); } catch (e) {}
 try { importScripts("store.js"); } catch (e) {}
 try { importScripts("update.js"); } catch (e) {}
 
