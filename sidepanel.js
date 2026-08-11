@@ -132,40 +132,30 @@
     paintNow();
   }
 
+  /* The fallback add button, and nothing else.
+
+     Grabbing a page is done on the page. This button exists only for the
+     pages the grab button cannot reach, so it states its own condition
+     instead of a separate status line narrating the tab. */
   function paintNow() {
-    const now = $("#now"), add = $("#addbtn"), dot = $("#dot");
+    const add = $("#addbtn"), dot = $("#dot");
     // the lens IS the status light — toggle, never rewrite the class list
     dot.classList.toggle("busy", !!(job && job.active && !job.paused));
-    if (!read) { now.textContent = "Reading the page…"; add.disabled = true; return; }
-    if (read.kind === "internal") {
-      now.innerHTML = "Browser page — <span class='badge'>can't be added</span>";
-      // reset the label too — otherwise it keeps whatever the last real page said
-      add.textContent = "＋ This page";
-      add.disabled = true; return;
+    const set = (label, on, why) => {
+      add.textContent = label; add.disabled = !on;
+      add.title = why || "Add the page you are on (the round button on the page does this too)";
+    };
+    if (!read) return set("＋ This page", false, "Reading the page…");
+    if (read.kind === "internal") return set("＋ This page", false, "A browser page can't be collected");
+    if (urlInList(read.url)) {
+      const brand = brandOfRead(read);
+      return set("✓ In list", false,
+        `${brand} — already in ${curList ? curList.name : "this list"}`);
     }
-    add.disabled = false;
-    const already = urlInList(read.url);
-    const scannable = !!(read.ctx || read.adapter);
-    // Any web page can be scanned — access is requested when it is added and
-    // the engine is injected on demand. "Reference" is left for addresses that
-    // are not web pages at all.
-    const web = /^https?:/i.test(read.url || "");
-    const badge = scannable ? `<span class="badge ok">Scannable</span>`
-      : web ? `<span class="badge" title="Adding this page will ask for access to the site">Scannable?</span>`
-      : `<span class="badge">Reference</span>`;
-    /* Show the two fields that will actually be filed — brand and category —
-       rather than one packed line. These are what Excel and LAB group by, so
-       seeing them wrong here is the moment to fix them (✎ on the row). */
     const brand = brandOfRead(read);
     const cat = cleanLabel((read.ctx && read.ctx.category) || (tab && tab.title || ""), brand, read.host)
-      || read.host;
-    now.innerHTML = `<span class="bdot" style="background:${brandColor(brand)}"></span>` +
-      `<span class="txt"><span class="host">${esc(brand)}</span>` +
-      `<span class="sub">${esc(cat)}</span>` +
-      (already ? `<span class="sub" style="color:var(--accent)">Already in ${esc(curList ? curList.name : "the list")}</span>` : "") +
-      `</span>` + badge;
-    add.textContent = already ? "✓ In list" : "＋ This page";
-    add.disabled = already;
+      || L.labelFromUrl(read.url) || read.host;
+    set("＋ This page", true, `Add as ${brand} · ${cat}`);
   }
 
   // ---- the list -------------------------------------------------------------
@@ -176,8 +166,14 @@
       await L.save(lists);
     }
     curList = lists.find(x => curList && x.id === curList.id) || lists[0];
-    repairNames();
-    return await repairScannable();
+    /* Both repairs mutate the same array, so they save ONCE, here. Saving
+       inside each of them raced: the name repair serialised the list before
+       the scannable repair had run, and its later write put every entry back
+       to Ref — which is how a fixed list could arrive on screen still broken. */
+    const renamed = repairNames();
+    const rescanned = await repairScannable();
+    if (renamed || rescanned) await L.save(lists);
+    return rescanned;
   }
 
   /* Entries saved before v1.68 can carry a platform label as their brand
@@ -192,11 +188,13 @@
       if (!brand.trim() || L.PLATFORM_LABEL.test(brand.trim())) {
         brand = brandFromHost(hostOf(e.url));
       }
-      const label = cleanLabel(e.label, brand, hostOf(e.url)) || e.label;
+      // A row has to read as a category. An address never did — it is the
+      // identity of the page, not what the designer is watching there.
+      let label = cleanLabel(e.label, brand, hostOf(e.url)) || e.label || "";
+      if (!label.trim() || L.looksLikeUrl(label)) label = L.labelFromUrl(e.url) || label;
       if (brand !== e.brand || label !== e.label) { e.brand = brand; e.label = label; changed++; }
     }));
-    if (changed) L.save(lists);
-    return changed;
+    return changed;                 // the caller saves — see loadLists
   }
 
   /* Ask for the origins a set of URLs needs, in one prompt.
@@ -250,8 +248,7 @@
       else delete e.scannable;
       if (e.scannable !== was) fixed++;      // report only what actually moved
     }
-    if (fixed) await L.save(lists);
-    return fixed;
+    return fixed;                   // the caller saves — see loadLists
   }
   function urlInList(url) {
     if (!url || !curList) return false;
@@ -265,7 +262,8 @@
     const brand = brandOfRead(read);
     const entry = {
       brand,
-      label: cleanLabel((a && a.category) || (tab.title || ""), brand, read.host) || read.host,
+      label: cleanLabel((a && a.category) || (tab.title || ""), brand, read.host)
+        || L.labelFromUrl(tab.url) || read.host,
       url: tab.url,
     };
     /* Everything the user adds is meant to be scanned — that is the whole

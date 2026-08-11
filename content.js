@@ -572,6 +572,32 @@ async function queueAdvance() {
     await closeJob();
     return false;
   }
+  /* Skip a URL whose collection this run already scanned.
+
+     A list picks up near-duplicates over time — the same category added twice
+     from different entry points, or two addresses that resolve to one page
+     (Zara's ?v1=… among them). Walking both costs a full scan and puts the
+     same products through the run twice. The signature is what the engine
+     already uses to decide "is this the same collection", so it is the honest
+     test here too. */
+  q.doneSigs = [].concat(q.doneSigs || []);
+  const sigNow = collectionSig(location.href);
+  if (sigNow && !q.doneSigs.includes(sigNow)) q.doneSigs.push(sigNow);
+  q.skipped = q.skipped || 0;
+  while (q.idx < q.list.length) {
+    const cand = q.list[q.idx];
+    const sig = cand && cand.url ? collectionSig(cand.url) : "";
+    if (!sig || !q.doneSigs.includes(sig)) break;
+    q.skipped++; q.idx += 1;
+  }
+  if (q.idx >= q.list.length) {
+    q.active = false; q.finishedAt = Date.now();
+    await setQueue(q);
+    await queueExport(q);
+    await queueHealthExport(q);
+    await closeJob();
+    return false;
+  }
   await setQueue(q);
   await closeJob();
   const next = q.list[q.idx];

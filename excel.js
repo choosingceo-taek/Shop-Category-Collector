@@ -246,6 +246,28 @@
     return best;
   }
 
+  /* One product, one row — the same identity the catalog uses.
+
+     A designer may scan the same list two or three times in a day, and a list
+     collects near-duplicate entries over time (one category added twice, or
+     two addresses that resolve to the same page). Keying on the raw id let a
+     product through twice whenever the two visits produced different URL
+     forms, so the spreadsheet showed it twice. Query strings are dropped —
+     except the parameters that ARE the product id, since Gap and Inditex put
+     it there and stripping those would collapse a whole shop into one row. */
+  const ID_PARAMS = ["pelement", "pid"];
+  function rowKey(rec) {
+    const raw = String((rec && (rec.product_url || rec.id)) || "");
+    try {
+      const x = new URL(raw);
+      const keep = ID_PARAMS
+        .map(k => { const v = x.searchParams.get(k); return v ? k + "=" + v : ""; })
+        .filter(Boolean).join("&");
+      return (x.origin + x.pathname).replace(/\/$/, "").toLowerCase() + (keep ? "?" + keep : "");
+    } catch (e) {}
+    return (raw || String((rec && rec.name) || "")).toLowerCase();
+  }
+
   // Apply de-dupe first, then the optional user filters. Returns kept + a
   // reason-tagged dropped list so the UI can report what each filter removed.
   // filters: { brands:[..], dominantBrandOnly:bool, nameInclude:[..], nameExclude:[..] }
@@ -260,7 +282,7 @@
     // de-dupe up front so dominant-brand vote isn't skewed by duplicates
     const uniq = [];
     for (const rec of items) {
-      const k = (rec.id || rec.product_url || rec.name || "").toLowerCase();
+      const k = rowKey(rec);
       if (k && seen.has(k)) { dropped.push([rec.name, "duplicate"]); continue; }
       if (k) seen.add(k);
       uniq.push(rec);

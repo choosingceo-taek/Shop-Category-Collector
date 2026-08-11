@@ -364,7 +364,10 @@
         <div class="panelcard">
 
         <div class="fs sites">
-          <div class="fhead"><span class="fico">🗂️</span><span class="ft"><b>Sites</b></span>
+          <!-- Named for what it is FOR. "Sites" describes the rows; the point
+               is the set of category pages this research question watches
+               week after week — so the card says Watchlist. -->
+          <div class="fhead"><span class="fico">🗂️</span><span class="ft"><b>Watchlist</b></span>
             <!-- the list's OWN tools: rename it, delete it, take it out.
                  Putting sites IN is a different job and lives with Add. -->
             <span class="ftools" id="ltools">
@@ -388,8 +391,11 @@
                is left here is bringing sites in by the sheet or the block,
                plus a quiet fallback for the pages the button cannot reach
                (a site the extension has no access to yet). -->
+          <!-- No status readout here. What the page is and what it will be
+               filed as is shown by the grab button ON the page, where the
+               decision is actually made; repeating it here was a line that
+               spent its life saying "Browser page — can't be added". -->
           <div class="adder">
-            <div class="now" id="now">Reading the page…</div>
             <div class="addrow">
               <button id="addbtn" title="Add the page you are on (the round button on the page does this too)">＋ This page</button>
               <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)">⬆ Import list</button>

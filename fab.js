@@ -217,7 +217,8 @@
     const brand = api ? api.brandFor(ctx, a && a.label, host)
       : String((ctx && ctx.brand) || host);
     const label = api
-      ? (api.cleanLabel((ctx && ctx.category) || document.title, brand, host) || host)
+      ? (api.cleanLabel((ctx && ctx.category) || document.title, brand, host)
+         || api.labelFromUrl(location.href) || host)
       : String((ctx && ctx.category) || document.title || host).slice(0, 60);
     return { brand, label, url: location.href, scannable: !!a };
   }

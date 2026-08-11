@@ -322,6 +322,37 @@
     return segs.join(" · ").slice(0, 60);
   }
 
+  /* A category name taken from the address, for rows that never got one.
+
+     Imports and older adds sometimes stored the URL itself as the label, and a
+     row reading "cottonon.com/AU/co/women/wom…" tells the designer nothing
+     about what she is watching. The shop's own slug does: it is the name the
+     shop gave that page, not a guess. */
+  function labelFromUrl(url) {
+    let segs = [];
+    try {
+      const u = new URL(String(url || "").replace(/^(?!https?:)/i, "https://"));
+      segs = u.pathname.split("/").filter(Boolean);
+    } catch (e) { return ""; }
+    const skip = /^(c|co|shop|browse|collections?|categor(y|ies)|women|womens|en|us|uk|au|kr|intl|[a-z]{2}([-_][a-z]{2})?)$/i;
+    // last segment that is not a locale, a routing word or a bare id
+    for (let i = segs.length - 1; i >= 0; i--) {
+      const s = decodeURIComponent(segs[i]).replace(/\.(html?|aspx?|do)$/i, "");
+      if (!s || skip.test(s) || /^\d+$/.test(s)) continue;
+      // An opaque id is not a name: shops end their category URLs with codes
+      // like /n1jux6 or /cat90030. No separator plus a digit means a code, so
+      // keep walking up the path to the segment a human wrote.
+      if (!/[-_+]/.test(s) && /\d/.test(s)) continue;
+      const words = s.replace(/[-_+]+/g, " ").replace(/\b[a-z]?\d{3,}\b/gi, "").trim();
+      if (words.length < 2) continue;
+      return words.replace(/\s+/g, " ").replace(/\b\w/g, c => c.toUpperCase()).slice(0, 60);
+    }
+    return "";
+  }
+  // Does this label read as an address rather than a category?
+  const looksLikeUrl = s => /^(https?:\/\/|www\.)/i.test(String(s || "").trim()) ||
+    /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i.test(String(s || "").trim());
+
   // A platform name is not a brand. "Shopify store" as a brand splits one shop
   // across Excel groups, so the engine's label is used only when it names a
   // real shop; otherwise the domain does.
@@ -336,7 +367,7 @@
 
   const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl,
     toText, toGrid, GRID_HEADER, tierOf, tierMap, load, save, KEY,
-    brandFromHost, cleanLabel, brandFor, PLATFORM_LABEL };
+    brandFromHost, cleanLabel, brandFor, PLATFORM_LABEL, labelFromUrl, looksLikeUrl };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.ScanLists = API;
 })(typeof self !== "undefined" ? self : this);
