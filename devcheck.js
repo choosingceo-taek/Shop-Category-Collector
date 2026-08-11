@@ -18,9 +18,12 @@
    must learn not to press is worse than no button.
 
    Usage:
+     devsweep()                 // ONE category per brand + a product page each
+                                //   → "which of my 130 brands work, fabric too"
      devcheck()                 // every site in every list
      devcheck("26SS tops")      // only that list, by name
      devcheck(null, 20)         // stop after 20 sites
+     devcheck({ brandsOnly: true, detail: true, limit: 40 })
      devcheckStop()             // stop a run in progress
      devhealth()                // what scans ALREADY recorded — no walking
 
@@ -49,9 +52,10 @@
     setTimeout(() => finish(false), ms);
   });
 
-  const probe = tabId => new Promise(res => {
+  const probe = (tabId, detail) => new Promise(res => {
     try {
-      chrome.tabs.sendMessage(tabId, { type: "probe" }, r => { void chrome.runtime.lastError; res(r || null); });
+      chrome.tabs.sendMessage(tabId, { type: "probe", detail: !!detail },
+        r => { void chrome.runtime.lastError; res(r || null); });
     } catch (e) { res(null); }
   });
 
@@ -71,12 +75,30 @@
     if (p.named < p.count) miss.push(`name×${p.count - p.named}`);
     if (p.imaged < p.count) miss.push(`image×${p.count - p.imaged}`);
     if (p.priced < p.count) miss.push(`price×${p.count - p.priced}`);
+    // The fabric verdict comes from one sampled product page. A single product
+    // may legitimately state no blend, so this is a warning, not a failure —
+    // but "no fabric anywhere on this shop" is exactly what a scan later flags.
+    if (p.detail && !p.detail.composition && !p.detail.skipped) miss.push("fabric?");
     return miss.length
       ? { mark: "⚠️", note: `${p.count} found · missing ${miss.join(" ")}` }
-      : { mark: "✅", note: `${p.count} found · complete` };
+      : { mark: "✅", note: `${p.count} found · complete` +
+          (p.detail && p.detail.composition ? ` · fabric "${p.detail.composition}"` : "") };
   }
 
-  self.devcheck = async function devcheck(listName, limit) {
+  /* devcheck(opts) — opts may also be given the old way: (listName, limit).
+
+       list        only this list, by name
+       limit       stop after N sites
+       detail      also sample ONE product page per site (the fabric column)
+       brandsOnly  check one URL per brand instead of every URL
+
+     brandsOnly is what makes a whole-catalogue sweep practical: the team's
+     list is ~620 URLs across ~130 brands, and the thing that breaks is the
+     shop, not the category — so one category per brand answers the same
+     question in a fifth of the time. */
+  self.devcheck = async function devcheck(opts, maybeLimit) {
+    if (typeof opts === "string" || opts == null) opts = { list: opts || "", limit: maybeLimit };
+    const { list: listName = "", limit = 0, detail = false, brandsOnly = false } = opts || {};
     stopping = false;
     const lists = await new Promise(r => chrome.storage.local.get("wpb_lists", o => r(o.wpb_lists || [])));
     const picked = listName ? lists.filter(l => l.name === listName) : lists;
@@ -86,10 +108,22 @@
     }
     let entries = picked.flatMap(l => (l.entries || []).map(e => ({ ...e, list: l.name })))
       .filter(e => e.scannable !== false && /^https?:/i.test(e.url || ""));
+    const total = entries.length;
+    if (brandsOnly) {
+      const seen = new Set();
+      entries = entries.filter(e => {
+        let host = ""; try { host = new URL(e.url).hostname.replace(/^www\./, ""); } catch (x) {}
+        const k = (e.brand || host || e.url).toLowerCase();
+        if (seen.has(k)) return false; seen.add(k); return true;
+      });
+    }
     if (limit) entries = entries.slice(0, limit);
     if (!entries.length) return console.log("nothing to check");
 
-    console.log(`devcheck: ${entries.length} sites — collects nothing, safe to run.`);
+    console.log(`devcheck: ${entries.length} sites` +
+      (brandsOnly ? ` (one per brand, out of ${total} URLs)` : "") +
+      (detail ? " · sampling one product page each" : "") +
+      " — collects nothing, safe to run.");
     const rows = [];
     const tab = await chrome.tabs.create({ url: entries[0].url, active: true });
     for (let i = 0; i < entries.length && !stopping; i++) {
@@ -97,8 +131,8 @@
       if (i) { try { await chrome.tabs.update(tab.id, { url: e.url }); } catch (x) { break; } }
       await waitForLoad(tab.id, PROBE_WAIT);
       await new Promise(r => setTimeout(r, PAINT_WAIT));
-      let p = await probe(tab.id);
-      if (!p) { await inject(tab.id); await new Promise(r => setTimeout(r, 800)); p = await probe(tab.id); }
+      let p = await probe(tab.id, detail);
+      if (!p) { await inject(tab.id); await new Promise(r => setTimeout(r, 800)); p = await probe(tab.id, detail); }
       const v = verdict(p);
       const line = `${v.mark} ${e.brand || ""} · ${e.label || ""} — ${v.note}`;
       console.log(`[${i + 1}/${entries.length}] ${line}`);
@@ -106,25 +140,37 @@
         mark: v.mark, brand: e.brand || "", label: e.label || "", note: v.note, url: e.url,
         engine: (p && p.adapterId) || "", platform: ((p && p.platform) || []).join("+"),
         count: (p && p.count) || 0, sample: ((p && p.samples) || [])[0] || null,
+        fabric: (p && p.detail && p.detail.composition) || "", detail: (p && p.detail) || null,
       });
     }
     try { await chrome.tabs.remove(tab.id); } catch (e) {}
 
     const by = m => rows.filter(r => r.mark === m).length;
     console.log(`\ndone — ✅ ${by("✅")} ready · ⚠️ ${by("⚠️")} gaps · ❌ ${by("❌")} broken`);
+    if (detail) {
+      const withFab = rows.filter(r => r.fabric).length;
+      console.log(`fabric read on ${withFab}/${rows.length} shops`);
+    }
     console.table(rows.map(r => ({ "": r.mark, brand: r.brand, category: r.label,
-      engine: r.engine, found: r.count, note: r.note })));
+      engine: r.engine, found: r.count, fabric: r.fabric ? r.fabric.slice(0, 28) : "", note: r.note })));
     // Paste-ready text — the failures are what a fix starts from.
     const bad = rows.filter(r => r.mark !== "✅");
     if (bad.length) {
       console.log("\n--- paste this ---\n" + bad.map(r =>
         `${r.mark} ${r.brand} · ${r.label}\n   ${r.note}${r.engine ? ` | engine=${r.engine}` : ""}${r.platform ? ` | ${r.platform}` : ""}\n   ${r.url}` +
-        (r.sample ? `\n   e.g. "${r.sample.name}" ${r.sample.price || ""} ${r.sample.img ? "" : "(no image)"}` : "")
+        (r.sample ? `\n   e.g. "${r.sample.name}" ${r.sample.price || ""} ${r.sample.img ? "" : "(no image)"}` : "") +
+        (r.detail ? `\n   detail: ${JSON.stringify(r.detail)}` : "")
       ).join("\n") + "\n--- end ---");
     }
     self.devcheckRows = rows;      // left behind for further poking
     return rows;
   };
+
+  /* The whole catalogue in one pass: one category per brand, product page
+     sampled, so the answer covers the fabric column too. This is the
+     "which of my 130 brands actually work?" question. */
+  self.devsweep = (listName) =>
+    self.devcheck({ list: listName || "", brandsOnly: true, detail: true });
 
   // What the real scans already found out — read from storage, zero browsing.
   self.devhealth = async function devhealth() {
@@ -144,5 +190,5 @@
     return recs;
   };
 
-  console.log("devcheck ready. run:  devcheck()   |   devcheck(\"My references\")   |   devhealth()   |   devcheckStop()");
+  console.log("devcheck ready. run:  devsweep()   |   devcheck()   |   devhealth()   |   devcheckStop()");
 })();

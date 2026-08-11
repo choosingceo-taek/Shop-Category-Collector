@@ -302,10 +302,101 @@
     return hit ? (normalizeComposition(hit) || hit.trim()) : "";
   }
 
+  /* Read one product page — the platform-agnostic detail reader.
+
+     Every shop states the same facts in the same two places: schema.org
+     structured data (JSON-LD Product: material, colour, size, brand, image)
+     and the visible text (the "<pct>% <fibre>" run, which the fibre validator
+     rebuilds). Neither is a CSS selector, so this survives redesigns and works
+     on a shop nobody has looked at yet — which is the point: a site the
+     registry has never seen still yields fabric, colours and sizes on its
+     first scan instead of a column of red.
+
+     Sources are tried best-first and only fill what is still empty, so a
+     stronger source is never overwritten by a weaker one. Everything is
+     validated: composition passes the fibre parser, colours and sizes must be
+     short label-shaped strings. Nothing is inferred. */
+  function readProductPage(doc, rawHtml, fallbackBrand) {
+    let brand = "", name = "", image = "", material = "", descr = "";
+    const colors = [], sizes = [];
+    const addTo = (arr, v) => {
+      const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+      if (s && s.length <= 40 && !arr.some(x => x.toLowerCase() === s.toLowerCase())) arr.push(s);
+    };
+    (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
+      let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
+      [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
+        if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
+        if (!name && n.name) name = String(n.name);
+        if (!brand && n.brand) brand = String(n.brand.name || n.brand);
+        // schema.org states the fabric outright in `material` when a shop
+        // bothers to fill it — the most reliable source there is.
+        if (!material && n.material) material = String(n.material.name || n.material);
+        if (!descr && n.description) descr = String(n.description);
+        // the PDP's own photo — a backstop for tiles whose lazy-loaded grid
+        // image never resolved (structured data, not a guessed CDN path)
+        if (!image) {
+          const im = [].concat(n.image || [])[0];
+          const u = im && (im.url || im.contentUrl || im);
+          if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+        }
+        [].concat(n.color || []).forEach(c => addTo(colors, c));
+        [].concat(n.size || []).forEach(z => addTo(sizes, z));
+        [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
+      });
+    });
+    // composition: declared material first, then the description, then the
+    // visible text — li boundaries before the whole body, so a spec list item
+    // can't run into the care instructions next to it.
+    const liText = doc.querySelectorAll
+      ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
+    const composition = compositionFromText(material)
+      || compositionFromText(descr)
+      || compositionFromText(liText)
+      || compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
+    // og:image — the one photo nearly every PDP declares. Semantic markup,
+    // not a CSS selector, so it survives redesigns; only used when both the
+    // listing tile and JSON-LD gave nothing.
+    if (!image && doc.querySelector) {
+      const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
+      const u = og && og.getAttribute("content");
+      if (u && /^https?:/i.test(u)) image = u.trim();
+    }
+    return {
+      composition, colorways: colors.join("; "), color_count: colors.length || "",
+      design: "", brand: brand || fallbackBrand || "", name,
+      sizes: sizes.join("; "), image_url: image,
+      reason: composition ? "" : "not_found",
+    };
+  }
+
+  /* Fetch a product page and read it. Bounded, credentialed (so a shop that
+     shows prices only to a session still answers), and it never throws — a
+     product that can't be read reports WHY, which is what the red cell says. */
+  async function fetchProductPage(url, fallbackBrand) {
+    const empty = r => ({ composition: "", colorways: "", design: "",
+      brand: fallbackBrand || "", reason: r });
+    let html;
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 12000);
+      try {
+        const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
+        if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
+        html = await res.text();
+      } finally { clearTimeout(timer); }
+    } catch (e) {
+      return empty((e && e.name === "AbortError") ? "timeout" : "error");
+    }
+    try {
+      return readProductPage(new DOMParser().parseFromString(html, "text/html"), html, fallbackBrand);
+    } catch (e) { return empty("error"); }
+  }
+
   // Expose shared helpers so adapters (and tests) can reuse them.
   const shared = { jsonBlobs, sliceBalanced, looksProduct, collectProductArrays,
     findKeyedValue, findNumber, uniqBy, compositionFromText, FIBER_RE,
-    normalizeComposition, fiberPairs };
+    normalizeComposition, fiberPairs, readProductPage, fetchProductPage };
 
   // ---------------------------------------------------------------------------
   // Walmart adapter
@@ -1308,15 +1399,33 @@
       };
     }
 
+    /* The detail phase for every shop nobody has written an adapter for.
+
+       Half the team's list (66 of 132 domains) lands here, and until now this
+       adapter had no fetchDetail at all — so those brands could never produce
+       a fabric or a colourway, no matter how plainly their product pages
+       stated it. The reader is entirely structural (JSON-LD + fibre-validated
+       text), so this is not "support for 66 sites" written 66 times; it is the
+       one thing every product page has in common.
+
+       The list entry supplies the brand, so nothing here needs to guess it. */
+    const fetchDetail = url => fetchProductPage(url, "");
+
     return {
       id: "generic",
       label: "Generic site (basic info only)",
       platform: true,      // a fallback engine, not a brand — never a grouping name
       match: () => true,   // catch-all; manifest.json's host allowlist is the real gate
+      /* Scroll before scraping. Modern grids render tiles as they come into
+         view, so reading the DOM at load time returns the first screenful and
+         calls it the category — the single most common way an unadapted shop
+         under-collects. The scroll loop stops as soon as the tile count and
+         page height hold steady, so a site that renders everything up front
+         pays about a second and nothing more. */
+      lazyScroll: 12,
       context, scrapeList, totalPages, resultCount, nextPageUrl, buildWorkbook, isResultsPage,
+      fetchDetail,
       templateUrl: null,
-      // fetchDetail intentionally omitted — content.js skips detail collection
-      // gracefully when an adapter doesn't implement it.
       _tileAncestor: tileAncestor, _signature: signature, _bestName: bestName,
       _bestImage: bestImage, _widestFromSrcset: widestFromSrcset,
       _jsonLdProducts: jsonLdProducts, _inRecommendation: inRecommendation,
@@ -2922,69 +3031,10 @@
       return out;
     }
 
-    function parseDetailDoc(doc, rawHtml, url) {
-      let brand = "", name = "", image = "";
-      const colors = [], sizes = [];
-      const addTo = (arr, v) => {
-        const s = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
-        if (s && s.length <= 40 && !arr.some(x => x.toLowerCase() === s.toLowerCase())) arr.push(s);
-      };
-      (doc.querySelectorAll ? doc.querySelectorAll('script[type="application/ld+json"]') : []).forEach(s => {
-        let d; try { d = JSON.parse(s.textContent); } catch (e) { return; }
-        [].concat(d && d["@graph"] ? d["@graph"] : d).forEach(n => {
-          if (!n || !/(^|,)Product(,|$)/i.test([].concat(n["@type"] || []).join(","))) return;
-          if (!name && n.name) name = String(n.name);
-          if (!brand && n.brand) brand = String(n.brand.name || n.brand);
-          // the PDP's own photo — a backstop for tiles whose lazy-loaded grid
-          // image never resolved (structured data, not a guessed CDN path)
-          if (!image) {
-            const im = [].concat(n.image || [])[0];
-            const u = im && (im.url || im.contentUrl || im);
-            if (typeof u === "string" && /^https?:/i.test(u)) image = u;
-          }
-          [].concat(n.color || []).forEach(c => addTo(colors, c));
-          [].concat(n.size || []).forEach(z => addTo(sizes, z));
-          [].concat(n.hasVariant || []).forEach(v => { if (v) { addTo(colors, v.color); addTo(sizes, v.size); } });
-        });
-      });
-      // composition: fiber-% — li boundaries first, then body/raw HTML
-      const liText = doc.querySelectorAll
-        ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
-      const composition = compositionFromText(liText)
-        || compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
-      // og:image — the one photo nearly every PDP declares. Semantic markup,
-      // not a CSS selector, so it survives redesigns; only used when both the
-      // listing tile and JSON-LD gave nothing.
-      if (!image && doc.querySelector) {
-        const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
-        const u = og && og.getAttribute("content");
-        if (u && /^https?:/i.test(u)) image = u.trim();
-      }
-      return {
-        composition, colorways: colors.join("; "), color_count: colors.length || "",
-        design: "", brand: brand || cfg.brand, sizes: sizes.join("; "), image_url: image,
-        reason: composition ? "" : "not_found",
-      };
-    }
-
-    async function fetchDetail(url) {
-      const empty = r => ({ composition: "", colorways: "", design: "", brand: cfg.brand, reason: r });
-      let html;
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 12000);
-        try {
-          const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
-          if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
-          html = await res.text();
-        } finally { clearTimeout(timer); }
-      } catch (e) {
-        return empty((e && e.name === "AbortError") ? "timeout" : "error");
-      }
-      try {
-        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html, url);
-      } catch (e) { return empty("error"); }
-    }
+    // A house-brand PDP is read exactly like any other product page; the only
+    // thing this site knows that the generic reader doesn't is its own brand.
+    const parseDetailDoc = (doc, rawHtml, url) => readProductPage(doc, rawHtml, cfg.brand);
+    const fetchDetail = url => fetchProductPage(url, cfg.brand);
 
     function context(doc) {
       doc = doc || document;

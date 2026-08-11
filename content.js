@@ -1012,6 +1012,24 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
       try { rows = a.scrapeList(document, location.href) || []; }
       catch (e) { return send({ ok: false, reason: String((e && e.message) || e) }); }
       const filled = f => rows.filter(r => String(r[f] || "").trim()).length;
+      /* Optional: try the detail path on ONE product. The fabric column is the
+         reason this tool exists, and it comes from the product page rather
+         than the grid — so a list check that only reads the grid cannot
+         predict it. One fetch, nothing stored, and only when asked for. */
+      let detail = null;
+      if (m.detail && rows[0] && typeof a.fetchDetail === "function") {
+        try {
+          const d = await a.fetchDetail(rows[0].product_url);
+          detail = {
+            url: String(rows[0].product_url || "").slice(0, 120),
+            composition: String((d && d.composition) || "").slice(0, 80),
+            colorways: String((d && d.colorways) || "").slice(0, 60),
+            reason: (d && d.reason) || "",
+          };
+        } catch (e) { detail = { error: String((e && e.message) || e).slice(0, 80) }; }
+      } else if (m.detail) {
+        detail = { skipped: rows.length ? "adapter has no detail phase" : "no products to test" };
+      }
       const html = document.documentElement.innerHTML;
       const platform = [
         /cdn\.shopify\.com|\/cdn\/shop\//.test(html) && "Shopify",
@@ -1027,6 +1045,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
         lazy: !!a.lazyScroll,
         count: rows.length,
         named: filled("name"), imaged: filled("image_url"), priced: filled("price"),
+        detail,
         platform, ld: document.querySelectorAll('script[type="application/ld+json"]').length,
         samples: rows.slice(0, 3).map(r => ({
           name: String(r.name || "").slice(0, 70),
