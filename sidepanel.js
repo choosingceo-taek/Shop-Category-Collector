@@ -277,8 +277,14 @@
     if (a || ad || read.access) entry.scannable = true;
     else {
       const g = await grantAccess([tab.url]).catch(() => ({ granted: 0 }));
-      if (g.granted) { entry.scannable = true; read.access = true; }
-      else delete entry.scannable;
+      if (g.granted) {
+        entry.scannable = true; read.access = true;
+        // Put the engine in straight away rather than waiting for a refresh:
+        // the grab button is how this site gets collected from now on, and a
+        // button that only appears after an unexplained F5 reads as broken.
+        try { chrome.runtime.sendMessage({ type: "ensureEngine", tabId: tab.id },
+          () => void chrome.runtime.lastError); } catch (e) {}
+      } else delete entry.scannable;
     }
     const m = L.mergeEntries(curList.entries || [], [entry]);
     if (!m.added) return toast("Already in this list");

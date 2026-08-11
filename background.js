@@ -115,6 +115,60 @@ async function ensureEngine(tabId) {
   return { ok: await pingTab(tabId, 1500), injected: true };
 }
 
+/* Keep the grab button on every site the user has actually allowed.
+
+   Collecting now happens on the page, at the round button in its corner — so
+   a shop where that button never appears has no way in at all. The manifest
+   covers the team's known list, but the whole point is finding shops that are
+   NOT on it yet: the user allows the site once, and from then on Chrome must
+   put the engine there by itself. A granted optional origin does not do that
+   on its own; it has to be registered.
+
+   Registered once per grant, so it survives browser restarts and applies to
+   every future tab on that site. Static matches are excluded so a site the
+   manifest already covers is never injected twice. */
+const DYN_ID = "wpb-granted-sites";
+const staticMatches = () =>
+  (chrome.runtime.getManifest().content_scripts || []).flatMap(c => c.matches || []);
+
+async function syncDynamicScripts() {
+  let origins = [];
+  try {
+    const mf = chrome.runtime.getManifest();
+    /* Only the origins the USER added. The manifest's own host_permissions are
+       there so the worker can fetch images and product pages — putting the
+       whole engine into raw.githubusercontent.com would be noise, and the
+       shops among them already have static content scripts. */
+    const builtIn = new Set(mf.host_permissions || []);
+    const p = await chrome.permissions.getAll();
+    origins = (p.origins || [])
+      .filter(o => /^(https?|\*):\/\//i.test(o))
+      .filter(o => !builtIn.has(o));
+  } catch (e) { return; }
+  try { await chrome.scripting.unregisterContentScripts({ ids: [DYN_ID] }); } catch (e) {}
+  if (!origins.length) return;
+  const script = {
+    id: DYN_ID, matches: origins, js: ENGINE_FILES,
+    runAt: "document_idle", allFrames: false, persistAcrossSessions: true,
+  };
+  try {
+    await chrome.scripting.registerContentScripts([
+      Object.assign({ excludeMatches: staticMatches() }, script)]);
+  } catch (e) {
+    /* Some Chrome builds cap how many exclude patterns one script may carry.
+       Registering anyway still beats no button: a doubly-injected engine
+       aborts on its own re-declared top-level bindings, and the grab button
+       has always guarded itself with __wpbFabInjected. */
+    try { await chrome.scripting.registerContentScripts([script]); } catch (e2) {}
+  }
+}
+chrome.runtime.onInstalled.addListener(() => { syncDynamicScripts(); });
+chrome.runtime.onStartup.addListener(() => { syncDynamicScripts(); });
+try {
+  chrome.permissions.onAdded.addListener(() => { syncDynamicScripts(); });
+  chrome.permissions.onRemoved.addListener(() => { syncDynamicScripts(); });
+} catch (e) {}
+
 /* A list run navigates one tab through every URL. On sites without a static
    content script nothing would come back to life after each navigation, so the
    run would stop at the first such URL — re-inject as each page finishes
