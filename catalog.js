@@ -33,20 +33,20 @@
      so the weekly aggregate is written down separately and never shrinks. That
      is what makes the long view possible: a year from now the charts still have
      every week, at a few KB each, whether or not the products are still here. */
-  /* The frozen weekly record is catalog-wide, and it is only written while the
-     whole catalog is in view. Writing it from a single list's rows would file
-     that list's numbers under the catalog's own week and quietly corrupt the
-     long view — so a scoped screen reads its weeks from the products it has,
-     and leaves the record alone. */
+  /* Each list keeps its own weekly record, under its own snapshot ids
+     (`<listId>|2026-W32`), alongside the catalog-wide one. A list is one
+     research question, so its history has to be its own — filing a list's
+     numbers under the catalog's week would rewrite a record that describes a
+     different population. */
   async function rollup() {
-    if (scopeId) return;
     const scanned = items.filter(i => i && i.source !== "clip" && i.addedAt);
     if (!scanned.length) return;
     const oldest = Math.min(...scanned.map(i => i.addedAt));
     const months = Math.max(2, Math.ceil((Date.now() - oldest) / (30 * 864e5)) + 1);
     try {
-      await S.putSnapshots(window.TrendCalc.weeklySnapshots(scanned, { months }));
+      await S.putSnapshots(window.TrendCalc.weeklySnapshots(scanned, { months, listId: scopeId }));
       snapshots = await S.allSnapshots();
+      applyScope();
     } catch (e) { /* snapshots are an optimisation — never block the view */ }
   }
 
@@ -60,9 +60,9 @@
   const inScope = i => !scopeId || [].concat((i && i.listIds) || []).includes(scopeId);
   function applyScope() {
     items = allItems.filter(inScope);
-    // The catalog-wide frozen weeks describe a different population, so a
-    // scoped LAB computes from its own products instead of borrowing them.
-    labSnapshots = scopeId ? [] : snapshots;
+    // Only this list's frozen weeks — the catalog-wide ones describe a
+    // different population and would inflate every archived figure.
+    labSnapshots = snapshots.filter(s => String((s && s.listId) || "") === scopeId);
   }
   let labSnapshots = [];
 
@@ -86,6 +86,8 @@
       applyScope();
       curWeekStart = null; curBrand = ""; curCat = ""; curFeedBrand = "";
       renderScope(); fillFilters(); redrawAll();
+      // this list's weeks are its own record — write them the first time it is opened
+      rollup().then(redrawAll);
     }));
   }
   // same derivation the panel and the grab button use, so a list keeps its

@@ -117,6 +117,19 @@
   .cmp { font-size:12.5px; color:var(--ink2); padding:9px 12px; background:var(--wash);
     border-radius:var(--r); margin-bottom:8px; }
   .cmp .ar { color:var(--muted); margin:0 4px; }
+  /* What the comparison is standing on. Always shown — a number without its
+     basis is the thing that loses a team's trust, and the caveat has to be
+     as visible as the figure it qualifies. */
+  .cov { font-size:12px; line-height:1.55; color:var(--ink2); padding:9px 12px;
+    margin-bottom:10px; border-radius:var(--r); background:#fdf6ec;
+    border:1px solid #efdcc0; }
+  .cov.same { background:var(--wash); border-color:transparent; color:var(--muted); }
+  .cov .covr { margin-top:4px; color:var(--ink2); }
+  .cov .covr b { font-weight:650; }
+  .rawcmp { margin-top:12px; border-top:1px solid var(--line); padding-top:9px; }
+  .rawcmp summary { cursor:pointer; font-size:12px; color:var(--muted); }
+  .rawcmp summary:hover { color:var(--ink); }
+  .rawcmp .rawnote { font-size:11.5px; color:var(--muted); margin:8px 0 0; }
   /* suggestions — reason always shown next to the key, never a bare verdict */
   .sugs { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:10px; }
   .sug { border:0; border-radius:var(--r-s); padding:10px 12px; background:var(--wash); }

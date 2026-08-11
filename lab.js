@@ -89,9 +89,71 @@
       ${bars}<line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="${GRID}"/></svg>`;
   }
 
-  /* Week-over-week board: what moved since the previous run.
-     Shows the two periods being compared by name, so nobody has to guess
-     whether "this week" means the calendar week or the last one with data. */
+  /* Week against week, on the shops both weeks actually contain.
+
+     A share is "out of this week's arrivals", which only compares to last week
+     if both weeks read the same shops. Lists grow, categories get added, a
+     scan fails — and then the number moves for a reason that has nothing to do
+     with fashion. So the headline is the like-for-like reading, the coverage
+     change is stated next to it rather than buried, and the raw reading is
+     kept where it can be seen but not mistaken for the trend. */
+  function compareBoard(w, label) {
+    if (!w || !w.ok) {
+      return `<div class="notice">${w && w.periods
+        ? `Only one ${w.unit} has products so far. Scan this list again next ${w.unit} ` +
+          `and the ${w.unit}-on-${w.unit} comparison appears here.`
+        : "Nothing to compare yet — scan this list once and this " +
+          "week becomes the baseline."}</div>`;
+    }
+    const cov = w.coverage;
+    const rowsOf = rows => rows.map(r => {
+      const col = r.delta > 0 ? UP : r.delta < 0 ? DOWN : MUTED;
+      const arrow = r.delta > 0 ? "▲" : r.delta < 0 ? "▼" : "–";
+      const badge = r.isNew ? '<em class="new">NEW</em>'
+        : r.isGone ? '<em class="new gone">GONE</em>' : "";
+      return `<div class="mv">
+        <span class="mk">${esc(r.key)}${badge}</span>
+        <span class="mb">${r.before}% → ${r.after}% <span class="cn">(${r.countBefore}→${r.countAfter})</span></span>
+        <span class="md" style="color:${col}">${arrow} ${Math.abs(r.delta)}p</span></div>`;
+    }).join("");
+
+    const head = `<div class="cmp"><b>${esc(w.previous.label)}</b> (${w.previous.count})
+      <span class="ar">→</span> <b>${esc(w.current.label)}</b> (${w.current.count})
+      · by ${esc(label)}</div>`;
+
+    if (!cov.comparable) {
+      return head + `<div class="notice">These two ${w.unit}s share no collection —
+        ${w.previous.collections} in ${esc(w.previous.label)},
+        ${w.current.collections} in ${esc(w.current.label)}, none in both. There is
+        nothing to compare like for like; what changed is which shops were read.</div>`;
+    }
+
+    // The coverage line is always shown, including when nothing moved — the
+    // absence of a caveat is itself information worth stating.
+    const names = list => list.slice(0, 6).map(esc).join(", ") +
+      (list.length > 6 ? ` +${list.length - 6} more` : "");
+    const covLine = cov.stable
+      ? `<div class="cov same">Same ${cov.common} collections in both ${w.unit}s —
+         this is a clean comparison.</div>`
+      : `<div class="cov">Compared on the <b>${cov.common} collections both ${w.unit}s contain</b>
+         (${cov.matchedProducts.before} → ${cov.matchedProducts.after} products).` +
+        (cov.added.length ? `<div class="covr"><b>+ new this ${w.unit}</b> ${names(cov.added)}</div>` : "") +
+        (cov.dropped.length ? `<div class="covr"><b>− not read this ${w.unit}</b> ${names(cov.dropped)}</div>` : "") +
+        `</div>`;
+
+    const matched = rowsOf(w.matched.rows) ||
+      `<div class="none">No clear movement on the shops both ${w.unit}s contain.</div>`;
+    // Only worth showing the raw reading when it can actually mislead.
+    const raw = cov.stable ? "" : `<details class="rawcmp">
+      <summary>Everything collected, including what changed underneath
+        (${w.all.before} → ${w.all.after} products)</summary>
+      ${rowsOf(w.all.rows) || `<div class="none">No movement.</div>`}
+      <p class="rawnote">These figures move with the list as well as with the market.
+        Use them for volume, not for trend.</p></details>`;
+
+    return head + covLine + matched + raw;
+  }
+
   function changeBoard(c, label) {
     if (!c.ok) {
       return `<div class="notice">${c.current
@@ -243,7 +305,7 @@
 
     const s = T.series(items, Object.assign({ dim, top: 6 }, base));
     const m = T.movers(items, Object.assign({ dim, top: 6, minCount: opts.minCount || 3 }, base));
-    const c = T.latestChange(items, Object.assign({ dim, top: 10, minCount: 2 }, base));
+    const w = T.weekCompare(items, Object.assign({ dim, top: 10, minCount: 2 }, base));
     const e = T.emerging(items, Object.assign({ dim, top: 8, window: 3, minCount: 2 }, base));
     const led = T.ledger(items, Object.assign({ dim, top: 4 }, base));
     const rk = T.ranked(items, Object.assign({ dim, top: 20, minCount: 2 }, base));
@@ -268,8 +330,9 @@
         </div>
       </div>
 
-      <section class="sec"><h3>🔄 Latest change by ${unit} <span class="sub">vs the previous recorded period</span></h3>
-      ${changeBoard(c, label)}</section>
+      <section class="sec"><h3>🔄 ${unit === "week" ? "Week on week" : "Month on month"}
+        <span class="sub">like for like — same shops in both</span></h3>
+      ${compareBoard(w, label)}</section>
 
       <section class="sec"><h3>👀 ${esc(label)} to watch now <span class="sub">reason always shown</span></h3>
       ${emergingBoard(e)}</section>
@@ -305,5 +368,5 @@
         clipped ? ` ${clipped} hand-picked products are excluded here because that sample is biased (they remain in the product list and in Excel).` : ""}</p>`;
   }
 
-  root.LabView = { render, lineChart, volumeChart, changeBoard, emergingBoard, ledgerTable, priceBoard, rankedList };
+  root.LabView = { render, lineChart, volumeChart, changeBoard, compareBoard, emergingBoard, ledgerTable, priceBoard, rankedList };
 })(typeof self !== "undefined" ? self : this);

@@ -132,6 +132,108 @@
     return `${th.getFullYear()}-W${String(wk).padStart(2, "0")}`;
   }
 
+  /* ---- what was actually looked at ----------------------------------------
+
+     Every share in here is "out of that week's new arrivals", which is only
+     comparable between two weeks if the two weeks looked at the same shops.
+     They often did not: a list grows as the designer finds brands, a category
+     gets added, a shop blocks a scan, a URL is retired. Then "Cotton went from
+     30% to 45%" can be entirely the new brands, and "that colour collapsed"
+     can be one shop we simply did not read this week.
+
+     So a week records its ROSTER — the brand·category collections that
+     actually produced products — and any two weeks are compared on the
+     collections they share. This is the same-store-sales rule: measure the
+     shops open in both periods, and report the ones that opened or closed
+     separately rather than letting them move the number silently. */
+  const collectionKey = it =>
+    String((it && it.brand) || "").trim() + " · " + String((it && it.category) || "").trim();
+  const collectionsOf = items =>
+    [...new Set((items || []).map(collectionKey).filter(k => k.trim() !== "·"))].sort();
+
+  // Counts and shares for one set of items, in one dimension.
+  function tallyOf(items, dim) {
+    const d = DIMS[dim] || DIMS.fabric;
+    const counts = new Map();
+    (items || []).forEach(it => d.keysOf(it).forEach(k => {
+      if (k) counts.set(k, (counts.get(k) || 0) + 1);
+    }));
+    const n = (items || []).length;
+    const shares = new Map();
+    counts.forEach((v, k) => shares.set(k, n ? (v / n) * 100 : 0));
+    return { count: n, counts, shares };
+  }
+
+  function rowsBetween(A, B, minCount, top) {
+    const rows = [];
+    new Set([...A.counts.keys(), ...B.counts.keys()]).forEach(k => {
+      const ca = A.counts.get(k) || 0, cb = B.counts.get(k) || 0;
+      if (ca + cb < minCount) return;
+      const a = Math.round((A.shares.get(k) || 0) * 10) / 10;
+      const b = Math.round((B.shares.get(k) || 0) * 10) / 10;
+      rows.push({ key: k, before: a, after: b, delta: Math.round((b - a) * 10) / 10,
+        countBefore: ca, countAfter: cb, isNew: !ca && !!cb, isGone: !!ca && !cb });
+    });
+    rows.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+    return top ? rows.slice(0, top) : rows;
+  }
+
+  /* Compare the two most recent periods that have data, on a like-for-like
+     basis — and say plainly how much of the list moved underneath.
+
+     Returns both readings, never one dressed as the other:
+       matched   only the collections present in BOTH periods. The trend.
+       all       everything collected in each period. The volume.
+     plus `coverage`, which names what was added and what went unread. When the
+     two readings disagree, the difference IS the coverage change, and that is
+     the thing worth knowing before quoting a number to the team. */
+  function weekCompare(items, opts) {
+    opts = Object.assign({ granularity: "week" }, opts || {});
+    const dim = opts.dim || "fabric";
+    const minCount = opts.minCount == null ? 2 : opts.minCount;
+    const unit = opts.granularity === "month" ? "month" : "week";
+    const buckets = timeline(items, opts).filter(b => b.count);
+    if (buckets.length < 2) {
+      return { ok: false, dim, unit, periods: buckets.length,
+        reason: buckets.length ? "only one period has products" : "nothing collected yet" };
+    }
+    const A = buckets[buckets.length - 2], B = buckets[buckets.length - 1];
+    const rosterA = new Set(collectionsOf(A.items));
+    const rosterB = new Set(collectionsOf(B.items));
+    const common = [...rosterA].filter(k => rosterB.has(k));
+    const commonSet = new Set(common);
+    const added = [...rosterB].filter(k => !rosterA.has(k)).sort();
+    const dropped = [...rosterA].filter(k => !rosterB.has(k)).sort();
+
+    const inCommon = it => commonSet.has(collectionKey(it));
+    const mA = tallyOf(A.items.filter(inCommon), dim);
+    const mB = tallyOf(B.items.filter(inCommon), dim);
+    const aA = tallyOf(A.items, dim);
+    const aB = tallyOf(B.items, dim);
+
+    return {
+      ok: true, dim, unit,
+      previous: { label: A.label, start: A.start, count: aA.count, collections: rosterA.size },
+      current: { label: B.label, start: B.start, count: aB.count, collections: rosterB.size },
+      coverage: {
+        common: common.length, added, dropped,
+        // Nothing changed underneath, so the two readings are the same number.
+        stable: !added.length && !dropped.length,
+        // Too little overlap to call it a comparison at all.
+        comparable: common.length > 0,
+        matchedProducts: { before: mA.count, after: mB.count },
+      },
+      matched: {
+        rows: rowsBetween(mA, mB, minCount, opts.top || 10),
+        before: mA.count, after: mB.count,
+      },
+      all: {
+        rows: rowsBetween(aA, aB, minCount, opts.top || 10),
+        before: aA.count, after: aB.count,
+      },
+    };
+  }
+
   function countKeys(items, dim, topN) {
     const c = new Map();
     items.forEach(it => DIMS[dim].keysOf(it).forEach(k => { if (k) c.set(k, (c.get(k) || 0) + 1); }));
@@ -146,14 +248,25 @@
   function weeklySnapshots(items, opts) {
     opts = Object.assign({}, opts || {}, { granularity: "week" });
     const topN = opts.topN || 200;
+    /* A list is one research question, so its weeks are its own record: the id
+       carries the list, and the whole-catalog record keeps the bare week id it
+       has always had. Without this, scoping the LAB to a list would file that
+       list's numbers under the catalog's week and quietly rewrite history. */
+    const listId = opts.listId || "";
     return timeline(items, opts).filter(b => b.count).map(b => {
       const dims = {};
       DIM_KEYS.forEach(d => { dims[d] = countKeys(b.items, d, topN); });
       const uniq = f => new Set(b.items.map(f).filter(Boolean)).size;
       return {
-        id: weekId(b.start), granularity: "week",
+        id: (listId ? listId + "|" : "") + weekId(b.start), listId,
+        granularity: "week",
         start: b.start, end: b.end, label: b.label,
         products: b.count, brands: uniq(i => i.brand), sites: uniq(i => i.site || i.source),
+        /* What this week actually looked at. Kept so a week stays comparable
+           after its products are cleaned up — without it, an old week's share
+           can only ever be read on a basis nobody can check. Capped, because a
+           snapshot is meant to stay a few KB. */
+        collections: collectionsOf(b.items).slice(0, 400),
         dims, builtAt: opts.now || Date.now(),
       };
     });
@@ -442,6 +555,7 @@
 
   const API = { timeline, sharesByBucket, periodsFor, series, movers, latestChange,
     emerging, ledger, ranked, priceByPeriod, overview, weeklySnapshots, weekId,
+    weekCompare, collectionsOf, collectionKey,
     DIMS, bucketStart };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.TrendCalc = API;
