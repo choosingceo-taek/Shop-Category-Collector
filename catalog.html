@@ -128,6 +128,29 @@
   .cov.same { background:var(--wash); border-color:transparent; color:var(--muted); }
   .cov .covr { margin-top:4px; color:var(--ink2); }
   .cov .covr b { font-weight:650; }
+  /* The pulse table: one line per measure. Dense on purpose — the eye runs
+     down the change column and stops wherever it is not STABLE. */
+  .pulse { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .pulse th { text-align:left; font-size:9px; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--muted); font-weight:600; padding:0 8px 5px 0; border-bottom:1px solid var(--line); }
+  .pulse th:nth-child(2), .pulse td.pc { width:78px; }
+  .pulse th:nth-child(3), .pulse td.ps { width:70px; }
+  .pulse th:last-child, .pulse td.pn { width:150px; text-align:right; }
+  .pulse td { padding:5px 8px 5px 0; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .pulse tbody tr:last-child td { border-bottom:0; }
+  .pulse tbody tr:hover td { background:var(--wash); }
+  .pulse .pk { font-weight:650; }
+  .pulse .pc { font-weight:700; font-variant-numeric:tabular-nums; }
+  .pulse .pc .up { color:#0ca30c; }
+  .pulse .pc .down { color:#d03b3b; }
+  .pulse .pc .flat { color:var(--muted); font-size:10px; letter-spacing:.08em; font-weight:600; }
+  .pulse .ps { line-height:0; }
+  .pulse .ps .nospark { color:var(--line2); line-height:1; font-size:12px; }
+  .pulse .pn { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums;
+    white-space:nowrap; }
+  .pulse .pn i { font-style:normal; color:var(--line2); }
+  @media (max-width:640px) { .pulse th:last-child, .pulse td.pn { display:none; } }
+  .pnote { font-size:11px; color:var(--muted); margin:8px 0 0; }
   .rawcmp { margin-top:12px; border-top:1px solid var(--line); padding-top:9px; }
   .rawcmp summary { cursor:pointer; font-size:12px; color:var(--muted); }
   .rawcmp summary:hover { color:var(--ink); }

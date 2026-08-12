@@ -234,6 +234,61 @@
     };
   }
 
+  /* The pulse: one line per measure, what it did this period, and its shape.
+
+     A designer scanning her list every week wants one table, not eight
+     charts: which fabrics/colours/silhouettes are up, which are down, which
+     are holding, and what each has been doing lately. So each row carries
+
+       change     the like-for-like move against the previous period, in
+                  percentage points — the honest number, computed only on the
+                  collections both periods contain (see weekCompare)
+       spark      the share across the recent periods that HAVE data, so the
+                  shape is visible at a glance. It is the raw share history:
+                  a sparkline is a trajectory, not a figure to quote, and
+                  mixing bases inside one line would be worse than either.
+       direction  up / down / flat / new / gone. Flat is stated rather than
+                  shown as a tiny wobble, because "it held" is an answer.
+
+     Rows come from the matched comparison, so a measure that appears only in
+     a brand added this week is not presented as a rise; it shows up in the
+     coverage line instead, which is where it belongs. */
+  function pulse(items, opts) {
+    opts = Object.assign({ granularity: "week" }, opts || {});
+    const dim = opts.dim || "fabric";
+    const spark = opts.spark || 8;
+    const cmp = weekCompare(items, opts);
+    /* What counts as "it moved" depends on how much was collected.
+
+       A fixed percentage band lies at both ends: on a 20-product week a
+       single garment is a 5-point swing, and calling that a rise would put
+       noise at the top of the table; on a 600-product week a 2-point move is
+       a dozen garments and reporting it as steady would hide a real shift.
+       So the band is the larger of a floor and ONE PRODUCT's worth of share
+       in the smaller of the two periods — a move the data cannot resolve is
+       reported as steady, which is what it is. */
+    const matched = (cmp.ok && cmp.coverage.matchedProducts) || { before: 0, after: 0 };
+    const smallest = Math.max(1, Math.min(matched.before || 0, matched.after || 0) || 1);
+    const flat = Math.max(opts.flat == null ? 1.5 : opts.flat, 100 / smallest);
+    const tail = periodsFor(items, dim, opts).filter(p => p.count).slice(-spark);
+    const rows = (cmp.ok ? cmp.matched.rows : []).map(r => ({
+      key: r.key, before: r.before, after: r.after, delta: r.delta,
+      countBefore: r.countBefore, countAfter: r.countAfter,
+      isNew: r.isNew, isGone: r.isGone,
+      direction: r.isNew ? "new" : r.isGone ? "gone"
+        : Math.abs(r.delta) < flat ? "flat" : (r.delta > 0 ? "up" : "down"),
+      spark: tail.map(p => Math.round((p.shares.get(r.key) || 0) * 10) / 10),
+    }));
+    return {
+      ok: cmp.ok, dim, unit: cmp.unit, reason: cmp.reason, periods: cmp.periods,
+      label: (DIMS[dim] || DIMS.fabric).label,
+      previous: cmp.previous, current: cmp.current, coverage: cmp.coverage,
+      all: cmp.all, rows, sparkLabels: tail.map(p => p.label),
+      // stated, not hidden: the reader can see why something reads STABLE
+      resolution: Math.round(flat * 10) / 10,
+    };
+  }
+
   function countKeys(items, dim, topN) {
     const c = new Map();
     items.forEach(it => DIMS[dim].keysOf(it).forEach(k => { if (k) c.set(k, (c.get(k) || 0) + 1); }));
@@ -555,7 +610,7 @@
 
   const API = { timeline, sharesByBucket, periodsFor, series, movers, latestChange,
     emerging, ledger, ranked, priceByPeriod, overview, weeklySnapshots, weekId,
-    weekCompare, collectionsOf, collectionKey,
+    weekCompare, pulse, collectionsOf, collectionKey,
     DIMS, bucketStart };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.TrendCalc = API;

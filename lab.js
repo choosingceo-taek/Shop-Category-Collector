@@ -89,6 +89,80 @@
       ${bars}<line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="${GRID}"/></svg>`;
   }
 
+
+  /* A sparkline: the shape of one measure over the recent periods.
+
+     Deliberately unlabelled and unscaled against the others — it answers
+     "which way has this been going", and the exact figure is the column
+     beside it. Each line is scaled to its own range so a 2%-to-4% climb is
+     as legible as a 40%-to-80% one; that is the point of a sparkline, and the
+     reason it never stands in for the axis-bearing chart further down. */
+  function sparkline(values, dir) {
+    const vals = (values || []).filter(v => v != null);
+    if (vals.length < 2) return '<span class="nospark">—</span>';
+    const W = 62, H = 18, pad = 2;
+    const max = Math.max(...vals), min = Math.min(...vals);
+    const span = max - min || 1;
+    const x = i => pad + (W - pad * 2) * (i / (vals.length - 1));
+    const y = v => pad + (H - pad * 2) * (1 - (v - min) / span);
+    const col = dir === "up" ? UP : dir === "down" ? DOWN : MUTED;
+    const d = vals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    const last = vals.length - 1;
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">
+      <path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${x(last).toFixed(1)}" cy="${y(vals[last]).toFixed(1)}" r="2" fill="${col}"/>
+    </svg>`;
+  }
+
+  /* The pulse table — the first thing the LAB says.
+
+     One row per measure: what it is, how it moved since the last scan of this
+     list, and the shape it has been tracing. Dense on purpose; a designer
+     reads down the change column and stops at whatever is not flat. */
+  /* What the line covers, for the row's tooltip. The change column answers
+     "since the last scan"; the line answers "and before that" — so the
+     tooltip states the window's own start and end rather than leaving the
+     reader to infer a second number from a picture. */
+  function sparkTitle(r, p) {
+    const v = (r.spark || []).filter(x => x != null);
+    if (v.length < 2) return "not enough periods yet";
+    const labs = p.sparkLabels || [];
+    const from = labs[labs.length - v.length] || "start", to = labs[labs.length - 1] || "now";
+    const move = Math.round((v[v.length - 1] - v[0]) * 10) / 10;
+    return `${from} → ${to}: ${v[0]}% → ${v[v.length - 1]}% (${move >= 0 ? "+" : ""}${move}p over ${v.length} ${p.unit}s)`;
+  }
+
+  function pulseTable(p) {
+    if (!p.rows.length) {
+      return `<div class="none">Nothing moved enough to report between these two ${p.unit}s.</div>`;
+    }
+    const rows = p.rows.map(r => {
+      const chg = r.direction === "flat" ? `<span class="flat">STABLE</span>`
+        : r.direction === "new" ? `<span class="up">NEW</span>`
+        : r.direction === "gone" ? `<span class="down">GONE</span>`
+        : `<span class="${r.direction}">${r.delta > 0 ? "+" : ""}${r.delta}p</span>`;
+      return `<tr>
+        <td class="pk">${esc(r.key)}</td>
+        <td class="pc">${chg}</td>
+        <td class="ps" title="${esc(sparkTitle(r, p))}">${sparkline(r.spark, r.direction)}</td>
+        <td class="pn">${r.before}% → ${r.after}% <i>(${r.countBefore}→${r.countAfter})</i></td>
+      </tr>`;
+    }).join("");
+    /* Say what STABLE means here. On a small week one garment is a large
+       percentage, so a move the sample cannot resolve is reported as steady —
+       and the reader is told the size of that band rather than left to guess
+       why something with a visibly different number reads as unchanged. */
+    const note = p.resolution
+      ? `<p class="pnote">Moves under ${p.resolution}p read as STABLE — that is
+         one product at this ${p.unit}'s size (${p.coverage.matchedProducts.before}
+         → ${p.coverage.matchedProducts.after} on the shared shops).</p>`
+      : "";
+    return `<table class="pulse"><thead><tr>
+      <th>${esc(p.label)}</th><th>Change</th><th>Trend</th><th>Share</th>
+    </tr></thead><tbody>${rows}</tbody></table>${note}`;
+  }
+
   /* Week against week, on the shops both weeks actually contain.
 
      A share is "out of this week's arrivals", which only compares to last week
@@ -98,6 +172,7 @@
      change is stated next to it rather than buried, and the raw reading is
      kept where it can be seen but not mistaken for the trend. */
   function compareBoard(w, label) {
+    // `w` is a pulse() result: weekCompare plus a spark per row.
     if (!w || !w.ok) {
       return `<div class="notice">${w && w.periods
         ? `Only one ${w.unit} has products so far. Scan this list again next ${w.unit} ` +
@@ -141,8 +216,7 @@
         (cov.dropped.length ? `<div class="covr"><b>− not read this ${w.unit}</b> ${names(cov.dropped)}</div>` : "") +
         `</div>`;
 
-    const matched = rowsOf(w.matched.rows) ||
-      `<div class="none">No clear movement on the shops both ${w.unit}s contain.</div>`;
+    const matched = pulseTable(w);
     // Only worth showing the raw reading when it can actually mislead.
     const raw = cov.stable ? "" : `<details class="rawcmp">
       <summary>Everything collected, including what changed underneath
@@ -305,7 +379,7 @@
 
     const s = T.series(items, Object.assign({ dim, top: 6 }, base));
     const m = T.movers(items, Object.assign({ dim, top: 6, minCount: opts.minCount || 3 }, base));
-    const w = T.weekCompare(items, Object.assign({ dim, top: 10, minCount: 2 }, base));
+    const w = T.pulse(items, Object.assign({ dim, top: 12, minCount: 2, spark: 8 }, base));
     const e = T.emerging(items, Object.assign({ dim, top: 8, window: 3, minCount: 2 }, base));
     const led = T.ledger(items, Object.assign({ dim, top: 4 }, base));
     const rk = T.ranked(items, Object.assign({ dim, top: 20, minCount: 2 }, base));
@@ -330,8 +404,8 @@
         </div>
       </div>
 
-      <section class="sec"><h3>🔄 ${unit === "week" ? "Week on week" : "Month on month"}
-        <span class="sub">like for like — same shops in both</span></h3>
+      <section class="sec"><h3>📊 ${esc(label)} pulse
+        <span class="sub">${unit} on ${unit}, like for like — same shops in both</span></h3>
       ${compareBoard(w, label)}</section>
 
       <section class="sec"><h3>👀 ${esc(label)} to watch now <span class="sub">reason always shown</span></h3>
@@ -368,5 +442,5 @@
         clipped ? ` ${clipped} hand-picked products are excluded here because that sample is biased (they remain in the product list and in Excel).` : ""}</p>`;
   }
 
-  root.LabView = { render, lineChart, volumeChart, changeBoard, compareBoard, emergingBoard, ledgerTable, priceBoard, rankedList };
+  root.LabView = { render, lineChart, volumeChart, sparkline, pulseTable, changeBoard, compareBoard, emergingBoard, ledgerTable, priceBoard, rankedList };
 })(typeof self !== "undefined" ? self : this);
