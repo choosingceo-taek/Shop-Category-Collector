@@ -134,8 +134,20 @@
   // is "transparent-background.png", a real https URL that an exact-name match
   // let straight through into every stored row. Sync with sites.js PLACEHOLDER.
   const IMG_PLACEHOLDER = /^data:|\/[^/?#]*(?:blank|placeholder|spacer|transparent|1x1|pixel|noimage|no-image|dummy)[^/?#]*\.(?:gif|png|svg|jpe?g|webp)(?:[?#]|$)/i;
+  /* Only an http(s) address survives, because everything downstream — the LAB
+     card, the report, the thumbnail embedded in the Excel — loads it from an
+     extension page, where a relative address resolves against the extension
+     rather than the shop and simply fails.
+
+     But "not absolute" is not the same as "not a picture". Shopify themes
+     write their images protocol-relative (//edikted.co.uk/cdn/shop/files/x.jpg)
+     — a perfectly good address that this rule threw away, which is why a whole
+     Edikted scan produced 64 rows with names, prices and publish dates and NO
+     IMAGE on every one of them. A missing scheme is repaired, not punished;
+     anything still not http(s) after that is genuinely unusable. */
   function cleanImage(u) {
-    const s = String(u || "").trim();
+    let s = String(u || "").trim();
+    if (s.slice(0, 2) === "//") s = "https:" + s;
     return (!s || IMG_PLACEHOLDER.test(s) || !/^https?:/i.test(s)) ? "" : s;
   }
 

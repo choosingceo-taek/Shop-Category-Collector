@@ -1323,7 +1323,12 @@
           brand: "", category: "", department: "",
           name: bestName(tile, pp.price, product_url) || "", price: pp.price, price_was: pp.price_was,
           product_url,
-          image_url: bestImage(tile),
+          // Absolute, always. Themes write pictures three ways — full URL,
+          // protocol-relative (//shop/cdn/…, Shopify's default) and root-relative
+          // (/cdn/shop/files/…) — and the last two only mean anything next to the
+          // page they came from. Stored raw they resolve against the extension
+          // later and every card reads NO IMAGE.
+          image_url: (u => u ? abs(u, base) : "")(bestImage(tile)),
           id: product_url,
         });
       }
@@ -1517,6 +1522,7 @@
         name: p.title || "", name_canonical: !!p.title,
         category: p.type || "",
         price_was,
+        image_url: shopifyImage(p),
         reason: composition ? "" : "not_found",
       };
     }
@@ -1598,6 +1604,19 @@
       return v;
     }
 
+    /* Shopify states the product's own image in every JSON shape it serves:
+       products.json gives `images:[{src}]`, the per-product .js gives
+       `featured_image` (protocol-relative) and `images:[url]`. Any of them is
+       a fact from the shop, which beats a lazy grid that never rendered. */
+    function shopifyImage(p) {
+      if (!p || typeof p !== "object") return "";
+      const first = [].concat(p.images || [])[0];
+      const cand = (first && (first.src || first)) || p.featured_image || "";
+      const s = String(cand || "").trim();
+      if (!s) return "";
+      return s.slice(0, 2) === "//" ? "https:" + s : s;
+    }
+
     function parseCollectionProduct(p) {
       const opt = (p.options || []).find(o => /colou?r/i.test(((o && (o.name || o)) || "") + ""));
       const colorways = opt ? (opt.values || []).join("; ") : "";
@@ -1615,6 +1634,10 @@
         name: p.title || "", name_canonical: !!p.title,
         category: p.product_type || "",
         price_was,
+        // The shop's own photo for this product. Only used where the tile gave
+        // none (applyDetail never overwrites a picture the listing supplied),
+        // and it costs nothing — the bulk pull already carries it.
+        image_url: shopifyImage(p),
         // when the shop actually published it — a real launch date, unlike our
         // own "first seen". Stored for later; trends still bucket by first-seen
         // so brands measured different ways never get compared as if equal.

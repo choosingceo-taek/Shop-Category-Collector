@@ -354,6 +354,15 @@
   상품 수만큼 쪼개졌다**. vendor가 그 상품의 handle과 같거나 공백 없는 코드
   (영문+숫자+구분자)면 브랜드가 아니라고 보고 비운다 → 리스트 항목의 브랜드가 채운다.
   상품명도 마찬가지로 **Shopify `product.title`이 정본**이라 타일 추정을 덮어쓴다.
+- **사진 주소는 저장 전에 절대주소가 된다**(v1.79.1). Edikted 64행이 이름·가격·
+  게시일까지 다 있는데 카드가 전부 NO IMAGE였던 원인: Shopify 테마는 사진을
+  **스킴 없이**(`//edikted.co.uk/cdn/shop/files/x.jpg`) 쓰는데 `cleanImage`가
+  `http(s)`를 요구해 **멀쩡한 주소를 버렸다**. 루트 상대(`/cdn/shop/…`)도 마찬가지고,
+  그대로 저장해도 LAB(`chrome-extension://`)에서는 확장 자신을 기준으로 풀려 깨진다.
+  그물 셋: ① 타일을 읽는 자리에서 `abs()` ② `cleanImage`가 `//`를 `https:`로 **수리**
+  (버리지 않음) ③ Shopify **자기 JSON의 사진**(`images[0].src`·`featured_image`)이
+  그리드가 렌더 안 된 타일을 채움 — 있는 사진을 덮지는 않는다. `shopimage-e2e` 11건 ·
+  `image-test` 30건.
 - 썸네일: 무한 스크롤 그리드는 화면 밖 타일의 `src`가 1x1 placeholder라 그대로 읽으면
   Zara 결과에 이미지가 통째로 비었다. `bestImage`는 srcset(가장 큰 후보) ·
   `<picture><source>` · data-src류 · 배경이미지까지 훑고 placeholder를 버린다.
