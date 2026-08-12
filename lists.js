@@ -365,9 +365,58 @@
     return brandFromHost(host);
   }
 
+  /* ---- when a list scans itself ------------------------------------------
+
+     A list is one research question, and the answer is only comparable if it
+     is asked on a rhythm — the LAB compares week to week, so a week that
+     nobody remembered to scan is a hole in the trend, not a quiet week. So a
+     list can carry its own time:
+
+       schedule = { on: true, time: "09:00", days: [1,2,3,4,5] }
+
+     days are 0=Sunday…6=Saturday; an empty list means every day. The clock is
+     the user's own local time — a designer says "every weekday at nine" about
+     the morning they are actually in.
+
+     Kept pure and here (not in the worker) so both the panel and the alarm
+     agree on what "next" means, and so it can be tested without a browser. */
+  const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+
+  function nextRun(schedule, from) {
+    const s = schedule || {};
+    if (!s.on) return 0;
+    const m = HHMM.exec(String(s.time || ""));
+    if (!m) return 0;
+    const hh = +m[1], mm = +m[2];
+    const days = [].concat(s.days || []).filter(d => d >= 0 && d <= 6);
+    const base = from instanceof Date ? new Date(from.getTime()) : new Date(from || Date.now());
+    for (let i = 0; i < 8; i++) {
+      const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i, hh, mm, 0, 0);
+      if (d.getTime() <= base.getTime()) continue;          // today's time already passed
+      if (days.length && !days.includes(d.getDay())) continue;
+      return d.getTime();
+    }
+    return 0;
+  }
+
+  // "Weekdays at 09:00" — what the panel shows so the setting is readable
+  // without opening it.
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  function scheduleLabel(schedule) {
+    const s = schedule || {};
+    if (!s.on || !HHMM.test(String(s.time || ""))) return "";
+    const days = [].concat(s.days || []).filter(d => d >= 0 && d <= 6).sort();
+    const when = !days.length || days.length === 7 ? "Every day"
+      : days.join() === "1,2,3,4,5" ? "Weekdays"
+      : days.join() === "0,6" ? "Weekends"
+      : days.map(d => DAY_NAMES[d]).join(" ");
+    return `${when} at ${s.time}`;
+  }
+
   const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl,
     toText, toGrid, GRID_HEADER, tierOf, tierMap, load, save, KEY,
-    brandFromHost, cleanLabel, brandFor, PLATFORM_LABEL, labelFromUrl, looksLikeUrl };
+    brandFromHost, cleanLabel, brandFor, PLATFORM_LABEL, labelFromUrl, looksLikeUrl,
+    nextRun, scheduleLabel, DAY_NAMES };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.ScanLists = API;
 })(typeof self !== "undefined" ? self : this);

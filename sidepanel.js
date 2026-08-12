@@ -410,7 +410,8 @@
     const chips = $("#lchips");
     chips.innerHTML = lists.map(l =>
       `<button type="button" data-id="${esc(l.id)}"${curList && l.id === curList.id ? ' class="on"' : ""}>` +
-      `${esc(l.name)}<span class="n">${(l.entries || []).length}</span></button>`).join("") +
+      `${l.schedule && l.schedule.on ? "⏱ " : ""}${esc(l.name)}` +
+      `<span class="n">${(l.entries || []).length}</span></button>`).join("") +
       `<button type="button" class="add" id="newlist" title="Start another list">＋ New</button>`;
     chips.querySelectorAll("button[data-id]").forEach(b => b.addEventListener("click", () => {
       if (curList && b.dataset.id === curList.id) return;
@@ -609,6 +610,58 @@
         toast(next ? "Grab button hidden on pages" : "Grab button back on pages");
       });
     });
+  });
+
+  /* ---- the list's own appointment ----------------------------------------
+
+     A list is one research question and the LAB reads it week over week, so a
+     week nobody remembered to scan is a hole in the trend rather than a quiet
+     week. The clock in the tool row opens this; the worker keeps the time
+     (chrome.alarms), and both sides ask ScanLists.nextRun what "next" means so
+     the panel can never promise a minute the alarm will not honour. */
+  let schedDays = [];
+  function paintDays() {
+    $("#scheddays").innerHTML = L.DAY_NAMES.map((n, i) =>
+      `<button type="button" data-d="${i}"${schedDays.includes(i) ? ' class="on"' : ""} title="${n}">${n[0]}</button>`).join("");
+  }
+  function paintSchedNext() {
+    const on = !!(curList && curList.schedule && curList.schedule.on);
+    const at = L.nextRun({ on: true, time: $("#schedtime").value, days: schedDays }, Date.now());
+    $("#schedsave").textContent = on ? "Turn off" : "Turn on";
+    $("#schednext").textContent = !at
+      ? "Pick a time."
+      : (on ? "Next scan " : "Would scan ") +
+        new Date(at).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }) +
+        " · Chrome must be open; a missed one runs soon after it opens.";
+  }
+  function openSchedule() {
+    const sc = (curList && curList.schedule) || {};
+    $("#schedtime").value = sc.time || "09:00";
+    schedDays = [].concat(sc.days || []);
+    paintDays(); paintSchedNext();
+  }
+  $("#schedtoggle").addEventListener("click", () => {
+    const box = $("#schedbox"), open = box.hidden;
+    box.hidden = !open;
+    $("#schedtoggle").setAttribute("aria-expanded", String(open));
+    if (open) openSchedule();
+  });
+  $("#scheddays").addEventListener("click", e => {
+    const b = e.target.closest("button[data-d]"); if (!b) return;
+    const d = +b.dataset.d;
+    schedDays = schedDays.includes(d) ? schedDays.filter(x => x !== d) : schedDays.concat(d);
+    paintDays(); paintSchedNext();
+  });
+  $("#schedtime").addEventListener("change", paintSchedNext);
+  $("#schedsave").addEventListener("click", async () => {
+    if (!curList) return;
+    const on = !(curList.schedule && curList.schedule.on);
+    curList.schedule = on
+      ? { on: true, time: $("#schedtime").value, days: schedDays.slice() }
+      : Object.assign({}, curList.schedule, { on: false });
+    await L.save(lists);
+    fillListSelect(); paintSchedNext();
+    toast(on ? `Scanning automatically — ${L.scheduleLabel(curList.schedule)}` : "Automatic scan off");
   });
 
   $("#addbtn").addEventListener("click", addCurrentPage);

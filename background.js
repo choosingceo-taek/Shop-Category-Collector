@@ -172,6 +172,117 @@ try {
   chrome.permissions.onRemoved.addListener(() => { syncDynamicScripts(); });
 } catch (e) {}
 
+/* ---- a list that scans itself ---------------------------------------------
+
+   The LAB compares week to week, and a week nobody remembered to scan is a
+   hole in the trend rather than a quiet week. So a list can carry a time, and
+   the worker keeps that appointment: one alarm per scheduled list, re-armed
+   after every firing (`ScanLists.nextRun` decides "next", and the panel shows
+   the same answer, because both call the same function).
+
+   What it does at the appointed minute is exactly what the ▶ button does —
+   open a tab on the first URL and hand the whole list to the engine. It asks
+   for no permissions: there is no click to carry them, so a scheduled run
+   reaches the origins the user has already allowed and reports the rest as
+   unreachable, the same as a manual run would.
+
+   Chrome only fires alarms while Chrome is running. A missed appointment
+   fires shortly after the browser is next opened rather than being skipped —
+   for a weekly trend, yesterday's scan arriving this morning is worth far
+   more than no scan at all. */
+const ALARM = "wpb_run_";
+
+async function scheduledLists() {
+  const lists = await new Promise(r => chrome.storage.local.get("wpb_lists", o => r(o.wpb_lists || [])));
+  return lists.filter(l => l && l.schedule && l.schedule.on);
+}
+
+async function syncSchedules() {
+  try {
+    const want = await scheduledLists();
+    const existing = await chrome.alarms.getAll();
+    for (const a of existing) {
+      if (a.name.startsWith(ALARM) && !want.some(l => ALARM + l.id === a.name))
+        await chrome.alarms.clear(a.name);
+    }
+    for (const l of want) {
+      const when = self.ScanLists.nextRun(l.schedule, Date.now());
+      if (!when) { await chrome.alarms.clear(ALARM + l.id); continue; }
+      const cur = existing.find(a => a.name === ALARM + l.id);
+      /* Leave an alarm that already points at the right minute alone — and
+         leave an EARLIER one alone too: that is a run postponed because the
+         browser was busy, and re-arming it would push a delayed scan past its
+         own day. Editing a list must not cost that list its appointment. */
+      if (cur && (cur.scheduledTime <= when || Math.abs(cur.scheduledTime - when) < 60000)) continue;
+      await chrome.alarms.create(ALARM + l.id, { when });
+    }
+  } catch (e) {}
+}
+
+// Start the run the same way the panel does: a foreground tab (Chrome throttles
+// hidden ones until a run crawls), then the engine, then the whole list.
+async function startScheduledRun(list) {
+  const entries = (list.entries || []).filter(e => e.scannable !== false && /^https?:/i.test(e.url || ""));
+  if (!entries.length) return;
+  const tab = await chrome.tabs.create({ url: entries[0].url, active: true });
+  const msg = { type: "runList", listId: list.id, name: list.name, list: entries, withSpec: true, filters: {} };
+  for (let i = 0; i < 14; i++) {
+    await new Promise(r => setTimeout(r, i ? 900 : 1800));
+    const ok = await new Promise(res => {
+      try {
+        chrome.tabs.sendMessage(tab.id, msg, r => { void chrome.runtime.lastError; res(!!(r && r.ok)); });
+      } catch (e) { res(false); }
+    });
+    if (ok) return;
+    if (i === 2) await ensureEngine(tab.id).catch(() => {});
+  }
+}
+
+/* Kept as its own function, not buried in the listener, so the appointment
+   can be exercised without waiting for a wall clock — Chrome's part (firing at
+   the minute) is verified by the alarm registration itself. */
+async function onScheduleAlarm(name) {
+  if (!String(name || "").startsWith(ALARM)) return;
+  const id = name.slice(ALARM.length);
+  let postponed = false;
+  try {
+    const lists = await new Promise(r => chrome.storage.local.get("wpb_lists", o => r(o.wpb_lists || [])));
+    const list = lists.find(l => l.id === id);
+    if (!list || !list.schedule || !list.schedule.on) return;
+    /* Never start on top of a run in progress — two scans sharing one queue
+       would interleave into one meaningless spreadsheet. Try again in ten
+       minutes instead of dropping the appointment. */
+    const q = await new Promise(r => chrome.storage.local.get("wpb_queue", o => r(o.wpb_queue || null)));
+    if (q && q.active) {
+      await chrome.alarms.create(name, { when: Date.now() + 10 * 60000 });
+      postponed = true;                 // …and keep that minute (see below)
+      return;
+    }
+    await startScheduledRun(list);
+  } catch (e) {
+  } finally {
+    /* Re-arm from a moment after now, so today's slot is not picked again.
+       Never when the run was postponed: `return` still runs this block, and
+       replacing the ten-minute retry with tomorrow's appointment is how a busy
+       morning would quietly become a skipped day. */
+    if (!postponed) {
+      try {
+        const lists = await new Promise(r => chrome.storage.local.get("wpb_lists", o => r(o.wpb_lists || [])));
+        const list = lists.find(l => l.id === id);
+        const when = list && list.schedule ? self.ScanLists.nextRun(list.schedule, Date.now() + 60000) : 0;
+        if (when) await chrome.alarms.create(name, { when });
+      } catch (e2) {}
+    }
+  }
+}
+chrome.alarms.onAlarm.addListener(a => { onScheduleAlarm(a && a.name); });
+
+chrome.runtime.onInstalled.addListener(() => { syncSchedules(); });
+chrome.runtime.onStartup.addListener(() => { syncSchedules(); });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.wpb_lists) syncSchedules();
+});
+
 /* A list run navigates one tab through every URL. On sites without a static
    content script nothing would come back to life after each navigation, so the
    run would stop at the first such URL — re-inject as each page finishes

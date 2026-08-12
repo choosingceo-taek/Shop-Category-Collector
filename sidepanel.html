@@ -251,6 +251,17 @@
   .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
 
   /* pasting is the rare path — offered beside the others, opened on demand */
+  /* the appointment row — one line, same furniture as the rest of the card */
+  .sched { margin-top:8px; }
+  .schedrow { display:flex; gap:6px; align-items:center; }
+  .schedrow input[type=time] { font:inherit; font-size:12px; padding:4px 6px;
+    border:1px solid var(--line); border-radius:var(--r); background:#fff; color:var(--ink); }
+  .schedrow button.grow { flex:1; font-size:12px; padding:5px 8px; }
+  .days { display:flex; gap:2px; }
+  .days button { width:20px; height:22px; padding:0; font-size:10px; font-weight:600;
+    border:1px solid var(--line); border-radius:var(--r); background:#fff; color:var(--muted); }
+  .days button.on { background:var(--ink); border-color:var(--ink); color:#fff; }
+  .sched .hint { font-size:10.5px; color:var(--muted); margin-top:6px; }
   .bulkbox { margin-top:8px; }
   .bulkbox textarea { width:100%; margin-top:8px; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
     border:1px solid var(--line2); border-radius:var(--r-s); padding:8px 9px;
@@ -391,6 +402,10 @@
                    it comes back. It rides in the existing tool row, so a
                    setting nobody needs daily costs no height. -->
               <button class="iconbtn" id="fabtoggle" title="Grab button on pages" aria-label="Grab button on pages">◉</button>
+              <!-- A list is one research question, and the LAB compares it
+                   week to week — so it can keep its own appointment. Rides
+                   the same tool row: no new height until it is opened. -->
+              <button class="iconbtn" id="schedtoggle" aria-expanded="false" title="Scan this list automatically" aria-label="Scan this list automatically">⏱</button>
               <button class="iconbtn" id="renlist" title="Rename this list" aria-label="Rename this list">✎</button>
               <button class="iconbtn" id="dellist" title="Delete this list" aria-label="Delete this list">🗑</button>
               <button class="xbtn" id="explisttxt" title="Export as .txt — edit it and import again">.txt</button>
@@ -398,6 +413,19 @@
             </span>
           </div>
           <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
+
+          <!-- The appointment, opened from the clock above. One row: the time,
+               the days as chips, and the switch. Closed it costs nothing; the
+               list chip carries a small ⏱ so a scheduled list is visible
+               without opening anything. -->
+          <div class="sched" id="schedbox" hidden>
+            <div class="schedrow">
+              <input type="time" id="schedtime" value="09:00" title="Local time">
+              <span class="days" id="scheddays"></span>
+              <button id="schedsave" class="grow">Turn on</button>
+            </div>
+            <div class="hint" id="schednext"></div>
+          </div>
 
           <!-- which list: chips, not a dropdown — a dropdown hides how many
                lists exist and how big each one is -->
