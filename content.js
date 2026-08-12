@@ -223,6 +223,8 @@ async function catalogSave(j, a, kept, total, queue) {
 
 const HEALTH = "wpb_sitehealth";     // { [collectionSig]: record }, latest per collection
 const HEALTH_MAX = 300;              // oldest records fall off
+const PROFILE = "wpb_siteprofile";   // { [host]: what we learned by reading the page }
+const PROFILE_MAX = 200;
 
 const kvGet = key => new Promise(r => {
   if (!alive()) return r(null);
@@ -335,6 +337,107 @@ function selfDiagnose() {
   return out;
 }
 
+/* ---- reading the page instead of trusting our rule about it ---------------
+
+   The funnel above only REPORTS that a shop's adapter emptied a scan. Saying
+   it is not enough: a designer whose Aritzia list came back with no Excel has
+   to wait for a developer to change one regular expression, and in the
+   meantime the tool is broken for them.
+
+   So when the adapter this shop is routed to comes back with nothing, the
+   scan reads the page structurally — the same reader that already handles the
+   66 shops with no adapter at all — and, if what comes back looks like a real
+   product grid, collects THAT. The site's own markup outranks our stale
+   assumption about its addresses.
+
+   This is not intelligence and does not pretend to be. There is no model in
+   the extension (charter) and none is needed: "the repeating thing that has
+   links, pictures and prices in it" is a structural fact, and structure is
+   what a developer reads in F12 anyway. What it cannot do is invent data the
+   page never served — a composition that isn't in the HTML, a catalogue
+   behind a private API, a shop that answers a bot with a block page. Those
+   still surface as failures with the page photograph attached. */
+
+const RESCUE_MIN = 4;                // fewer tiles than this is not a grid
+
+// Guardrail: only accept a structural read that looks like merchandise.
+// A page of editorial banners can produce "links with images"; requiring
+// names on most of them plus prices or pictures keeps navigation chrome out.
+function plausibleGrid(rows) {
+  if (!Array.isArray(rows) || rows.length < RESCUE_MIN) return false;
+  const share = f => rows.filter(r => String(r[f] || "").trim()).length / rows.length;
+  return share("name") >= 0.6 && (share("price") >= 0.5 || share("image_url") >= 0.5);
+}
+
+function genericRead(doc, url) {
+  try {
+    const g = self.SITES && SITES.get && SITES.get("generic");
+    return g ? (g.scrapeList(doc || document, url || location.href) || []) : [];
+  } catch (e) { return []; }
+}
+
+// What the rejected addresses have in common, written the way a developer
+// would write the fix: /p/<slug>/N . Digits collapse to N, long slugs to
+// <slug>, so twelve product URLs come out as one pattern.
+function pathShape(urls) {
+  const shapes = {};
+  [].concat(urls || []).forEach(u => {
+    let p = "";
+    try { p = new URL(u, location.href).pathname; } catch (e) { return; }
+    const seg = p.split("/").filter(Boolean).map(s =>
+      /^\d+$/.test(s) ? "N" : (/\d/.test(s) && /[-_]/.test(s)) || s.length > 12 ? "<slug>" : s);
+    const key = "/" + seg.join("/");
+    shapes[key] = (shapes[key] || 0) + 1;
+  });
+  const best = Object.keys(shapes).sort((a, b) => shapes[b] - shapes[a])[0] || "";
+  return best;
+}
+
+/* Remember it per shop, so the next scan does not rediscover the same thing
+   and so the record can say WHICH adapters have gone stale. The profile never
+   silences the report — a shop being read structurally is exactly what the
+   developer needs to see. */
+async function learnProfile(host, info) {
+  try {
+    const all = (await kvGet(PROFILE)) || {};
+    const prev = all[host] || {};
+    all[host] = Object.assign({}, prev, info, {
+      host, learnedAt: Date.now(), hits: (prev.hits || 0) + 1,
+      firstAt: prev.firstAt || Date.now(),
+    });
+    const keys = Object.keys(all);
+    if (keys.length > PROFILE_MAX) {
+      keys.sort((x, y) => (all[x].learnedAt || 0) - (all[y].learnedAt || 0))
+        .slice(0, keys.length - PROFILE_MAX).forEach(k => delete all[k]);
+    }
+    await kvSet(PROFILE, all);
+  } catch (e) {}
+}
+
+const hostOf = u => { try { return new URL(u || location.href).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
+
+/* The repair has to reach the product page too, or it only half works.
+
+   A shop whose adapter no longer recognises its list addresses does not
+   recognise its product addresses either — Shopify's detail reader wants
+   "/products/" in the path and returns nothing for a shop that moved to
+   "/p/". The rows would come back with names and pictures and an empty
+   fabric column, which is the column this tool exists for. So on a repaired
+   page the site-neutral reader (JSON-LD, then visible text) goes first and
+   the adapter stays as the backup. */
+async function readDetail(a, url, repaired) {
+  if (!repaired || a.id === "generic") return a.fetchDetail(url);
+  const g = self.SITES && SITES.get && SITES.get("generic");
+  let open = null;
+  if (g && typeof g.fetchDetail === "function") {
+    try { open = await g.fetchDetail(url); } catch (e) {}
+    if (open && open.composition) return open;
+  }
+  let own = null;
+  try { own = await a.fetchDetail(url); } catch (e) {}
+  return (own && own.composition) ? own : (open || own);
+}
+
 function healthMark(rec) {
   if (!rec.count) return "❌";
   if (rec.named < rec.count || rec.imaged < rec.count || rec.priced < rec.count) return "⚠️";
@@ -342,6 +445,11 @@ function healthMark(rec) {
   // collected: single products legitimately state no blend, but a whole site
   // at zero means the extraction is broken — the user's core column.
   if (rec.withSpec && rec.count && rec.fabric === 0) return "⚠️";
+  /* A rescued page is never called ready. The designer's spreadsheet is
+     complete — that is the point of the rescue — but the shop is being read
+     around its own adapter, and calling that ✅ would hide the stale rule
+     forever, since a clean run downloads no site check file at all. */
+  if (rec.repair) return "⚠️";
   return "✅";
 }
 function healthNote(rec) {
@@ -351,7 +459,8 @@ function healthNote(rec) {
   if (rec.imaged < rec.count) miss.push(`image×${rec.count - rec.imaged}`);
   if (rec.priced < rec.count) miss.push(`price×${rec.count - rec.priced}`);
   if (rec.withSpec && rec.count && rec.fabric === 0) miss.push("fabric×all");
-  return miss.length ? `${rec.count} found · missing ${miss.join(" ")}` : `${rec.count} found · complete`;
+  const base = miss.length ? `${rec.count} found · missing ${miss.join(" ")}` : `${rec.count} found · complete`;
+  return rec.repair ? `${base} · recovered by reading the page (${rec.repair.adapter} adapter kept none)` : base;
 }
 
 /* When a whole site's fabric column came back empty, photograph ONE product
@@ -424,11 +533,15 @@ async function recordHealth(j, a, ent) {
       fabric: filled("fabric_composition"), withSpec: !!j.withSpec,
       ts: Date.now(),
     };
+    // the page was read around its adapter — the spreadsheet is whole, the rule is not
+    if (j.repair) rec.repair = j.repair;
     rec.mark = healthMark(rec);
     // Photograph the page only when something is wrong AND we are still looking
     // at the scanned collection (single-page scans stay on it; a paginated run
     // may have walked off it, and diagnosing the wrong page would mislead).
-    if (rec.mark !== "✅" && collectionSig(location.href) === rec.sig) rec.diag = selfDiagnose();
+    // A repaired page needs no photograph: the pattern line already says what
+    // to change, and a 4KB dump next to it only buries the answer.
+    if (rec.mark !== "✅" && !rec.repair && collectionSig(location.href) === rec.sig) rec.diag = selfDiagnose();
     /* Where in the pipeline the products were lost.
 
        "0 products" has two very different causes, and the page photograph
@@ -506,6 +619,10 @@ async function queueHealthExport(q) {
       lines.push(`   ${r.url}`);
       /* Put the funnel FIRST when we have it: it names the culprit in a
          sentence, and the page dump below is only needed when it doesn't. */
+      if (r.repair) lines.push(`   ⚑ recovered by reading the page: the ${r.repair.adapter} adapter kept ` +
+        `none of the ${r.repair.tiles} tiles, so the page's own markup was used instead.` +
+        `\n     the products here look like ${r.repair.pattern} — that is what the ${r.repair.adapter} ` +
+        `adapter's URL rule should accept. The spreadsheet for this site is complete.`);
       if (r.funnel) lines.push("   ⚑ " + r.funnel.note +
         "\n     rejected e.g. " + (r.funnel.rejectedUrls || []).join("  |  "));
       if (r.diag) lines.push("   diag: " + JSON.stringify(r.diag));
@@ -737,6 +854,10 @@ async function runStep(j) {
         const live = await g();
         if (!live || !live.active || live.paused) return;   // honor pause/stop mid-scroll
         let n = 0; try { n = (a.scrapeList(document, location.href) || []).length; } catch (e) {}
+        // An adapter that reads nothing here must not also stop the unrolling:
+        // at zero the count would be "stable" immediately and a lazy grid would
+        // never open, leaving the rescue below one viewport of tiles to work with.
+        if (!n && a.id !== "generic") n = genericRead(document, location.href).length;
         const h = document.body.scrollHeight;
         if (n === lastN && h === lastH) stable++; else stable = 0;
         lastN = n; lastH = h;
@@ -755,6 +876,24 @@ async function runStep(j) {
     let scraped = [];
     try { scraped = a.scrapeList(document, location.href) || []; }
     catch (e) { scraped = []; await report(`Page ${page} parse error (skipped): ${e && e.message || e}`); }
+    /* The adapter routed to this shop found nothing. Before accepting that,
+       read the page structurally — if it really is a grid of products, those
+       are the products, whatever our rule about this shop's addresses says.
+       (Aritzia: the grid was there all along and a "/product/" rule dropped
+       every tile, which produced a run with no spreadsheet at all.) */
+    if (!scraped.length && a.id !== "generic") {
+      const raw = genericRead(document, location.href);
+      if (plausibleGrid(raw)) {
+        scraped = raw;
+        const shape = pathShape(raw.map(r => r.product_url));
+        j.repair = { adapter: a.id, tiles: raw.length, via: "generic", pattern: shape };
+        await learnProfile(hostOf(location.href), {
+          adapter: a.id, via: "generic", pattern: shape, tiles: raw.length,
+          note: `${a.id} adapter reads nothing here; products look like ${shape}`,
+        });
+        await report(`The ${a.id} reader found nothing — recovered ${raw.length} products from the page itself`);
+      }
+    }
     j.seen = j.seen || {};
     let added = 0, hitCap = false;
     for (const r of scraped) {
@@ -880,7 +1019,7 @@ async function runStep(j) {
       const slice = j.items.slice(i, i + LANES);
       await Promise.all(slice.map(async it => {
         if (it._specDone) return;
-        try { applyDetail(it, await a.fetchDetail(it.product_url)); }
+        try { applyDetail(it, await readDetail(a, it.product_url, j.repair)); }
         catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run
         it._specDone = true;
       }));

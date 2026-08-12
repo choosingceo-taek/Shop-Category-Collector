@@ -184,6 +184,7 @@
     const bad = recs.filter(r => r.mark !== "✅");
     if (bad.length) console.log("--- paste this ---\n" + bad.map(r =>
       `${r.mark} ${r.brand} · ${r.label}\n   ${r.count} found (name ${r.named} · image ${r.imaged} · price ${r.priced}${r.withSpec ? ` · fabric ${r.fabric}` : ""}) | engine=${r.adapter}\n   ${r.url}` +
+      (r.repair ? `\n   ⚑ recovered structurally — ${r.repair.adapter} kept none of ${r.repair.tiles} tiles; products look like ${r.repair.pattern}` : "") +
       (r.funnel ? `\n   ⚑ ${r.funnel.note}\n     rejected e.g. ${(r.funnel.rejectedUrls || []).join("  |  ")}` : "") +
       (r.diag ? `\n   diag: ${JSON.stringify(r.diag)}` : "") +
       (r.diagDetail ? `\n   pdp: ${JSON.stringify(r.diagDetail)}` : "")).join("\n") + "\n--- end ---");
@@ -191,5 +192,19 @@
     return recs;
   };
 
-  console.log("devcheck ready. run:  devsweep()   |   devcheck()   |   devhealth()   |   devcheckStop()");
+  /* Shops the scans had to read around their own adapter. Each line is a
+     ready-made work item: the adapter whose URL rule went stale and the
+     address shape the shop actually uses now. Nobody had to open a page. */
+  self.devprofile = async function devprofile() {
+    const all = await new Promise(r => chrome.storage.local.get("wpb_siteprofile", o => r(o.wpb_siteprofile || {})));
+    const rows = Object.values(all).sort((a, b) => (b.learnedAt || 0) - (a.learnedAt || 0));
+    if (!rows.length) return console.log("nothing learned — every shop was read by its own adapter");
+    console.log(`${rows.length} shop(s) read structurally instead of by their adapter:`);
+    console.table(rows.map(r => ({ host: r.host, adapter: r.adapter, products: r.pattern,
+      tiles: r.tiles, times: r.hits, last: new Date(r.learnedAt).toISOString().slice(0, 16) })));
+    self.devprofileRows = rows;
+    return rows;
+  };
+
+  console.log("devcheck ready. run:  devsweep()   |   devcheck()   |   devhealth()   |   devprofile()   |   devcheckStop()");
 })();
