@@ -429,6 +429,34 @@ async function recordHealth(j, a, ent) {
     // at the scanned collection (single-page scans stay on it; a paginated run
     // may have walked off it, and diagnosing the wrong page would mislead).
     if (rec.mark !== "✅" && collectionSig(location.href) === rec.sig) rec.diag = selfDiagnose();
+    /* Where in the pipeline the products were lost.
+
+       "0 products" has two very different causes, and the page photograph
+       cannot tell them apart: either the page offered no tiles (a shop we
+       cannot read), or it offered plenty and this shop's adapter rejected
+       them all (a rule of ours that has gone stale). Aritzia was the second —
+       the grid was read, every tile found, and the product-URL filter dropped
+       all of them — and nothing in the report said so, which is what made it
+       a mystery instead of a one-line fix.
+
+       Only computed when the adapter came back empty, and only for a
+       dedicated adapter, so it costs one extra DOM pass exactly when that
+       pass is the answer. */
+    if (!rec.count && a.id !== "generic" && collectionSig(location.href) === rec.sig) {
+      try {
+        const g = self.SITES && SITES.get && SITES.get("generic");
+        const raw = g ? (g.scrapeList(document, location.href) || []) : [];
+        if (raw.length) {
+          rec.funnel = {
+            tilesOnPage: raw.length, keptByAdapter: 0, adapter: a.id,
+            note: `the page offered ${raw.length} tiles and the ${a.id} adapter kept none — ` +
+              `its own filters, not the shop, are what emptied this scan`,
+            // the shapes it rejected: this is what a changed URL pattern looks like
+            rejectedUrls: raw.slice(0, 3).map(r => String(r.product_url || "").slice(0, 140)),
+          };
+        }
+      } catch (e) {}
+    }
     // A site whose fabric came back empty for EVERY product gets one product
     // page photographed too — that is where the blend would live, and it is
     // the page the developer used to inspect by hand (Edikted, Alo).
@@ -476,6 +504,10 @@ async function queueHealthExport(q) {
       lines.push(`${r.mark} ${r.brand || "?"} · ${r.label || ""}`.trimEnd());
       lines.push(`   ${r.note_override || healthNote(r)}${r.adapter ? ` | engine=${r.adapter}` : ""}`);
       lines.push(`   ${r.url}`);
+      /* Put the funnel FIRST when we have it: it names the culprit in a
+         sentence, and the page dump below is only needed when it doesn't. */
+      if (r.funnel) lines.push("   ⚑ " + r.funnel.note +
+        "\n     rejected e.g. " + (r.funnel.rejectedUrls || []).join("  |  "));
       if (r.diag) lines.push("   diag: " + JSON.stringify(r.diag));
       if (r.diagDetail) lines.push("   pdp: " + JSON.stringify(r.diagDetail));
       lines.push("");

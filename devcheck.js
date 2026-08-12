@@ -184,6 +184,7 @@
     const bad = recs.filter(r => r.mark !== "✅");
     if (bad.length) console.log("--- paste this ---\n" + bad.map(r =>
       `${r.mark} ${r.brand} · ${r.label}\n   ${r.count} found (name ${r.named} · image ${r.imaged} · price ${r.priced}${r.withSpec ? ` · fabric ${r.fabric}` : ""}) | engine=${r.adapter}\n   ${r.url}` +
+      (r.funnel ? `\n   ⚑ ${r.funnel.note}\n     rejected e.g. ${(r.funnel.rejectedUrls || []).join("  |  ")}` : "") +
       (r.diag ? `\n   diag: ${JSON.stringify(r.diag)}` : "") +
       (r.diagDetail ? `\n   pdp: ${JSON.stringify(r.diagDetail)}` : "")).join("\n") + "\n--- end ---");
     self.devhealthRows = recs;
