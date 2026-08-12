@@ -203,6 +203,14 @@
     const t = Date.parse(i.launched_at);
     return isFinite(t) ? t : null;
   };
+  /* The shop states an instant (Shopify's published_at is a UTC timestamp),
+     and the reader lives in one timezone. Slicing the ISO string showed the
+     UTC day, so a product published on a Korean morning could read as the day
+     before. The day the designer means is the day where the designer is. */
+  const ymdLocal = t => {
+    const d = new Date(t);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
 
   const byBrand = (x, y) => {
     const a = String(x.brand || ""), b = String(y.brand || "");
@@ -580,8 +588,15 @@
       ? `<img class="thumb" src="${esc(i.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
       : `<div class="thumb ph">NO IMAGE</div>`;
     const link = i.product_url ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">` : "";
+    /* What the shop itself says, never our own guess: the date it published
+       this product to its online store. Only Shopify states one, so most rows
+       carry nothing here — and the tooltip says whose date it is, because
+       "published" is not the same as "designed" or "arrived in this
+       category". */
     const launched = i.launched_at && isFinite(Date.parse(i.launched_at))
-      ? `<div class="fb">Published ${new Date(Date.parse(i.launched_at)).toISOString().slice(0, 10)}</div>` : "";
+      ? `<div class="fb" title="The shop's own published date for this product${
+          i.launched_at ? " (" + esc(i.launched_at) + ")" : ""}">Published ${
+          ymdLocal(Date.parse(i.launched_at))}</div>` : "";
     return `<div class="c">
       ${link}${img}${link ? "</a>" : ""}
       <div class="body">

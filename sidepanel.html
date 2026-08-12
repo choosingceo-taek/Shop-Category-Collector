@@ -172,6 +172,7 @@
     margin-bottom:10px; font-size:12px; line-height:1.55; }
   .upnote .uphow { color:var(--muted); font-size:11px; margin:3px 0 8px; }
   .upnote button { width:100%; font-size:11px; font-weight:700; letter-spacing:.05em; }
+  .upnote.ready { border-color:rgba(46,139,87,.55); background:rgba(46,139,87,.07); }
   .explist { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
   .explist .cap { color:var(--muted); flex:1; }
   .explist button { font-size:10.5px; padding:4px 9px; letter-spacing:.05em; }
@@ -366,10 +367,21 @@
            LAB first (where the collected work turns into an answer), then the
            list you are curating, then adding the page you happen to be on —
            which is an action ON that list, so it sits with it. -->
+      <!-- Two different states, one line each. "There is a newer version"
+           (nothing done yet) and "the new files are already in your folder"
+           (update.bat has run — one click left). Telling them apart matters:
+           the second one is nearly finished and the first is not. -->
       <div class="upnote" id="upnote" hidden>
         <div><b>Version <span id="upver"></span></b> is available (you have <span id="upcur"></span>)</div>
-        <div class="uphow">Download the ZIP, overwrite your folder, reload the extension, then refresh the tab.</div>
-        <button id="upget">⬇ Get the new ZIP</button>
+        <div class="uphow">Double-click <b>update.bat</b> in your Market Lens folder (Mac: update.command).
+          It replaces the files for you.</div>
+        <button id="upget">⬇ Get the new ZIP instead</button>
+      </div>
+      <div class="upnote ready" id="upready" hidden>
+        <div><b>Version <span id="rdver"></span> is in your folder</b>, ready to run</div>
+        <div class="uphow">One step left: open <b>chrome://extensions</b> and press ↻ on Market Lens.
+          Your lists, settings and collected products are kept, and the pages you have open
+          pick it up on their own.</div>
       </div>
 
       <button id="catalog" class="labbtn">

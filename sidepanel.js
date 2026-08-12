@@ -976,16 +976,30 @@
     if (repaired) toast(`${repaired} site${repaired > 1 ? "s" : ""} restored to the run`);
     refreshProducts();
     observe();
-    // update notice: the worker checks GitHub (≤ once/6h); we just display it
+    /* Update notices, in the order that matters. If the new files are ALREADY
+       in the folder — update.bat has run — that is the only thing worth
+       saying, because one click finishes it. Otherwise fall back to "a newer
+       version exists", which is a longer road. */
     try {
-      chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
-        void chrome.runtime.lastError;
-        if (!r || !r.newer) return;
-        $("#upver").textContent = "v" + r.latest;
-        $("#upcur").textContent = "v" + r.current;
-        $("#upnote").hidden = false;
-        $("#upget").onclick = () => chrome.tabs.create({ url: r.zip });
+      chrome.storage.local.get("wpb_filesready", o => {
+        const ready = (o || {}).wpb_filesready;
+        if (ready && ready.onDisk) {
+          $("#rdver").textContent = ready.onDisk;
+          $("#upready").hidden = false;
+          return;
+        }
+        chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
+          void chrome.runtime.lastError;
+          if (!r || !r.newer) return;
+          $("#upver").textContent = "v" + r.latest;
+          $("#upcur").textContent = "v" + r.current;
+          $("#upnote").hidden = false;
+          $("#upget").onclick = () => chrome.tabs.create({ url: r.zip });
+        });
       });
+      // ask the worker to look at the folder right now, so opening the panel
+      // is the fast path rather than waiting for the five-minute check
+      chrome.runtime.sendMessage({ type: "checkFiles" }, () => void chrome.runtime.lastError);
     } catch (e) {}
   })();
 })();

@@ -172,6 +172,79 @@ try {
   chrome.permissions.onRemoved.addListener(() => { syncDynamicScripts(); });
 } catch (e) {}
 
+/* ---- noticing that the folder was replaced ---------------------------------
+
+   Until the team is on the Web Store, updating means replacing the folder on
+   disk — and the step people skip is the one after that: reload the extension,
+   refresh the tab. Nothing looks wrong when it is skipped; the old code just
+   keeps running, and the next bug report is about a bug fixed a week ago.
+
+   Chrome re-reads an unpacked extension's files on request, so the worker can
+   simply look: fetch its own manifest and compare the version on disk with the
+   version it is running. When they differ, update.bat (or update.command) has
+   already put the new files there and the panel says so in one line, with the
+   one step left.
+
+   It does NOT reload itself. chrome.runtime.reload() unloads an unpacked
+   extension and — measured, not assumed — does not reliably bring it back; an
+   extension that disappears from a designer's browser is a far worse outcome
+   than one click on chrome://extensions. What IS automatic is the part after
+   the reload: the engine goes back into the shop tabs that are already open,
+   which is what the F5 in the old instructions was for (and why "Extension
+   context invalidated" used to greet anyone who skipped it). */
+const DISK_CHECK = "wpb_diskcheck";
+const DISK_READY = "wpb_filesready";      // { onDisk, running, at }
+
+async function diskVersion() {
+  try {
+    const url = chrome.runtime.getURL("manifest.json") + "?t=" + Date.now();
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return "";
+    return String(((await res.json()) || {}).version || "");
+  } catch (e) { return ""; }
+}
+
+async function checkForReplacedFiles() {
+  try {
+    const running = chrome.runtime.getManifest().version;
+    const onDisk = await diskVersion();
+    const ready = onDisk && onDisk !== running ? { onDisk, running, at: Date.now() } : null;
+    await new Promise(r => (ready
+      ? chrome.storage.local.set({ [DISK_READY]: ready }, r)
+      : chrome.storage.local.remove(DISK_READY, r)));
+    try {
+      chrome.action.setBadgeText({ text: ready ? "↻" : "" });
+      if (ready) chrome.action.setBadgeBackgroundColor({ color: "#2e8b57" });
+    } catch (e) {}
+    return !!ready;
+  } catch (e) { return false; }
+}
+
+/* Straight after a reload, put the engine back into the shops already open.
+   The version is remembered so this runs once per new version rather than on
+   every worker wake-up. */
+async function reinjectOpenTabs() {
+  try {
+    const running = chrome.runtime.getManifest().version;
+    const seen = await new Promise(r => chrome.storage.local.get("wpb_ranversion", o => r(o.wpb_ranversion || "")));
+    if (seen === running) return;
+    await new Promise(r => chrome.storage.local.set({ wpb_ranversion: running }, r));
+    await new Promise(r => chrome.storage.local.remove(DISK_READY, r));
+    try { chrome.action.setBadgeText({ text: "" }); } catch (e) {}
+    if (!seen) return;                       // first ever run — nothing to refresh
+    const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+    for (const t of tabs) { try { await ensureEngine(t.id); } catch (e) {} }
+  } catch (e) {}
+}
+
+chrome.runtime.onStartup.addListener(() => { reinjectOpenTabs(); checkForReplacedFiles(); });
+chrome.runtime.onInstalled.addListener(() => {
+  reinjectOpenTabs();
+  try { chrome.alarms.create(DISK_CHECK, { periodInMinutes: 5 }); } catch (e) {}
+});
+reinjectOpenTabs();
+try { chrome.alarms.create(DISK_CHECK, { periodInMinutes: 5 }); } catch (e) {}
+
 /* ---- a list that scans itself ---------------------------------------------
 
    The LAB compares week to week, and a week nobody remembered to scan is a
@@ -275,7 +348,11 @@ async function onScheduleAlarm(name) {
     }
   }
 }
-chrome.alarms.onAlarm.addListener(a => { onScheduleAlarm(a && a.name); });
+chrome.alarms.onAlarm.addListener(a => {
+  const n = (a && a.name) || "";
+  if (n === DISK_CHECK) return void checkForReplacedFiles();
+  onScheduleAlarm(n);
+});
 
 chrome.runtime.onInstalled.addListener(() => { syncSchedules(); });
 chrome.runtime.onStartup.addListener(() => { syncSchedules(); });
@@ -299,6 +376,10 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   if (msg && msg.type === "ensureEngine" && msg.tabId != null) {
     ensureEngine(msg.tabId).then(send).catch(e => send({ ok: false, reason: String(e) }));
+    return true;
+  }
+  if (msg && msg.type === "checkFiles") {
+    checkForReplacedFiles().then(v => send({ ready: v })).catch(() => send({ ready: false }));
     return true;
   }
   if (msg && msg.type === "updateStatus") {
