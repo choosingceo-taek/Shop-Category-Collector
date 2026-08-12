@@ -92,7 +92,7 @@
     "women,womens,women's,woman,man,men,mens,men's,girls,boys,kids,unisex,adult," +
     "plus,size,sizes,fit,fits,regular,length,piece,pieces,pack,set,item,items,style,styles," +
     "features,featuring,crafted,made,design,designed,designs,fabric,fabrics,material," +
-    "new,now,collection,edition,line,label,zw," +
+    "new,now,collection,edition,line,label,zw,blend,blended,mix,touch,look," +
     // garment nouns — the category dimension's job
     "top,tops,tee,tees,shirt,shirts,tshirt,t-shirt,blouse,blouses,dress,dresses,skirt,skirts," +
     "pant,pants,trouser,trousers,jean,jeans,short,shorts,jacket,jackets,coat,coats,blazer," +
@@ -121,6 +121,68 @@
       .filter(w => !SIZE_WORD.test(w) && !(SIZE_RANGE.test(w) && w.split("-").every(p => SIZE_WORD.test(p) || /^\d+w?$/.test(p))));
   }
 
+  /* ---- what a product NAME actually tells you ------------------------------
+
+     A shop writes three different kinds of fact into a product name, and a
+     designer tracks them separately:
+
+       원단  material   what it is made of — linen, denim, leather, cashmere
+       조직  weave      how the cloth is built — poplin, rib, jacquard, ponte
+       디테일 detail    what was done to the garment — ruched, corset, peplum
+
+     Mixed into one "keyword" list they compete: a season where linen doubles
+     and a season where ruching doubles are different findings, and reading
+     them off one ranking means reading past two thirds of it.
+
+     The first two are WHITELISTS, and deliberately so — unlike silhouette
+     vocabulary, the names of fibres and weaves are a closed, stable set that
+     has not changed in a century, so naming them is accurate rather than
+     limiting. The third stays a stoplist, exactly as before: whatever is left
+     after the stopwords, the materials and the weaves is a design detail, so
+     a silhouette nobody has seen yet still arrives on its own.
+
+     Composition data (the 원단 column) remains the stronger source for what a
+     garment is made of; this reads the NAME, which is the only place a shop
+     states the weave and the detail. */
+  const MATERIAL = new Set((
+    "cotton,linen,silk,wool,cashmere,merino,alpaca,mohair,angora,leather,suede,shearling," +
+    "denim,viscose,rayon,modal,tencel,lyocell,cupro,nylon,polyester,acrylic,acetate," +
+    "spandex,elastane,lycra,bamboo,hemp,ramie,jute,pima,supima,organic,recycled,vegan," +
+    "faux,down,feather,fur,sherpa,shell,mesh-knit,twill-cotton"
+  ).split(","));
+
+  const WEAVE = new Set((
+    // wovens
+    "poplin,twill,sateen,satin,chambray,oxford,flannel,gabardine,seersucker,voile,gauze," +
+    "chiffon,organza,georgette,crepe,taffeta,velvet,velour,corduroy,cord,canvas,drill," +
+    "tweed,herringbone,houndstooth,jacquard,brocade,damask,tulle,lace,eyelet,broderie," +
+    // knits and structures
+    "jersey,rib,ribbed,interlock,pique,ponte,scuba,waffle,thermal,terry,fleece,boucle," +
+    "cable,pointelle,mesh,net,crochet,macrame,plisse,pleat-knit,slub,marl,melange,heather," +
+    "quilted,padded,brushed,bonded,ottoman,milano"
+  ).split(","));
+
+  // Which bucket a name word belongs to, or "" when it is neither.
+  function kindOf(word) {
+    const w = String(word || "").toLowerCase();
+    if (MATERIAL.has(w)) return "material";
+    if (WEAVE.has(w)) return "weave";
+    return "";
+  }
+
+  /* Split a name's keywords into the three kinds. Every word appears in
+     exactly one bucket, so counting them never double-counts a product. */
+  function classifyKeywords(text) {
+    const out = { material: [], weave: [], detail: [] };
+    const seen = new Set();
+    nameKeywords(text).forEach(w => {
+      if (seen.has(w)) return;
+      seen.add(w);
+      out[kindOf(w) || "detail"].push(w);
+    });
+    return out;
+  }
+
   // One item -> a normalized record the aggregations read.
   function normItem(it) {
     it = it || {};
@@ -144,6 +206,9 @@
       designFacets: design.facets,
       hasDesign: design.facets.length > 0 || !!design.text,
       keywords: [...new Set(nameKeywords(name + " " + design.text))],
+      /* The same words, sorted into what they actually are. `keywords` is
+         kept whole so anything reading it is unaffected. */
+      nameKinds: classifyKeywords(name + " " + design.text),
       product_url: it.product_url || "",
       image_url: it.image_url || "",
     };
@@ -357,7 +422,8 @@
   }
 
   const API = {
-    parsePrice, parseFibers, parseColors, parseDesign, nameKeywords, normItem, normScan,
+    parsePrice, parseFibers, parseColors, parseDesign, nameKeywords, classifyKeywords,
+    kindOf, MATERIAL, WEAVE, normItem, normScan,
     aggregate, compare, priceHistogram, mean, median, tally,
     isoWeek, weekly, weeklyTrend, inspoImages,
   };

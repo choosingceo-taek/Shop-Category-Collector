@@ -79,9 +79,20 @@
       label: "Colour",
       keysOf: it => [...new Set(Calc.parseColors(it.colorways).map(titleCase))],
     },
+    /* The three things a product NAME states, kept apart on purpose — a
+       season where linen doubles and a season where ruching doubles are
+       different findings, and one merged ranking hides both. */
+    material: {
+      label: "Material in name",
+      keysOf: it => Calc.normItem(it).nameKinds.material.map(titleCase),
+    },
+    weave: {
+      label: "Weave / structure",
+      keysOf: it => Calc.normItem(it).nameKinds.weave.map(titleCase),
+    },
     keyword: {
-      label: "Design keyword",
-      keysOf: it => Calc.normItem(it).keywords,
+      label: "Design detail",
+      keysOf: it => Calc.normItem(it).nameKinds.detail.map(titleCase),
     },
     brand: { label: "Brand", keysOf: it => (it.brand ? [it.brand] : []) },
     category: { label: "Category", keysOf: it => (it.category ? [it.category] : []) },
