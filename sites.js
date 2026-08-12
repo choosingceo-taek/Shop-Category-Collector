@@ -3018,7 +3018,22 @@
     const isProduct = u => cfg.isProduct ? cfg.isProduct(u) : !!productKey(u);
 
     function scrapeList(doc, url) {
-      const raw = generic.scrapeList(doc, url).filter(r => isProduct(r.product_url));
+      /* The product-URL shape narrows the tiles; it must never erase them.
+
+         A house-brand site is recognised by its address, and its product
+         pages follow a pattern (Aritzia's /product/<slug>/<id>.html). Shops
+         change those patterns — and when they do, a filter written as a hard
+         requirement turns a working scan into zero products, silently: the
+         grid was read, every tile was found, and then all of them were
+         dropped for not matching a rule about last year's URLs.
+
+         So the filter is a preference. If it keeps nothing while the generic
+         scrape found tiles, the tiles win and the run reports what is on the
+         page. A slightly noisy row is recoverable; an empty spreadsheet with
+         no explanation is not. */
+      const all = generic.scrapeList(doc, url);
+      const kept = all.filter(r => isProduct(r.product_url));
+      const raw = kept.length ? kept : all;
       const pageCat = listingCategory(doc, url);
       const seen = new Set(); const out = [];
       for (const r of raw) {

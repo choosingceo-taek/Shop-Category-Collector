@@ -336,8 +336,7 @@
   $("#x").addEventListener("click", close);
   $("#hide").addEventListener("click", async () => {
     close();
-    host.style.display = "none";
-    await set({ [HIDDEN]: true });
+    await set({ [HIDDEN]: true });          // the storage listener takes it away
   });
   // Scanning belongs to the panel, but the page you are looking at is the one
   // case where starting from here saves a round trip.
@@ -356,22 +355,44 @@
     $("#run").textContent = on ? "Scanning…" : "▶ Scan this page";
   }
 
+  /* Hiding is a setting, not a one-way door.
+
+     The button used to remove itself from the page and leave nothing behind
+     that could bring it back — the only way to collect again was to find the
+     preference nobody knew existed. It is now a stored flag the panel can
+     flip, and this listens for that flip so the button reappears on the page
+     you are already looking at rather than after a refresh you would have to
+     guess at. */
+  let mounted = false;
+  async function mount() {
+    if (mounted) return;
+    mounted = true;
+    document.documentElement.appendChild(host);
+    await load();
+    paintJob();
+  }
+  function unmount() {
+    if (!mounted) return;
+    mounted = false;
+    close();
+    try { host.remove(); } catch (e) {}
+  }
+
   if (alive()) {
     try {
       chrome.storage.onChanged.addListener((ch, area) => {
         if (area !== "local") return;
-        if (ch[JOB]) { job = ch[JOB].newValue || null; paintJob(); }
-        if (ch.wpb_lists) { load(); }
+        if (ch[JOB]) { job = ch[JOB].newValue || null; if (mounted) paintJob(); }
+        if (ch.wpb_lists && mounted) { load(); }
+        if (ch[HIDDEN]) { ch[HIDDEN].newValue ? unmount() : mount(); }
       });
     } catch (e) {}
   }
 
   (async () => {
     const o = await get([JOB, HIDDEN]);
-    if (o[HIDDEN]) return;                    // user tucked it away
     job = o[JOB] || null;
-    document.documentElement.appendChild(host);
-    await load();
-    paintJob();
+    if (o[HIDDEN]) return;                    // tucked away — the panel can bring it back
+    await mount();
   })();
 })();

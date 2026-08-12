@@ -499,7 +499,15 @@ async function queueHealthExport(q) {
       document.body.appendChild(el); el.click(); el.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
-    await report(`${bad.length} site(s) need attention — details saved as ${filename}`);
+    /* The LAST line the panel shows has to be the whole story. When the run
+       collected nothing there is no spreadsheet, and saying only "1 site needs
+       attention" leaves the designer looking for an Excel that was never
+       written — which is exactly how a stray .txt became the only visible
+       outcome of a scan. */
+    const collected = ((q && q.rows) || []).length;
+    await report(collected
+      ? `${bad.length} site${bad.length === 1 ? "" : "s"} need attention — details saved as ${filename}`
+      : `No products collected, so there is no Excel. ${filename} says what each site returned — send it to the developer.`);
   } catch (e) { /* the report is a bonus — never fail the run over it */ }
 }
 
@@ -513,7 +521,19 @@ async function queueHealthExport(q) {
    yields the work already done. */
 async function queueExport(q) {
   const rows = (q && q.rows) || [];
-  if (!rows.length) return;
+  /* A run that collected nothing has to SAY so.
+
+     There is no spreadsheet to write, so this used to return in silence — and
+     what the designer saw was a run that ended and a stray .txt appearing
+     next to nothing, with no way to tell a broken shop from a mistake of her
+     own. The sitecheck file explains which sites failed; this line explains
+     that the file is the only output and why. */
+  if (!rows.length) {
+    const n = ((q && q.list) || []).length;
+    await report(`No products collected from ${n} site${n === 1 ? "" : "s"} — ` +
+      `no Excel to write. The sitecheck file saved beside it says what each site returned.`);
+    return;
+  }
   const a = adapter();
   if (!a) return;
   const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);

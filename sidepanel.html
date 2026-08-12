@@ -61,6 +61,8 @@
   .xbtn { font-size:10px; padding:2px 7px; border-radius:999px; background:var(--wash);
     border-color:transparent; color:var(--muted); }
   .xbtn:hover { color:var(--ink); }
+  /* off is a state, so it takes the muted treatment rather than vanishing */
+  .iconbtn.off { opacity:.45; }
   .cap { text-transform:uppercase; letter-spacing:.1em; font-size:10px; }
   .row { display:flex; gap:6px; align-items:center; }
   .grow { flex:1; min-width:0; }
@@ -385,6 +387,10 @@
             <!-- the list's OWN tools: rename it, delete it, take it out.
                  Putting sites IN is a different job and lives with Add. -->
             <span class="ftools" id="ltools">
+              <!-- The grab button on the page can be tucked away; this is how
+                   it comes back. It rides in the existing tool row, so a
+                   setting nobody needs daily costs no height. -->
+              <button class="iconbtn" id="fabtoggle" title="Grab button on pages" aria-label="Grab button on pages">◉</button>
               <button class="iconbtn" id="renlist" title="Rename this list" aria-label="Rename this list">✎</button>
               <button class="iconbtn" id="dellist" title="Delete this list" aria-label="Delete this list">🗑</button>
               <button class="xbtn" id="explisttxt" title="Export as .txt — edit it and import again">.txt</button>

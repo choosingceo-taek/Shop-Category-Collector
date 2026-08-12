@@ -584,6 +584,33 @@
     if (v === "products") refreshProducts();
   }));
 
+  /* Bring the on-page grab button back (or send it away).
+
+     Hiding it used to be permanent in practice: the page removed the button
+     and nothing anywhere offered it back, so the main way to collect a page
+     disappeared for good. The flag lives in storage and the button on every
+     open tab reacts to it, so this reaches the page you are looking at
+     without a refresh. */
+  const FAB_HIDDEN = "wpb_fab_hidden";
+  function paintFabToggle(hidden) {
+    const b = $("#fabtoggle");
+    b.classList.toggle("off", !!hidden);
+    b.textContent = hidden ? "◎" : "◉";
+    b.title = hidden
+      ? "Grab button is hidden on pages — click to show it again"
+      : "Grab button is showing on pages — click to hide it";
+  }
+  chrome.storage.local.get(FAB_HIDDEN, o => paintFabToggle(!!(o || {})[FAB_HIDDEN]));
+  $("#fabtoggle").addEventListener("click", () => {
+    chrome.storage.local.get(FAB_HIDDEN, o => {
+      const next = !((o || {})[FAB_HIDDEN]);
+      chrome.storage.local.set({ [FAB_HIDDEN]: next }, () => {
+        paintFabToggle(next);
+        toast(next ? "Grab button hidden on pages" : "Grab button back on pages");
+      });
+    });
+  });
+
   $("#addbtn").addEventListener("click", addCurrentPage);
   $("#catalog").addEventListener("click", () =>
     chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") }));
