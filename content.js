@@ -213,9 +213,10 @@ async function catalogSave(j, a, kept, total, queue) {
    are now automatic. Every scan already exercises the real engine, so the
    scan ITSELF records a per-site verdict (found / gaps / broken), and when a
    site comes up broken it photographs the page structure right there — the
-   same facts the diagnose script gathered by hand. A Scan all that hits
-   failures downloads one `sitecheck_….txt` next to the Excel; sending that
-   file is the entire manual step that remains.
+   same facts the diagnose script gathered by hand. The whole report is kept
+   in storage and printed by devsitecheck(); a scan writes ONE file and it is
+   the spreadsheet, because a stray .txt in the Downloads folder is the
+   developer's business showing up in the designer's.
 
    Read-only by design: the diagnosis never changes what a scan collects,
    never blocks the run (every piece is wrapped), and adds nothing when all
@@ -223,6 +224,7 @@ async function catalogSave(j, a, kept, total, queue) {
 
 const HEALTH = "wpb_sitehealth";     // { [collectionSig]: record }, latest per collection
 const HEALTH_MAX = 300;              // oldest records fall off
+const SITECHECK = "wpb_sitecheck";   // the latest run's report, kept instead of downloaded
 const PROFILE = "wpb_siteprofile";   // { [host]: what we learned by reading the page }
 const PROFILE_MAX = 200;
 
@@ -587,10 +589,11 @@ async function recordHealth(j, a, ent) {
   } catch (e) { /* diagnosis must never cost a scan */ }
 }
 
-/* One text file per list run, ONLY when something failed: the verdict for
-   every URL plus the stored page photograph of each failure — the exact
-   output the developer used to assemble by hand with devcheck + diagnose
-   scripts. The designer's part is just "send this file". */
+/* One report per list run, ONLY when something failed: the verdict for every
+   URL plus the stored page photograph of each failure — the exact output the
+   developer used to assemble by hand with devcheck + diagnose scripts. It is
+   kept in storage rather than downloaded (devsitecheck() prints it), so a
+   scan still leaves exactly one file behind and that file is the Excel. */
 async function queueHealthExport(q) {
   try {
     const list = (q && q.list) || [];
@@ -629,34 +632,28 @@ async function queueHealthExport(q) {
       if (r.diagDetail) lines.push("   pdp: " + JSON.stringify(r.diagDetail));
       lines.push("");
     }
-    const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);
-    const stamp = new Date().toISOString().slice(0, 10);
-    const filename = `sitecheck_${tag}_${stamp}.txt`;
+    /* A scan produces ONE file, and it is the spreadsheet (user's rule).
+
+       The site check used to download itself as a .txt next to the Excel. It
+       is the developer's channel, not the designer's: what it bought was a
+       stray text file in the Downloads folder of someone who only asked for a
+       spreadsheet, and on the run that collected nothing it was the ONLY thing
+       that appeared. So the report is kept, not written out — it stays in
+       storage where devsitecheck() prints it — and the run's last line still
+       says plainly that something needs attention. */
     const text = lines.join("\n");
-    const b64 = btoa(unescape(encodeURIComponent(text)));
-    const saved = await new Promise(res => {
-      try {
-        chrome.runtime.sendMessage({ type: "downloadFile", filename, b64, mime: "text/plain" },
-          r => res(!chrome.runtime.lastError && !!(r && r.ok)));
-      } catch (e) { res(false); }
+    await kvSet(SITECHECK, {
+      name: q.name || "list", at: Date.now(), text,
+      bad: bad.length, total: recs.length,
     });
-    if (!saved) {
-      const blob = new Blob([text], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const el = document.createElement("a");
-      el.href = url; el.download = filename;
-      document.body.appendChild(el); el.click(); el.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }
     /* The LAST line the panel shows has to be the whole story. When the run
-       collected nothing there is no spreadsheet, and saying only "1 site needs
-       attention" leaves the designer looking for an Excel that was never
-       written — which is exactly how a stray .txt became the only visible
-       outcome of a scan. */
+       collected nothing there is no spreadsheet either, and a bare "1 site
+       needs attention" leaves the designer looking for a file that was never
+       written. */
     const collected = ((q && q.rows) || []).length;
     await report(collected
-      ? `${bad.length} site${bad.length === 1 ? "" : "s"} need attention — details saved as ${filename}`
-      : `No products collected, so there is no Excel. ${filename} says what each site returned — send it to the developer.`);
+      ? `Excel saved · ${bad.length} of ${recs.length} site${recs.length === 1 ? "" : "s"} need attention`
+      : `No products collected, so there is no Excel — ${bad.length} of ${recs.length} site${recs.length === 1 ? "" : "s"} came back empty or broken.`);
   } catch (e) { /* the report is a bonus — never fail the run over it */ }
 }
 
@@ -672,15 +669,13 @@ async function queueExport(q) {
   const rows = (q && q.rows) || [];
   /* A run that collected nothing has to SAY so.
 
-     There is no spreadsheet to write, so this used to return in silence — and
-     what the designer saw was a run that ended and a stray .txt appearing
-     next to nothing, with no way to tell a broken shop from a mistake of her
-     own. The sitecheck file explains which sites failed; this line explains
-     that the file is the only output and why. */
+     There is no spreadsheet to write, so this used to return in silence, and
+     a run that ended with nothing at all looked the same as one that worked.
+     The site check that follows names the sites; this line says why the file
+     the designer was waiting for never arrived. */
   if (!rows.length) {
     const n = ((q && q.list) || []).length;
-    await report(`No products collected from ${n} site${n === 1 ? "" : "s"} — ` +
-      `no Excel to write. The sitecheck file saved beside it says what each site returned.`);
+    await report(`No products collected from ${n} site${n === 1 ? "" : "s"} — nothing to put in an Excel.`);
     return;
   }
   const a = adapter();
@@ -737,7 +732,7 @@ async function queueAdvance() {
     q.active = false; q.finishedAt = Date.now();
     await setQueue(q);
     await queueExport(q);          // job is still active here, so progress shows
-    await queueHealthExport(q);    // failures (if any) leave as one sitecheck txt
+    await queueHealthExport(q);    // failures (if any) are kept for devsitecheck()
     await closeJob();
     return false;
   }

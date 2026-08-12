@@ -26,12 +26,15 @@
      devcheck({ brandsOnly: true, detail: true, limit: 40 })
      devcheckStop()             // stop a run in progress
      devhealth()                // what scans ALREADY recorded — no walking
+     devsitecheck()             // the last run's full report (kept, not downloaded)
+     devsitecheck(true)         // …and save it as a .txt to send on
 
    Since v1.67 the scans record all of this by themselves: every Scan all
    leaves a verdict per URL in storage, failing sites get an automatic page
-   photograph (the diagnose-generic facts), and a run with failures downloads
-   a sitecheck_….txt on its own. devhealth() reads that record instantly;
-   devcheck() is only for probing a list WITHOUT running a real scan.
+   photograph (the diagnose-generic facts), and the whole report is kept for
+   devsitecheck(). A scan downloads ONE file and it is the spreadsheet.
+   devhealth() reads the record instantly; devcheck() is only for probing a
+   list WITHOUT running a real scan.
 */
 (() => {
   const PROBE_WAIT = 15000;     // how long to allow one page load
@@ -192,6 +195,27 @@
     return recs;
   };
 
+  /* The last run's site check, in full.
+
+     A scan leaves one file behind and it is the spreadsheet, so this report
+     is kept in storage instead of downloaded. Everything that used to be in
+     sitecheck_….txt is here: the verdict per URL, the funnel, the page
+     photograph, the PDP sample. Pass true to save it as a file anyway. */
+  self.devsitecheck = async function devsitecheck(save) {
+    const rec = await new Promise(r => chrome.storage.local.get("wpb_sitecheck", o => r(o.wpb_sitecheck || null)));
+    if (!rec || !rec.text) return console.log("no site check stored — no run has failed yet");
+    console.log(`site check · ${rec.name} · ${new Date(rec.at).toISOString().slice(0, 16)} · ${rec.bad}/${rec.total} need attention`);
+    console.log(rec.text);
+    if (save) {
+      const url = "data:text/plain;charset=utf-8," + encodeURIComponent(rec.text);
+      const name = `sitecheck_${String(rec.name).replace(/[^\w가-힣]+/g, "_").slice(0, 30)}.txt`;
+      try { await chrome.downloads.download({ url, filename: name }); console.log("saved " + name); }
+      catch (e) { console.log("could not save: " + (e && e.message || e)); }
+    }
+    self.devsitecheckText = rec.text;      // copy(devsitecheckText) to send it on
+    return rec;
+  };
+
   /* Shops the scans had to read around their own adapter. Each line is a
      ready-made work item: the adapter whose URL rule went stale and the
      address shape the shop actually uses now. Nobody had to open a page. */
@@ -206,5 +230,5 @@
     return rows;
   };
 
-  console.log("devcheck ready. run:  devsweep()   |   devcheck()   |   devhealth()   |   devprofile()   |   devcheckStop()");
+  console.log("devcheck ready. run:  devsweep()  |  devcheck()  |  devhealth()  |  devsitecheck()  |  devprofile()  |  devcheckStop()");
 })();

@@ -111,12 +111,18 @@
   function paintStats() {
     const brands = new Set(items.map(i => i.brand).filter(Boolean)).size;
     const dated = items.filter(i => i.launched_at).length;
+    // How many rows carry a photo at all. A screenful of NO IMAGE has two
+    // possible causes and this number separates them in one glance: low here
+    // means the scan collected none, high here means the shop refused to serve
+    // what was collected.
+    const shot = items.filter(i => i.image_url).length;
     const where = scopeId
       ? ((lists.find(l => l.id === scopeId) || {}).name || "this list") + " · "
       : "";
     $("#stats").textContent = items.length
       ? where + `${items.length.toLocaleString()} products · ${brands} brands` +
         (merged && !scopeId ? ` · ${merged} duplicates merged` : "") +
+        ` · ${shot} with a photo` +
         (dated ? ` · ${dated} with a published date` : "")
       : (scopeId ? where + "nothing collected yet" : "Nothing collected yet");
   }
@@ -276,7 +282,7 @@
     grid.innerHTML = rows.map(i => {
       const onSale = i.price_was && i.price && priceNum(i.price_was) > priceNum(i.price);
       const img = i.image_url
-        ? `<img class="thumb" src="${esc(i.image_url)}" alt="" loading="lazy">`
+        ? `<img class="thumb" src="${esc(i.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
         : `<div class="thumb"></div>`;
       const link = i.product_url ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">` : "";
       return `<div class="c${picked.has(i.key) ? " sel" : ""}" data-k="${esc(i.key)}">
@@ -571,7 +577,7 @@
   function feedCard(i) {
     const onSale = i.price_was && i.price && priceNum(i.price_was) > priceNum(i.price);
     const img = i.image_url
-      ? `<img class="thumb" src="${esc(i.image_url)}" alt="" loading="lazy">`
+      ? `<img class="thumb" src="${esc(i.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
       : `<div class="thumb ph">NO IMAGE</div>`;
     const link = i.product_url ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">` : "";
     const launched = i.launched_at && isFinite(Date.parse(i.launched_at))
@@ -592,15 +598,20 @@
 
   /* A stored URL can still be a dead image — the shop deleted the product,
      rotated its CDN path, or refuses the request. The <img> then renders as a
-     silent grey box that reads as "broken app". Swap it for the same NO IMAGE
-     placeholder an empty value gets, so the card states the truth instead.
+     silent grey box that reads as "broken app".
+
+     It says WHICH of the two happened, because they are fixed in different
+     places and the card used to blame both on "NO IMAGE": nothing was
+     collected (scan side) versus the shop would not serve what we collected
+     (network side). Hovering shows the address that failed.
      (Attached in JS — MV3 CSP forbids inline onerror handlers.) */
   function armImgFallback(root) {
     root.querySelectorAll("img.thumb").forEach(img =>
       img.addEventListener("error", () => {
         const ph = document.createElement("div");
         ph.className = "thumb ph";
-        ph.textContent = "NO IMAGE";
+        ph.textContent = "IMAGE BLOCKED";
+        ph.title = "the shop refused this address:\n" + img.getAttribute("src");
         img.replaceWith(ph);
       }, { once: true }));
   }
