@@ -40,8 +40,13 @@ const g = () => new Promise(r => {
   try { chrome.storage.local.get(JOB, o => r(chrome.runtime.lastError ? null : (o[JOB] || null))); }
   catch (e) { r(null); }
 });
+/* Every write stamps the time. All progress already flows through here —
+   report(), each phase change, each persisted batch — so `at` is the run's
+   heartbeat, and something outside the page can tell "still working" from
+   "stopped" without knowing anything about phases. */
 const s = j => new Promise(r => {
   if (!alive()) return r();
+  if (j && typeof j === "object") j.at = Date.now();
   try { chrome.storage.local.set({ [JOB]: j }, () => r()); } catch (e) { r(); }
 });
 const clear = () => new Promise(r => {
@@ -150,6 +155,7 @@ const getQueue = () => new Promise(r => {
 });
 const setQueue = q => new Promise(r => {
   if (!alive()) return r();
+  if (q && typeof q === "object") q.at = Date.now();   // heartbeat, as above
   try { chrome.storage.local.set({ [QUEUE]: q }, () => r()); } catch (e) { r(); }
 });
 
@@ -731,6 +737,20 @@ async function queueExport(q) {
   } catch (e) {
     await report("List Excel failed: " + (e && e.message || e) + " (use ⬇ Excel in the panel to retry)");
   }
+}
+
+/* A shop answered a different address than the one we asked for. Kept so the
+   site report can say so — a category that arrives by redirect is worth
+   knowing about even when the scan itself went fine, because the address in
+   the list may be the one that has gone stale. */
+async function noteRedirect(asked, landed) {
+  try {
+    const q = await getQueue();
+    if (!q || !q.active) return;
+    q.redirects = (q.redirects || []).slice(-40);
+    q.redirects.push({ asked, landed, at: Date.now() });
+    await setQueue(q);
+  } catch (e) {}
 }
 
 // Called when a scan finishes. Advances the queue, or ends it.
@@ -1381,8 +1401,36 @@ function ownsAndMatches(job, myTab, sig) {
   const q = await getQueue();
   if (!q || !q.active || !q.list || !q.list.length) return;
   if (q.tabId != null && me != null && q.tabId !== me) return;
+
+  /* A run that has walked its whole list still has to be finished — the
+     spreadsheet is written from a page, because that is where ExcelJS lives.
+     The stall watchdog can push the index past the end without a page to do
+     it, so if we land here already past the end, close the run properly
+     rather than leaving it "active" with nothing driving it. */
+  if (q.idx >= q.list.length) { queueAdvance(); return; }
+
   const cur = q.list[q.idx];
-  if (!cur || !sameCollection(cur.url, location.href)) return;
+  if (!cur) return;
+  if (!sameCollection(cur.url, location.href)) {
+    /* The shop sent us somewhere else.
+
+       This line used to be a bare `return`, and that is how a run stopped
+       dead: the queue stayed active, the index never moved, no error was
+       written, and the panel went on showing a scan in progress. Anything
+       that changes the address on the way in does it — a locale or region
+       redirect, a consent interstitial, a canonical rewrite.
+
+       On the SAME shop it is still the shop's own answer for that address, so
+       scan where we were sent and record the redirect; a category page reached
+       by redirect is the page the designer asked for. A different host is not
+       ours to interpret, so it is left to the watchdog to report and step over.
+       Either way, nothing waits forever. */
+    if (hostOf(location.href) && hostOf(location.href) === hostOf(cur.url) && adapter()) {
+      noteRedirect(cur.url, location.href);
+    } else {
+      return;
+    }
+  }
   if (!adapter()) return;                       // unsupported page — leave it alone
   startJob({ withSpec: q.withSpec !== false, filters: q.filters || {}, queued: true,
     maxItems: q.maxItems });

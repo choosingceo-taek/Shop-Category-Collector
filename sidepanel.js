@@ -230,6 +230,36 @@
      an adapter for become Scan, the rest become Scan? (included in every run,
      access requested when it starts). Only a non-web address — a file:// or a
      chrome:// page, which cannot be added anyway — can still be Ref. */
+  /* One judgement about a URL, used everywhere a site enters a list.
+
+     It used to exist twice with different strength. The repair asked "do we
+     name an adapter for it, OR do we already hold the origin"; the add paths
+     (Import, Paste, a starter list) asked only the first half. Almost no shop
+     answers the first half — Shopify is detected from markers inside the page
+     and half the team's brands read with the structural engine — so pasting
+     eight shops the manifest fully covers filed all eight as unknown, and the
+     list came back reading "SCAN?" on every row. It scanned fine; it just said
+     it might not, until the panel was closed and opened again and the repair
+     caught up. A tag that appears on everything tells the designer nothing,
+     and a hedge on a site we own is simply wrong.
+
+     true = certain · undefined = genuinely unknown (still runs, access asked
+     for at the start) · false = not a web page at all, which is the only Ref. */
+  async function judgeScannable(url) {
+    if (!/^https?:/i.test(url || "")) return false;
+    if (adapterFor(url)) return true;
+    return (await hasHostAccess(url).catch(() => false)) ? true : undefined;
+  }
+
+  // Stamp a batch the same way, in parallel — a starter list is hundreds long.
+  async function stampScannable(entries) {
+    await Promise.all((entries || []).map(async e => {
+      const v = await judgeScannable(e.url);
+      if (v === undefined) delete e.scannable; else e.scannable = v;
+    }));
+    return entries;
+  }
+
   async function repairScannable() {
     /* Undefined is repaired too, not just false. "Scan?" is honest only while
        we genuinely cannot tell; once the origin is ours the answer is known,
@@ -244,8 +274,8 @@
       // Certain when we can name the adapter or we already hold the origin
       // (the engine goes in either way); otherwise unknown, which still runs.
       const was = e.scannable;
-      if (adapterFor(e.url) || await hasHostAccess(e.url).catch(() => false)) e.scannable = true;
-      else delete e.scannable;
+      const v = await judgeScannable(e.url);
+      if (v === undefined) delete e.scannable; else e.scannable = v;
       if (e.scannable !== was) fixed++;      // report only what actually moved
     }
     return fixed;                   // the caller saves — see loadLists
@@ -365,7 +395,7 @@
           </div>
           ${e.scannable === false ? '<span class="tag">Ref</span>'
             : e.scannable ? '<span class="tag on">Scan</span>'
-            : '<span class="tag q" title="Only the page itself can tell — included in the run">Scan?</span>'}
+            : '<span class="tag q" title="A shop we have not been given access to yet. It IS included in the run — Chrome asks for access when the run starts.">Scan?</span>'}
           <button class="act go" title="Open">↗</button>
           <button class="act ren" title="Rename">✎</button>
           <button class="act del" title="Remove">✕</button>
@@ -916,11 +946,11 @@
     renderList();
   });
   $("#addbulk").addEventListener("click", async () => {
-    const parsed = L.parseList($("#bulk").value)
-      // adapterFor can't see platform-detected shops from a URL, so a miss is
-      // "unknown" (undefined) rather than false — the page itself decides later
-      .map(e => Object.assign(e, adapterFor(e.url) ? { scannable: true } : {}));
+    const parsed = L.parseList($("#bulk").value);
     if (!parsed.length) return toast("No URLs found");
+    // the same judgement the repair makes, so a pasted shop we already hold
+    // reads Scan straight away instead of Scan? until the panel is reopened
+    await stampScannable(parsed);
     const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
     await L.save(lists); $("#bulk").value = "";
@@ -1033,7 +1063,7 @@
     try { parsed = await gridFromFile(file); }
     catch (err) { return toast("Could not read that file"); }
     if (!parsed || !parsed.length) return toast("No URLs found");
-    parsed = parsed.map(en => Object.assign(en, adapterFor(en.url) ? { scannable: true } : {}));
+    await stampScannable(parsed);
     const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
     await L.save(lists);

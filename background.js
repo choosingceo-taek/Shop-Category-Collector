@@ -439,6 +439,94 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   ensureEngine(tabId).catch(() => {});
 });
 
+/* ---- a run must never be able to hang quietly -------------------------------
+
+   A list run walks its tab from URL to URL, and each page's engine picks the
+   job back up. When a page never gets there, nothing in the page can notice —
+   there is no page. Reported on adidas: the scan stopped, the panel went on
+   saying a run was in progress, and no spreadsheet ever arrived.
+
+   So the worker watches from outside. Every job and queue write stamps `at`,
+   and all progress flows through those two writes, so a heartbeat older than
+   STALL_MS means the run is stuck rather than busy. The window is generous —
+   a big grid scrolls, then up to sixty product pages are fetched one at a
+   time — and each of those steps writes, so a real run never looks idle.
+
+   Being stuck is then treated as a failed URL, not a failed run: it is
+   recorded for the site report, the index moves on, and the tab is sent to the
+   next address, where the engine resumes exactly as it does normally. The last
+   URL is finished by the same code that finishes any run, from the page. */
+const STALL_MS = 4 * 60 * 1000;
+const WATCH_ALARM = "wpb_runwatch";
+
+async function armRunWatch() {
+  try {
+    const q = await new Promise(r => chrome.storage.local.get("wpb_queue", o => r((o || {}).wpb_queue)));
+    if (q && q.active) {
+      const a = await chrome.alarms.get(WATCH_ALARM);
+      if (!a) await chrome.alarms.create(WATCH_ALARM, { periodInMinutes: 1, delayInMinutes: 1 });
+    } else {
+      await chrome.alarms.clear(WATCH_ALARM);
+    }
+  } catch (e) {}
+}
+
+async function checkRunStall() {
+  let q;
+  try {
+    q = await new Promise(r => chrome.storage.local.get("wpb_queue", o => r((o || {}).wpb_queue)));
+  } catch (e) { return; }
+  if (!q || !q.active) { try { await chrome.alarms.clear(WATCH_ALARM); } catch (e) {} return; }
+  // a run on hold is not a stalled run
+  const job = await new Promise(r => chrome.storage.local.get("wpb_job", o => r((o || {}).wpb_job)));
+  if (job && job.paused) return;
+  const beat = Math.max(q.at || q.startedAt || 0, (job && job.at) || 0);
+  if (!beat || Date.now() - beat < STALL_MS) return;
+
+  const cur = (q.list || [])[q.idx];
+  /* Recorded the same way a failed scan is, so it reaches the site report
+     rather than only the console: the designer's question is "which sites need
+     attention", and a site that never answered is one of them. */
+  try {
+    const health = await new Promise(r => chrome.storage.local.get("wpb_sitehealth", o => r((o || {}).wpb_sitehealth || {})));
+    const key = (cur && cur.url) || ("stalled-" + q.idx);
+    health[key] = { url: (cur && cur.url) || "", brand: (cur && cur.brand) || "",
+      label: (cur && cur.label) || "", adapter: "—", count: 0, mark: "❌",
+      why: "the page never answered — it may have redirected off the shop, asked for " +
+           "a consent or region choice, or blocked automated visits", ts: Date.now() };
+    await new Promise(r => chrome.storage.local.set({ wpb_sitehealth: health }, r));
+  } catch (e) {}
+
+  q.stalled = (q.stalled || []).concat([{ url: (cur && cur.url) || "", at: Date.now() }]);
+  q.idx += 1;
+  q.at = Date.now();
+  try {
+    await new Promise(r => chrome.storage.local.set({ wpb_queue: q }, r));
+    // the half-finished job must not resume on the next page and export there
+    if (job && job.active) {
+      job.active = false;
+      await new Promise(r => chrome.storage.local.set({ wpb_job: job }, r));
+    }
+  } catch (e) {}
+
+  /* Send the tab onward. Past the end there is no next address, so the tab is
+     sent back to a page of this run that we hold — the engine loads there and
+     the normal finish path writes the spreadsheet. */
+  const next = (q.list || [])[q.idx];
+  const dest = next ? next.url
+    : ((q.list || []).slice(0, q.idx).reverse().find(e => e && e.url) || {}).url;
+  if (!dest || q.tabId == null) return;
+  try { await chrome.tabs.update(q.tabId, { url: dest }); } catch (e) {}
+}
+
+chrome.alarms.onAlarm.addListener(a => {
+  if (a && a.name === WATCH_ALARM) checkRunStall();
+});
+chrome.storage.onChanged.addListener((ch, area) => {
+  if (area === "local" && ch.wpb_queue) armRunWatch();
+});
+armRunWatch();
+
 /* Allowing a site is the moment the button should appear on it — not after a
    refresh the person has no reason to expect. Registration alone only reaches
    the NEXT page load, so the tabs already open on that site are handed the
