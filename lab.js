@@ -386,6 +386,39 @@
     const label = (T.DIMS[dim] || {}).label || dim;
     const unit = granularity === "week" ? "week" : "month";
 
+    /* The two axes this tool exists for, always on screen.
+
+       A designer's question is "what is happening to fabric" and "what is
+       happening to the details" — composition and design vocabulary. Those two
+       used to be one choice among eight in a selector, so seeing both meant
+       switching back and forth and holding the first in your head. They are now
+       the headline: one long-term share line each, with what is moving under
+       it. The selector still drives everything below, for the seasons when the
+       question is colour or brand.
+
+       Fabric reads the measured composition; design detail reads the product
+       name AND the shop's own copy from the product page, which is where the
+       square necks and the ruching are actually stated. */
+    const axis = (d) => {
+      const label = (T.DIMS[d] || {}).label || d;
+      const ser = T.series(items, Object.assign({ dim: d, top: 6 }, base));
+      const mv = T.movers(items, Object.assign({ dim: d, top: 3, minCount: opts.minCount || 3 }, base));
+      const now = (ser.series || []).map(x => ({
+        key: x.key, last: [...(x.values || [])].reverse().find(v => v != null),
+      })).filter(x => x.last != null).sort((a, b) => b.last - a.last).slice(0, 3);
+      return `<section class="sec axis"><h3>${d === "fabric" ? "🧵" : "✂️"} ${esc(label)}
+        <span class="sub">share of each ${unit}\u2019s new arrivals</span></h3>
+        ${lineChart(ser, { alt: label + " share over time" })}
+        <div class="axisnow">${now.length
+          ? "Now: " + now.map(x => `<b>${esc(x.key)}</b> ${x.last}%`).join(" · ")
+          : "not enough collected yet"}</div>
+        <div class="axismv">${(mv.risers || []).length
+          ? "Rising: " + (mv.risers || []).map(r => `${esc(r.key)} +${r.delta}%p`).join(" · ")
+          : "nothing rising yet"}${(mv.fallers || []).length
+          ? " &nbsp;·&nbsp; Falling: " + (mv.fallers || []).map(r => `${esc(r.key)} ${r.delta}%p`).join(" · ")
+          : ""}</div></section>`;
+    };
+
     el.innerHTML = `
       ${opts.tierChips || ""}
       <div class="labhead">
@@ -403,6 +436,8 @@
             <div class="ts">new or consecutively rising</div></div>
         </div>
       </div>
+
+      <div class="movers axespair">${axis("fabric")}${axis("keyword")}</div>
 
       <section class="sec"><h3>📊 ${esc(label)} pulse
         <span class="sub">${unit} on ${unit}, like for like — same shops in both</span></h3>

@@ -388,10 +388,43 @@
     }
     return {
       composition, colorways: colors.join("; "), color_count: colors.length || "",
-      design: "", brand: brand || fallbackBrand || "", name,
+      design: designText(descr, liText), brand: brand || fallbackBrand || "", name,
       sizes: sizes.join("; "), image_url: image,
       reason: composition ? "" : "not_found",
     };
+  }
+
+  /* The words a shop writes about the garment itself.
+
+     The product NAME is a thin sample of a design: "Airbrush Tank" says
+     nothing about the square neck, the ruching or the cropped hem, and those
+     are what a designer tracks. The shop states them on the product page, in
+     the description and the spec bullets — so the same reader that already
+     goes there for the composition brings that copy back, and the keyword
+     axes in the LAB read name AND copy instead of name alone.
+
+     Stored as text, not as extracted keywords, on purpose: the vocabulary that
+     decides what counts as a detail lives in the report layer and improves
+     over time, and text lets an old scan benefit from a better reading without
+     being re-scanned. Bounded hard — this is a sample of the copy, not a
+     mirror of the page, and it is carried on every product row. */
+  const DESIGN_TEXT_MAX = 400;
+  function designText(descr, liText) {
+    const parts = [];
+    const push = t => {
+      const clean = String(t || "").replace(/\s+/g, " ").trim();
+      if (clean) parts.push(clean);
+    };
+    push(descr);
+    /* Spec bullets, but not the care label: "machine wash cold" and "imported"
+       are on every garment ever made and would drown the real vocabulary. */
+    String(liText || "").split("\n").forEach(line => {
+      const t = line.replace(/\s+/g, " ").trim();
+      if (!t || t.length < 4 || t.length > 120) return;
+      if (/\b(wash|bleach|tumble|dry clean|iron|imported|made in|style ?#|sku|model is|wears? (a )?size)\b/i.test(t)) return;
+      push(t);
+    });
+    return parts.join(" · ").slice(0, DESIGN_TEXT_MAX);
   }
 
   /* Fetch a product page and read it. Bounded, credentialed (so a shop that
@@ -1543,7 +1576,7 @@
         price_was = sym + (p.compare_at_price / 100).toFixed(2);
       }
       return {
-        composition, colorways, design: "",
+        composition, colorways, design: copyOf(p.description || p.body_html),
         brand: realVendor(p.vendor, p.handle),
         name: p.title || "", name_canonical: !!p.title,
         category: p.type || "",
@@ -1643,6 +1676,16 @@
       return s.slice(0, 2) === "//" ? "https:" + s : s;
     }
 
+    /* Shopify hands the shop's own copy back in its JSON, so the design words
+       come for free — no product page fetch needed for the 47% of the team's
+       list that runs on it. Same bound as the shared reader. */
+    const copyOf = html => String(html || "")
+      .replace(/<br\s*\/?>|<\/(p|li|div|h\d)>/gi, " · ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&[a-z]+;|&#\d+;/gi, " ")
+      .replace(/\s*·\s*(?=·)/g, "")
+      .replace(/\s+/g, " ").trim().slice(0, 400);
+
     function parseCollectionProduct(p) {
       const opt = (p.options || []).find(o => /colou?r/i.test(((o && (o.name || o)) || "") + ""));
       const colorways = opt ? (opt.values || []).join("; ") : "";
@@ -1655,7 +1698,7 @@
         if (was != null && now != null && was > now) price_was = was.toFixed(2);
       }
       return {
-        composition, colorways, design: "",
+        composition, colorways, design: copyOf(p.body_html),
         brand: realVendor(p.vendor, p.handle),
         name: p.title || "", name_canonical: !!p.title,
         category: p.product_type || "",
