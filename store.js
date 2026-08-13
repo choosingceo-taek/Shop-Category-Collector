@@ -178,10 +178,28 @@
      Edikted scan produced 64 rows with names, prices and publish dates and NO
      IMAGE on every one of them. A missing scheme is repaired, not punished;
      anything still not http(s) after that is genuinely unusable. */
+  /* Cleaned on write AND on read, so rows an older scan poisoned are repaired
+     the next time the LAB opens — no migration, no re-scan.
+
+     The path check is the one that matters. srcset used to be split on
+     commas, and image addresses contain them (Adobe Scene7's
+     ?op_usm=0.5,2,10,0, Cloudinary's c_fill,w_600,h_800), so a candidate
+     shattered and a fragment like "0&fmt=webp" was stored as a product photo.
+     Resolved against the shop it even became a plausible https:// address, so
+     the row counted as HAVING a picture and the scan graded the page healthy
+     — which is why four shops showed IMAGE BLOCKED for three releases while
+     every check said they were fine. An address has a path; a fragment does
+     not. A row with nothing usable is honestly empty, and an empty one is
+     what the photo-coverage check is watching for. */
   function cleanImage(u) {
     let s = String(u || "").trim();
     if (s.slice(0, 2) === "//") s = "https:" + s;
-    return (!s || IMG_PLACEHOLDER.test(s) || !/^https?:/i.test(s)) ? "" : s;
+    if (!s || IMG_PLACEHOLDER.test(s) || !/^https?:/i.test(s)) return "";
+    try {
+      const p = new URL(s).pathname;
+      if (!p || p === "/") return "";
+    } catch (e) { return ""; }
+    return s;
   }
 
   /* A brand value that is not actually a brand.

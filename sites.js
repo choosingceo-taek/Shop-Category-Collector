@@ -1166,18 +1166,64 @@
        Keep in sync with IMG_PLACEHOLDER in store.js. */
     const PLACEHOLDER = /^data:|\/[^/?#]*(?:blank|placeholder|spacer|transparent|1x1|pixel|noimage|no-image|dummy)[^/?#]*\.(?:gif|png|svg|jpe?g|webp)(?:[?#]|$)/i;
 
+    /* srcset cannot be split on commas, because image addresses contain them.
+
+       This was measured against the shapes the team's shops actually serve:
+       Adobe Scene7, which lululemon and Aritzia use, writes
+       `?wid=800&op_usm=0.5,2,10,0&fmt=webp`, and Cloudinary puts
+       `c_fill,w_600,h_800` in the PATH. Splitting on "," shattered one
+       address into five, and the piece that happened to carry the width
+       descriptor won — so the row was stored holding "0&fmt=webp". Asked for
+       that, lululemon answered {"message":"Bad Request."}, which is what the
+       designer saw when they opened one. Three fixes had been shipped for
+       "IMAGE BLOCKED" on the assumption that the address was right and we
+       were being refused; the address was wrong the whole time.
+
+       What separates two candidates is a comma that follows a complete
+       candidate — and a URL may never contain whitespace, so the tokens are
+       unambiguous: read the address up to the first space, then its optional
+       descriptor, then expect a comma. */
+    function parseSrcset(srcset) {
+      const s = String(srcset || "");
+      const out = [];
+      let i = 0;
+      while (i < s.length) {
+        while (i < s.length && /[\s,]/.test(s[i])) i++;          // between candidates
+        if (i >= s.length) break;
+        const start = i;
+        while (i < s.length && !/\s/.test(s[i])) i++;            // the address
+        let url = s.slice(start, i);
+        // a trailing comma IS the separator, and then there is no descriptor
+        let ended = false;
+        while (url.slice(-1) === ",") { url = url.slice(0, -1); ended = true; }
+        let desc = "";
+        if (!ended) {
+          while (i < s.length) {
+            while (i < s.length && /[ \t]/.test(s[i])) i++;
+            if (i >= s.length) break;
+            if (s[i] === ",") { i++; break; }
+            const d0 = i;
+            while (i < s.length && !/[\s,]/.test(s[i])) i++;
+            desc = s.slice(d0, i);
+            if (s[i] === ",") { i++; break; }
+          }
+        }
+        if (url) out.push({ url, desc });
+      }
+      return out;
+    }
+
     function widestFromSrcset(srcset) {
       let best = "", bestW = -1;
-      // Drop data: URIs before splitting — they are placeholders anyway, and a
-      // base64 payload contains commas that would shatter one candidate into
-      // several, leaving a fragment that looks like a valid URL.
-      String(srcset || "").replace(/data:\S*/gi, " ").split(",").forEach(part => {
-        const bits = part.trim().split(/\s+/);
-        const url = bits[0];
-        if (!url || PLACEHOLDER.test(url)) return;
-        const d = bits[1] || "";
-        const w = /(\d+)w$/.test(d) ? parseInt(d, 10)
-          : /(\d+(?:\.\d+)?)x$/.test(d) ? parseFloat(d) * 1000
+      parseSrcset(srcset).forEach(({ url, desc }) => {
+        if (!url || PLACEHOLDER.test(url) || /^data:/i.test(url)) return;
+        /* Debris guard. If a shop ever serves a srcset this parser cannot
+           read, a fragment like "0&fmt=webp" must not be stored as a photo.
+           An address either has a path, or it is a bare filename beside the
+           page — anything else is a piece of a query string. */
+        if (!url.includes("/") && !/^[\w@.~-]+\.[a-z0-9]{2,5}$/i.test(url)) return;
+        const w = /(\d+)w$/.test(desc) ? parseInt(desc, 10)
+          : /(\d+(?:\.\d+)?)x$/.test(desc) ? parseFloat(desc) * 1000
           : 0;
         if (w > bestW) { bestW = w; best = url; }
       });
@@ -1489,7 +1535,7 @@
       fetchDetail,
       templateUrl: null,
       _tileAncestor: tileAncestor, _signature: signature, _bestName: bestName,
-      _bestImage: bestImage, _widestFromSrcset: widestFromSrcset,
+      _bestImage: bestImage, _widestFromSrcset: widestFromSrcset, _parseSrcset: parseSrcset,
       _jsonLdProducts: jsonLdProducts, _inRecommendation: inRecommendation,
     };
   })();
