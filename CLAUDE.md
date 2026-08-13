@@ -377,6 +377,16 @@
   (툴팁에 그 주소)이고, 썸네일에 `referrerpolicy="no-referrer"`를 달아 핫링크
   차단을 먼저 피한다. 헤더 줄에 **`N with a photo`**가 상시 표시되어 재스캔 없이
   둘 중 어느 쪽인지 즉시 보인다.
+- **사진 주소를 만드는 곳은 이제 한 곳이다**(`absImage`, v1.81.2). Edikted를 고친
+  자리는 **목록 타일**뿐이었는데, 레이지 그리드가 사진을 끝내 안 내주면 사진은
+  **상품 페이지**(JSON-LD `image` · `og:image`)에서 온다 — 그 리더들이 똑같이
+  `/^https?:/`를 요구해 몰이 스킴 없이/루트 상대로 적은 주소를 버리고 있었다.
+  Aritzia(하우스 브랜드)와 Victoria's Secret(어댑터 없음=generic)이 정확히 이
+  경로에 의존한다. 이제 **타일 · JSON-LD · og:image · 플랫폼 API 전부**가
+  `absImage(u, base)` 하나를 거친다(스킴 없으면 https:, 상대경로면 그 페이지
+  기준으로 해석, 그래도 http(s)가 아니면 버림). 리더 4벌에 흩어져 있던 같은
+  규칙을 한 줄로 합쳤고, PDP 리더에는 **페이지 URL을 넘긴다**(없으면 상대경로를
+  풀 기준이 없다). `pdpimage-e2e` 12건 — 수정 전에는 5건 실패.
 - **사진 주소는 저장 전에 절대주소가 된다**(v1.79.1). Edikted 64행이 이름·가격·
   게시일까지 다 있는데 카드가 전부 NO IMAGE였던 원인: Shopify 테마는 사진을
   **스킴 없이**(`//edikted.co.uk/cdn/shop/files/x.jpg`) 쓰는데 `cleanImage`가

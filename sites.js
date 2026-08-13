@@ -62,6 +62,31 @@
     return out;
   }
 
+  /* Every image address that reaches a row has to be absolute.
+
+     Shops write the same picture three ways — a full URL, protocol-relative
+     (//shop/cdn/…, what Shopify emits) and root-relative (/cdn/shop/files/…)
+     — and the last two only mean something next to the page they came from.
+     Stored raw they are later resolved against the extension itself, which is
+     how an Edikted scan produced 64 rows with names, prices and no pictures
+     at all. Every reader goes through here: listing tiles, JSON-LD, og:image,
+     and the platform APIs.
+
+     A missing scheme is repaired, a relative path is resolved, and anything
+     still not http(s) after that (data: URIs, javascript:, junk) is dropped
+     rather than stored as a broken address. */
+  function absImage(u, base) {
+    let s = String(u || "").trim();
+    if (!s) return "";
+    if (s.slice(0, 2) === "//") s = "https:" + s;
+    if (!/^https?:/i.test(s)) {
+      const from = base || (typeof location !== "undefined" ? location.href : "");
+      if (!from) return "";
+      try { s = new URL(s, from).toString(); } catch (e) { return ""; }
+    }
+    return /^https?:/i.test(s) ? s : "";
+  }
+
   // Return the substring starting at `start` ('{' or '[') through its matching
   // close, respecting strings/escapes. Robust to trailing "; window.x=..." junk.
   function sliceBalanced(str, start) {
@@ -316,7 +341,7 @@
      stronger source is never overwritten by a weaker one. Everything is
      validated: composition passes the fibre parser, colours and sizes must be
      short label-shaped strings. Nothing is inferred. */
-  function readProductPage(doc, rawHtml, fallbackBrand) {
+  function readProductPage(doc, rawHtml, fallbackBrand, pageUrl) {
     let brand = "", name = "", image = "", material = "", descr = "";
     const colors = [], sizes = [];
     const addTo = (arr, v) => {
@@ -338,7 +363,7 @@
         if (!image) {
           const im = [].concat(n.image || [])[0];
           const u = im && (im.url || im.contentUrl || im);
-          if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+          if (typeof u === "string") image = absImage(u, pageUrl);
         }
         [].concat(n.color || []).forEach(c => addTo(colors, c));
         [].concat(n.size || []).forEach(z => addTo(sizes, z));
@@ -359,8 +384,7 @@
     // listing tile and JSON-LD gave nothing.
     if (!image && doc.querySelector) {
       const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
-      const u = og && og.getAttribute("content");
-      if (u && /^https?:/i.test(u)) image = u.trim();
+      image = absImage(og && og.getAttribute("content"), pageUrl);
     }
     return {
       composition, colorways: colors.join("; "), color_count: colors.length || "",
@@ -389,7 +413,7 @@
       return empty((e && e.name === "AbortError") ? "timeout" : "error");
     }
     try {
-      return readProductPage(new DOMParser().parseFromString(html, "text/html"), html, fallbackBrand);
+      return readProductPage(new DOMParser().parseFromString(html, "text/html"), html, fallbackBrand, url);
     } catch (e) { return empty("error"); }
   }
 
@@ -617,7 +641,7 @@
             name: name.trim(),
             price: (price || "").trim(),
             product_url: abs(a.getAttribute("href")),
-            image_url: (tile.querySelector("img") || {}).src || "",
+            image_url: absImage((tile.querySelector("img") || {}).src, location.href),
             category, department: "",
             id: tile.getAttribute && (tile.getAttribute("data-item-id") || ""),
           });
@@ -1345,11 +1369,11 @@
           if (p.name && (!existing.name || isSlugName(existing.name, existing.product_url)))
             existing.name = p.name;
           if (!existing.price && p.price) existing.price = p.price;
-          if (!existing.image_url && p.image) existing.image_url = p.image;
+          if (!existing.image_url && p.image) existing.image_url = absImage(p.image, base);
         } else if (p.name && out.length < MAX_TILES) {
           const rec = { brand: "", category: "", department: "",
             name: p.name, price: p.price || "", product_url: p.url,
-            image_url: p.image || "", id: p.url };
+            image_url: absImage(p.image, base), id: p.url };
           byPath.set(key, rec); out.push(rec);
         }
       });
@@ -1498,7 +1522,9 @@
           if (!name || name.length < 3 || !price) return;
           seen.add(href);
           items.push({ brand: "", category, department: "", name: name.slice(0, 200), price,
-            product_url: href, image_url: img ? (img.getAttribute("src") || img.getAttribute("data-src") || "") : "", id: href });
+            product_url: href,
+            image_url: img ? absImage(img.getAttribute("src") || img.getAttribute("data-src"), url) : "",
+            id: href });
         });
       }
       return items;
@@ -2115,7 +2141,7 @@
           if (!image) {
             const im = [].concat(n.image || [])[0];
             const u = im && (im.url || im.contentUrl || im);
-            if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+            if (typeof u === "string") image = absImage(u, url);
           }
           [].concat(n.color || []).forEach(c => addTo(colors, c));
           [].concat(n.size || []).forEach(z => addTo(sizes, z));
@@ -2180,8 +2206,7 @@
       // listing tile and JSON-LD gave nothing.
       if (!image && doc.querySelector) {
         const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
-        const u = og && og.getAttribute("content");
-        if (u && /^https?:/i.test(u)) image = u.trim();
+        image = absImage(og && og.getAttribute("content"), url);
       }
       return {
         composition, colorways: colors.join("; "), color_count: colorCount || "", image_url: image,
@@ -2404,7 +2429,7 @@
       return out;
     }
 
-    function parseDetailDoc(doc, rawHtml) {
+    function parseDetailDoc(doc, rawHtml, url) {
       let brand = "", name = "", image = "";
       const colors = [], sizes = [];
       const addTo = (arr, v) => {
@@ -2423,7 +2448,7 @@
           if (!image) {
             const im = [].concat(n.image || [])[0];
             const u = im && (im.url || im.contentUrl || im);
-            if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+            if (typeof u === "string") image = absImage(u, url);
           }
           [].concat(n.color || []).forEach(c => addTo(colors, c));
           [].concat(n.size || []).forEach(z => addTo(sizes, z));
@@ -2468,8 +2493,7 @@
       // listing tile and JSON-LD gave nothing.
       if (!image && doc.querySelector) {
         const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
-        const u = og && og.getAttribute("content");
-        if (u && /^https?:/i.test(u)) image = u.trim();
+        image = absImage(og && og.getAttribute("content"), url);
       }
       return {
         composition, colorways: colors.join("; "), design: parts.join("\n").slice(0, 400), image_url: image,
@@ -2493,7 +2517,7 @@
         return empty((e && e.name === "AbortError") ? "timeout" : "error");
       }
       try {
-        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html);
+        return parseDetailDoc(new DOMParser().parseFromString(html, "text/html"), html, url);
       } catch (e) { return empty("error"); }
     }
 
@@ -2622,7 +2646,7 @@
           if (!image) {
             const im = [].concat(n.image || [])[0];
             const u = im && (im.url || im.contentUrl || im);
-            if (typeof u === "string" && /^https?:/i.test(u)) image = u;
+            if (typeof u === "string") image = absImage(u, url);
           }
           [].concat(n.color || []).forEach(c => addTo(colors, c));
           [].concat(n.size || []).forEach(z => addTo(sizes, z));
@@ -2639,8 +2663,7 @@
       // listing tile and JSON-LD gave nothing.
       if (!image && doc.querySelector) {
         const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
-        const u = og && og.getAttribute("content");
-        if (u && /^https?:/i.test(u)) image = u.trim();
+        image = absImage(og && og.getAttribute("content"), url);
       }
       return {
         composition, colorways: colors.join("; "), design: "",
@@ -2963,7 +2986,7 @@
           const img = a.querySelector && a.querySelector("img");
           rows.set(id, {
             id, product_url: abs, name: "", price: "", price_was: "", category, brand,
-            image_url: img ? (img.getAttribute("src") || img.getAttribute("data-src") || "") : "",
+            image_url: img ? absImage(img.getAttribute("src") || img.getAttribute("data-src"), url) : "",
           });
         });
         capture.ids.forEach(id => {
@@ -3071,7 +3094,7 @@
 
     // A house-brand PDP is read exactly like any other product page; the only
     // thing this site knows that the generic reader doesn't is its own brand.
-    const parseDetailDoc = (doc, rawHtml, url) => readProductPage(doc, rawHtml, cfg.brand);
+    const parseDetailDoc = (doc, rawHtml, url) => readProductPage(doc, rawHtml, cfg.brand, url);
     const fetchDetail = url => fetchProductPage(url, cfg.brand);
 
     function context(doc) {
