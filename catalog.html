@@ -315,6 +315,16 @@
            is a working-set control rather than a delete-your-history button.
            It rides the line that is already here. -->
       <button class="datachip" id="datachip" title="What this catalog is holding">·</button>
+      <!-- Opened from the chip, closed by default, so it costs no height until
+           someone asks. Everything here is about the catalog as a whole, which
+           is why it sits by the size and not in the products toolbar. -->
+      <div class="databox" id="databox" hidden>
+        <span id="datafacts"></span>
+        <button id="datatrim">Free up space…</button>
+        <button id="dataout">Back up (.json)</button>
+        <button id="datain">Merge in a backup…</button>
+        <input type="file" id="datafile" accept=".json,application/json" hidden>
+      </div>
     </div>
     <div class="filters">
       <!-- Grouped by what each control does, not by what fits on the line:

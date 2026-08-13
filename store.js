@@ -232,12 +232,13 @@
     // to several (two lists may watch the same category), so this is a union
     // rather than a last-writer-wins field — that is what lets "export this
     // list's results" mean exactly the products that list collected.
-    if (meta && meta.listId) {
-      const ids = new Set([].concat(out.listIds || []));
-      ids.add(meta.listId);
-      out.listIds = [...ids];
-      out.listName = meta.listName || out.listName || "";
-    }
+    /* A row can also ARRIVE with list membership of its own — that is what an
+       imported catalog carries — so the union takes both sides. Losing the
+       stored side would quietly un-file a product from the list that collected
+       it, and "show me this list's results" would come back short. */
+    const ids = new Set([].concat(oldRec && oldRec.listIds || [], incoming && incoming.listIds || []));
+    if (meta && meta.listId) { ids.add(meta.listId); out.listName = meta.listName || out.listName || ""; }
+    if (ids.size) out.listIds = [...ids];
     out.addedAt = (oldRec && oldRec.addedAt) || Date.now();
     out.updatedAt = Date.now();
     out.seenCount = ((oldRec && oldRec.seenCount) || 0) + 1;
@@ -403,6 +404,71 @@
     };
   }
 
+  /* ---- moving a catalog between browsers ----------------------------------
+
+     Every designer runs this in their own Chrome, and IndexedDB is per browser
+     — so there are as many catalogs as there are people, none of them aware of
+     the others. Two consequences the team feels: a person's history dies with
+     their machine, and a trend built from four people's scans cannot be seen by
+     any of them.
+
+     Merging is well defined here, which is what makes a plain file enough. A
+     product's identity is its URL, so the same garment scanned by two people is
+     one row; the survivor keeps the EARLIEST addedAt, because first-seen is what
+     the weekly trend buckets on; list membership is a union. Frozen weeks merge
+     by the same never-shrink rule a rebuild uses. So one browser can take
+     everyone's file and hold the team's LAB, and nobody's numbers are invented
+     in the process. */
+  async function exportAll() {
+    const [products, snapshots, projects] = await Promise.all([
+      all("products"), all("snapshots"), all("projects"),
+    ]);
+    return { format: "market-lens-catalog", version: 1, at: Date.now(),
+      products, snapshots, projects };
+  }
+
+  async function importAll(data) {
+    const out = { products: 0, added: 0, updated: 0, snapshots: 0, projects: 0 };
+    if (!data || data.format !== "market-lens-catalog") throw new Error("not a Market Lens backup");
+    const items = [].concat(data.products || []);
+    if (items.length) {
+      const db = await open();
+      await new Promise((res, rej) => {
+        const t = db.transaction("products", "readwrite");
+        const P = t.objectStore("products");
+        t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+        items.forEach(it => {
+          const key = productKey(it);
+          if (!key) return;
+          const g = P.get(key);
+          g.onsuccess = () => {
+            const prev = g.result;
+            if (prev) out.updated++; else out.added++;
+            /* merge() stamps addedAt with "now" for a row it has not seen, which
+               is right for a scan and wrong for an import: this row was first
+               seen on someone else's machine, on the day their scan saw it. The
+               incoming date wins when it is earlier, so a merged trend keeps
+               pointing at when the garment actually appeared. */
+            const rec = merge(prev, it, { scanId: it.scanId || "", source: it.source || "" });
+            const first = Math.min(prev && prev.addedAt || Infinity, it.addedAt || Infinity);
+            if (isFinite(first)) rec.addedAt = first;
+            rec.seenCount = Math.max((prev && prev.seenCount) || 0, it.seenCount || 0) || 1;
+            P.put(rec);
+          };
+        });
+      });
+      out.products = items.length;
+    }
+    if ((data.snapshots || []).length) {
+      const r = await putSnapshots(data.snapshots);
+      out.snapshots = r.written;
+    }
+    for (const p of data.projects || []) {
+      try { await saveProject(p); out.projects++; } catch (e) {}
+    }
+    return out;
+  }
+
   async function clearAll() {
     const db = await open();
     const names = ["products", "scans", "projects", "snapshots", "runrows"];
@@ -448,7 +514,7 @@
   const API = { open, putScan, allProducts, allScans, allProjects, allSnapshots,
     appendRunRows, getRunRows, clearRunRows,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
-    pruneOlderThan, usage,
+    pruneOlderThan, usage, exportAll, importAll,
     clearAll, productKey, merge, dedupe, cleanImage, cleanBrand };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;

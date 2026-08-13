@@ -121,34 +121,87 @@
      schedule; this is a tool a person points at a window they no longer need,
      and it reports exactly what it removed. */
   const MB = n => (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB";
+  const ymd = t => new Date(t).toISOString().slice(0, 10);
+
   async function paintDataChip() {
     const chip = $("#datachip");
     if (!chip) return;
     let u = null;
     try { u = await window.CatalogStore.usage(); } catch (e) { return; }
     chip.textContent = MB(u.bytes || 0);
-    const span = u.oldest
-      ? `${new Date(u.oldest).toISOString().slice(0, 10)} → ${new Date(u.newest).toISOString().slice(0, 10)}`
-      : "nothing collected yet";
-    chip.title = `${u.products.toLocaleString()} products · ${u.snapshots} frozen weeks · ${span}\n` +
-      `${MB(u.bytes || 0)} of ${u.quota ? MB(u.quota) : "the browser's"} space\n` +
-      "Click to free up the working set — the weekly numbers are kept.";
-    chip.onclick = async () => {
+    const span = u.oldest ? `${ymd(u.oldest)} → ${ymd(u.newest)}` : "nothing collected yet";
+    chip.title = "What this browser is holding — click for the details";
+    $("#datafacts").textContent =
+      `${u.products.toLocaleString()} products · ${u.snapshots} frozen weeks · ${span} · ` +
+      `${MB(u.bytes || 0)} of ${u.quota ? MB(u.quota) : "the browser's"} space. ` +
+      "This catalog lives in THIS browser only.";
+  }
+
+  function wireDataBox() {
+    const box = $("#databox");
+    $("#datachip").addEventListener("click", () => {
+      box.hidden = !box.hidden;
+      if (!box.hidden) paintDataChip();
+    });
+
+    /* Trimming the working set. Safe because every week's numbers are frozen
+       separately — the trend outlives the products it was computed from. */
+    $("#datatrim").addEventListener("click", async () => {
+      const u = await window.CatalogStore.usage();
       const months = parseInt(window.prompt(
         "Keep products collected in the last how many months?\n\n" +
         `Now: ${u.products.toLocaleString()} products, ${MB(u.bytes || 0)}.\n` +
-        "Older products are removed; the weekly trend keeps its numbers, " +
+        "Older products are removed. The weekly trend keeps its numbers, " +
         "because each week is frozen separately.", "12"), 10);
       if (!isFinite(months) || months < 1) return;
-      const cutoff = Date.now() - months * 30 * 864e5;
-      const res = await window.CatalogStore.pruneOlderThan(cutoff);
+      const res = await window.CatalogStore.pruneOlderThan(Date.now() - months * 30 * 864e5);
       window.alert(res.removed
-        ? `${res.removed.toLocaleString()} products removed · ${res.kept.toLocaleString()} kept.\n` +
-          "The weekly trend is unchanged."
+        ? `${res.removed.toLocaleString()} removed · ${res.kept.toLocaleString()} kept.\nThe weekly trend is unchanged.`
         : "Nothing was older than that — nothing removed.");
       if (res.removed) await load();
       paintDataChip();
-    };
+    });
+
+    /* A catalog that can leave the machine it was collected on.
+
+       Everyone runs this in their own Chrome, so there are as many catalogs as
+       there are people: a history dies with a laptop, and no one can see the
+       trend the team collected together. A file fixes both, because merging is
+       already well defined — the product URL is the identity, the earliest
+       first-seen wins, list membership is a union, and a frozen week is never
+       replaced by a smaller one. */
+    $("#dataout").addEventListener("click", async () => {
+      const btn = $("#dataout"), was = btn.textContent;
+      btn.disabled = true; btn.textContent = "Packing…";
+      try {
+        const data = await window.CatalogStore.exportAll();
+        const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `marketlens_catalog_${ymd(Date.now())}_${data.products.length}items.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+      } finally { btn.disabled = false; btn.textContent = was; }
+    });
+
+    $("#datain").addEventListener("click", () => $("#datafile").click());
+    $("#datafile").addEventListener("change", async e => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      const btn = $("#datain"), was = btn.textContent;
+      btn.disabled = true; btn.textContent = "Merging…";
+      try {
+        const res = await window.CatalogStore.importAll(JSON.parse(await file.text()));
+        window.alert(`${res.added.toLocaleString()} new products · ` +
+          `${res.updated.toLocaleString()} already here (merged) · ` +
+          `${res.snapshots} weeks of history.\n` +
+          "Products seen by both are one row, dated from whoever saw them first.");
+        await load();
+      } catch (err) {
+        window.alert("Could not read that file: " + ((err && err.message) || err));
+      } finally { btn.disabled = false; btn.textContent = was; paintDataChip(); }
+    });
   }
 
   function paintStats() {
@@ -167,6 +220,8 @@
         ` · ${shot} with a photo`
       : (scopeId ? where + "nothing collected yet" : "Nothing collected yet");
   }
+
+  wireDataBox();
 
   async function load() {
     // one product, one row — see store.dedupe for what counts as the same product
