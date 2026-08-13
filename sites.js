@@ -1682,7 +1682,14 @@
     function shopifyImage(p) {
       if (!p || typeof p !== "object") return "";
       const first = [].concat(p.images || [])[0];
-      const cand = (first && (first.src || first)) || p.featured_image || "";
+      /* Some shops carry no product-level photo in products.json and hang the
+         picture off the first variant instead — Vuori does, which is why a
+         whole grid of theirs came back with the fabric filled in and NO IMAGE
+         on every card. Still the shop's own JSON, so still a fact. */
+      const vimg = ([].concat(p.variants || [])
+        .map(v => v && (v.featured_image && (v.featured_image.src || v.featured_image)))
+        .find(Boolean)) || "";
+      const cand = (first && (first.src || first)) || p.featured_image || vimg || "";
       const s = String(cand || "").trim();
       if (!s) return "";
       return s.slice(0, 2) === "//" ? "https:" + s : s;
@@ -1742,7 +1749,7 @@
         let res;
         try { res = await fetch(url, { credentials: "include", signal: ctrl.signal }); }
         finally { clearTimeout(timer); }
-        if (!res.ok) return "";
+        if (!res.ok) return { composition: "", image: "" };
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, "text/html");
         let comp = "";
@@ -1756,8 +1763,30 @@
             if (comp) return;
           }
         });
-        return comp || compositionFromText((doc.body && doc.body.textContent) || "");
-      } catch (e) { return ""; }
+        /* The page is already parsed, so the photo costs nothing more. The
+           bulk pull is enrichment rather than a verdict — that was settled for
+           the composition, and a missing PICTURE is the same situation: the
+           product page shows one, and a card that says NO IMAGE on a garment
+           the shop photographed is simply wrong. */
+        let image = "";
+        try {
+          const og = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
+          image = absImage((og && og.getAttribute("content")) || "", url);
+        } catch (e) {}
+        if (!image) {
+          doc.querySelectorAll('script[type="application/ld+json"]').forEach(sc => {
+            if (image) return;
+            let d; try { d = JSON.parse(sc.textContent); } catch (e) { return; }
+            for (const n of [].concat(Array.isArray(d) ? d : (d["@graph"] || [d]))) {
+              if (!n || typeof n !== "object" || !n.image) continue;
+              const c = [].concat(n.image)[0];
+              image = absImage(typeof c === "string" ? c : (c && c.url) || "", url);
+              if (image) return;
+            }
+          });
+        }
+        return { composition: comp || compositionFromText((doc.body && doc.body.textContent) || ""), image };
+      } catch (e) { return { composition: "", image: "" }; }
     }
 
     async function fetchDetail(url) {
@@ -1792,9 +1821,16 @@
           out = empty((e && e.name === "AbortError") ? "timeout" : "error");
         }
       }
-      if (!out.composition) {
-        const comp = await compFromPdp(url);
-        if (comp) { out.composition = comp; out.reason = ""; }
+      /* Go to the product page when either fact is still missing. Vuori is
+         why the picture joined the composition here: its bulk JSON answered
+         the blend, so the chain stopped, and the grid — lazy, so the tiles had
+         given nothing — produced sixty cards reading NO IMAGE for products the
+         shop photographs. One page fetch answers both, and only rows that are
+         actually short of something pay for it. */
+      if (!out.composition || !out.image_url) {
+        const pdp = await compFromPdp(url);
+        if (pdp && pdp.composition && !out.composition) { out.composition = pdp.composition; out.reason = ""; }
+        if (pdp && pdp.image && !out.image_url) out.image_url = pdp.image;
       }
       return out;
     }

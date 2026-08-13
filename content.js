@@ -1107,8 +1107,19 @@ async function runStep(j) {
       if (inList) {
         /* The list entry's own naming, which the user typed on the Grab card.
 
-           Brand fills blanks only: on a multi-brand page (Walmart, Target) each
-           row states its own maker and the entry's brand is just the shop.
+           Brand: on a MULTI-BRAND retailer (Walmart, Target) each row states
+           its own maker, so the row wins and the entry only fills blanks. On
+           a single shop it is the other way round — one storefront is one
+           brand, and whatever the shop wrote per product is not it.
+
+           Set Active is why. It sells its own label, but files each product
+           under the drop it belongs to — "JUL 2026 - GONE BANANAS",
+           "AUG 2026 - CORE" — in Shopify's free-text vendor field. Reading
+           that as the brand split one shop into a season calendar: the LAB
+           showed drops as brands, and every number underneath them was a
+           number about nothing. The existing guard only caught vendors shaped
+           like style codes; a drop name reads like an ordinary name, so shape
+           cannot decide it. What decides it is that the shop has one brand.
 
            Category, though, is the user's to name and theirs WINS. A shop only
            knows the collection it served — Alo's faceted new-arrivals URL is
@@ -1119,8 +1130,10 @@ async function runStep(j) {
            they were the one looking at the page. */
         const ent = queue.list[queue.idx] || {};
         const keptRows = [].concat.apply([], Object.values(kept || {}));
+        const manyBrands = !!(a && a.multiBrand);
         keptRows.forEach(r => {
-          if (!r.brand && ent.brand) r.brand = ent.brand;
+          if (ent.brand && !manyBrands) r.brand = ent.brand;
+          else if (!r.brand && ent.brand) r.brand = ent.brand;
           if (ent.label) r.category = ent.label;
           else if (!r.category) r.category = "";
         });

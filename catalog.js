@@ -68,15 +68,25 @@
 
   function renderScope() {
     const rail = $("#scoperail"), box = $("#scopechips");
+    /* Brands, not products. A list is a research question, and its size as a
+       question is how many shops it watches — a number the designer chose and
+       can act on. The product count is a consequence of what the shops
+       happened to publish that week: 387 against 431 says nothing about which
+       list is the bigger job. The exact product count is still on the line
+       beside these chips, where the rest of the totals are. */
+    const brandsIn = rows => new Set(rows.map(i => String(i.brand || "").trim())
+      .filter(Boolean)).size;
     const counts = new Map(lists.map(l =>
-      [l.id, allItems.filter(i => [].concat(i.listIds || []).includes(l.id)).length]));
+      [l.id, brandsIn(allItems.filter(i => [].concat(i.listIds || []).includes(l.id)))]));
+    const allBrands = brandsIn(allItems);
     // With no list saved there is nothing to choose between — the rail would
     // be a control with one option, which is just noise.
     rail.hidden = lists.length < 1;
     box.innerHTML =
-      `<button data-id="" class="${scopeId ? "" : "on"}">All lists` +
-      `<span class="n">${allItems.length}</span></button>` +
-      lists.map(l => `<button data-id="${esc(l.id)}" class="${scopeId === l.id ? "on" : ""}">` +
+      `<button data-id="" class="${scopeId ? "" : "on"}" title="${allBrands} brands · ${allItems.length} products">All lists` +
+      `<span class="n">${allBrands}</span></button>` +
+      lists.map(l => `<button data-id="${esc(l.id)}" class="${scopeId === l.id ? "on" : ""}" ` +
+        `title="${counts.get(l.id) || 0} brands in ${esc(l.name)}">` +
         `<span class="dot" style="background:${listColor(l.name)}"></span>${esc(l.name)}` +
         `<span class="n">${counts.get(l.id) || 0}</span></button>`).join("");
     box.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
@@ -128,9 +138,20 @@
     if (!chip) return;
     let u = null;
     try { u = await window.CatalogStore.usage(); } catch (e) { return; }
-    chip.textContent = MB(u.bytes || 0);
+    /* The chip used to be the byte count, and that number was measured to
+       never matter: ~283 bytes a product against a ~150 GB quota, so a year
+       of a whole team is single-digit MB. Showing it invited the reasonable
+       question "why am I being told this", and the honest answer is that the
+       size was never the point — what is behind the chip is: BACK UP and
+       MERGE, which is the only way one browser's catalog reaches another's,
+       because this catalog lives in this browser alone.
+
+       So the chip names the door instead of a measurement, and the size stays
+       inside, on the line that is genuinely about storage. */
+    chip.textContent = "Data";
     const span = u.oldest ? `${ymd(u.oldest)} → ${ymd(u.newest)}` : "nothing collected yet";
-    chip.title = "What this browser is holding — click for the details";
+    chip.title = "Back up this catalog, merge in a teammate's, or free up space" +
+      ` — ${u.products.toLocaleString()} products, ${MB(u.bytes || 0)}`;
     $("#datafacts").textContent =
       `${u.products.toLocaleString()} products · ${u.snapshots} frozen weeks · ${span} · ` +
       `${MB(u.bytes || 0)} of ${u.quota ? MB(u.quota) : "the browser's"} space. ` +
@@ -717,15 +738,57 @@
      collected (scan side) versus the shop would not serve what we collected
      (network side). Hovering shows the address that failed.
      (Attached in JS — MV3 CSP forbids inline onerror handlers.) */
+  /* A refusal is usually not a dead address — it is who is asking.
+
+     This page is chrome-extension://, and Nike, lululemon and adidas serve
+     their product images only to their own site: no CORS header, or a Referer
+     check. The browser drops the response and the card said IMAGE BLOCKED on
+     a photo that exists and that the scan recorded correctly.
+
+     The service worker is not subject to that. It holds host permissions for
+     these shops — it is already how the spreadsheet embeds thumbnails — so a
+     refused image is fetched there and handed back as bytes. One shared cache
+     keyed by address, because a grid shows the same CDN host hundreds of
+     times and a colourway repeats the same photo.
+
+     Only failures take this path: an image the page can load itself never
+     costs a message. What stays IMAGE BLOCKED after it is genuinely gone. */
+  const viaWorker = new Map();                    // url -> Promise<dataURL|null>
+  function workerImage(url) {
+    if (viaWorker.has(url)) return viaWorker.get(url);
+    const p = new Promise(res => {
+      let done = false;
+      const finish = v => { if (!done) { done = true; res(v); } };
+      setTimeout(() => finish(null), 15000);
+      try {
+        chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
+          void chrome.runtime.lastError;
+          finish(r && r.ok && r.base64
+            ? `data:image/${r.ext === "jpg" ? "jpeg" : (r.ext || "png")};base64,${r.base64}` : null);
+        });
+      } catch (e) { finish(null); }
+    });
+    viaWorker.set(url, p);
+    return p;
+  }
+
   function armImgFallback(root) {
     root.querySelectorAll("img.thumb").forEach(img =>
-      img.addEventListener("error", () => {
-        const ph = document.createElement("div");
-        ph.className = "thumb ph";
-        ph.textContent = "IMAGE BLOCKED";
-        ph.title = "the shop refused this address:\n" + img.getAttribute("src");
-        img.replaceWith(ph);
+      img.addEventListener("error", async () => {
+        const src = img.getAttribute("src") || "";
+        // already a fetched copy that failed to decode — nothing left to try
+        if (!src || /^data:/.test(src)) return blocked(img, src);
+        const data = await workerImage(src);
+        if (data && img.isConnected) { img.src = data; return; }
+        if (img.isConnected) blocked(img, src);
       }, { once: true }));
+  }
+  function blocked(img, src) {
+    const ph = document.createElement("div");
+    ph.className = "thumb ph";
+    ph.textContent = "IMAGE BLOCKED";
+    ph.title = "the shop refused this address, and fetching it here failed too:\n" + src;
+    img.replaceWith(ph);
   }
 
   function renderNew() {
