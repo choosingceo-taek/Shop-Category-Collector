@@ -1521,12 +1521,24 @@
         '#shopify-features, meta[name="shopify-checkout-api-token"]');
     }
 
-    // Category from the collection handle in the URL: /collections/mini-dresses
-    // -> "Mini Dresses". This is literal site structure, not a guess.
+    /* Category from the collection handle in the URL: /collections/mini-dresses
+       -> "Mini Dresses". This is literal site structure, not a guess.
+
+       Shopify also serves a collection narrowed by tag at
+       /collections/<handle>/<tag> — Gymshark's womenswear is
+       /collections/everyday/womens, and calling that page "Everyday" throws
+       away the half the designer actually chose. The tag is site structure
+       too, so it is kept. Not every second segment is a tag: /products/ under
+       a collection is a product page, and Shopify's own routes (/page/N for
+       pagination, and the tag negation form) are addresses, not categories. */
+    const NOT_A_TAG = /^(products?|page|all)$/i;
     function categoryFromUrl(url) {
-      const m = String(url || "").match(/\/collections\/([^/?#]+)/i);
+      const m = String(url || "").match(/\/collections\/([^/?#]+)(?:\/([^/?#]+))?/i);
       if (!m) return "";
-      return decodeURIComponent(m[1]).replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const title = s => decodeURIComponent(s).replace(/[-+]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      let out = title(m[1]);
+      if (m[2] && !NOT_A_TAG.test(m[2]) && !/^\d+$/.test(m[2])) out += " " + title(m[2]);
+      return out;
     }
 
     function scrapeList(doc, url) {

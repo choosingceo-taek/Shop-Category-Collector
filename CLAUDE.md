@@ -68,6 +68,28 @@
       사이즈·세일가를 구조화 JSON으로 직접 수집. store/catalog는 페이지에서 발견
       (하드코딩 아님). list 스크랩은 DOM 그대로, 상세만 API로 교체. `inditex` 헬퍼
   - generic: DOM 휴리스틱 + JSON-LD 병합 폴백. **상세도 한다**(v1.69) — 아래 참조
+- **몰을 하나 뚫으면 그 몰의 모든 카테고리가 열린다**(v1.92.0, 사용자 질문 "해당
+  브랜드의 다른 카테고리도 가능한거지?"). 세 층 전부가 **주소가 아니라 몰 단위**로
+  판단하기 때문이다: ① 권한은 오리진(`https://*.gymshark.com/*`) ② 엔진은 **페이지
+  안의 마커**(Shopify) 또는 구조 읽기(generic)이지 URL 패턴이 아님 ③ 버튼은 v1.91.0
+  이후 경로와 무관. 그래서 **한 카테고리가 되면 나머지도 된다** — 예외는 house-brand
+  어댑터의 상품 URL 패턴뿐이고, 그건 v1.77 이후 아무것도 안 남기면 generic으로 되돌아간다.
+  - 액티브웨어 8곳 추가 검증(2026-08, 사용자 목록): VUORI · adidas · adanola · TALA ·
+    Varley · Gymshark · Set Active · Athleta. **매니페스트에 없던 건 TALA 하나**였고
+    나머지는 `*.brand.com/*`이라 `row.gymshark.com`·`athleta.gap.com` 같은
+    서브도메인도 이미 포함. 라우팅: **6곳 Shopify**(페이지 마커) · adidas·Athleta는
+    generic — 팀 리스트의 절반이 generic이라는 계측과 같은 그림.
+  - **주소 모양이 조용히 틀리는 자리**를 고정했다(`newbrands-test` 41건):
+    로케일 접두(`/en-int/`·`/en-us/`)가 카테고리가 되지 않고 **벌크 JSON 경로에는
+    남아야** 한다(`/en-int/collections/activewear/products.json`), 반복 쿼리
+    (`?o_cat=Tops&o_cat=Sweatshirts`)가 한 값으로 뭉개지지 않는다, 프래그먼트 패싯
+    (Athleta `#style=`)이 컬렉션을 가른다 — 안 그러면 두 번째 URL이 "이미 스캔함"으로
+    건너뛰어진다.
+  - **`/collections/<handle>/<tag>`는 두 조각 다 이름이다**: Gymshark 여성복이
+    `/collections/everyday/womens`인데 "Everyday"라고만 부르면 **디자이너가 고른
+    절반을 버린다**. 태그도 몰이 쓴 구조이므로 "Everyday Womens". 단
+    `/products/`(그 컬렉션 안의 상품 페이지)와 페이지 번호는 카테고리가 아니다.
+    벌크 JSON 엔드포인트에는 태그가 들어갈 자리가 없으므로 거기서는 뗀다.
 - **엔진 커버리지는 측정해서 판단한다**(`scratchpad/coverage.js`, 실제 `SITES.active()`
   호출). Miro 스타터 리스트 623 URL / 132 브랜드 기준(2026-08):
   전용 어댑터 4(3%) · Shopify 페이지 내 감지 62(47%) · **generic 66(50%)**.
