@@ -106,6 +106,49 @@
     if (!$("#v-new").hidden) renderNew();
     if (!$("#v-brands").hidden) renderBrands();
     paintStats();
+    paintDataChip();
+  }
+
+  /* ---- what the catalog is holding ----------------------------------------
+
+     Measured on this store: ~283 bytes per product against a ~150 GB quota, so
+     disk is never the limit. What grows is the work on every LAB open — the
+     whole table is read and repaired before anything is drawn — so the useful
+     control is over the WORKING SET, not over disk.
+
+     Pruning is safe because each week's numbers are frozen in a snapshot of a
+     few KB: the trend survives its products. Nothing is ever pruned on a
+     schedule; this is a tool a person points at a window they no longer need,
+     and it reports exactly what it removed. */
+  const MB = n => (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB";
+  async function paintDataChip() {
+    const chip = $("#datachip");
+    if (!chip) return;
+    let u = null;
+    try { u = await window.CatalogStore.usage(); } catch (e) { return; }
+    chip.textContent = MB(u.bytes || 0);
+    const span = u.oldest
+      ? `${new Date(u.oldest).toISOString().slice(0, 10)} → ${new Date(u.newest).toISOString().slice(0, 10)}`
+      : "nothing collected yet";
+    chip.title = `${u.products.toLocaleString()} products · ${u.snapshots} frozen weeks · ${span}\n` +
+      `${MB(u.bytes || 0)} of ${u.quota ? MB(u.quota) : "the browser's"} space\n` +
+      "Click to free up the working set — the weekly numbers are kept.";
+    chip.onclick = async () => {
+      const months = parseInt(window.prompt(
+        "Keep products collected in the last how many months?\n\n" +
+        `Now: ${u.products.toLocaleString()} products, ${MB(u.bytes || 0)}.\n` +
+        "Older products are removed; the weekly trend keeps its numbers, " +
+        "because each week is frozen separately.", "12"), 10);
+      if (!isFinite(months) || months < 1) return;
+      const cutoff = Date.now() - months * 30 * 864e5;
+      const res = await window.CatalogStore.pruneOlderThan(cutoff);
+      window.alert(res.removed
+        ? `${res.removed.toLocaleString()} products removed · ${res.kept.toLocaleString()} kept.\n` +
+          "The weekly trend is unchanged."
+        : "Nothing was older than that — nothing removed.");
+      if (res.removed) await load();
+      paintDataChip();
+    };
   }
 
   function paintStats() {
@@ -160,6 +203,7 @@
     if (!$("#v-new").hidden) renderNew();
     if (!$("#v-brands").hidden) renderBrands();
     paintStats();
+    paintDataChip();
   }
 
   function fillFilters() {

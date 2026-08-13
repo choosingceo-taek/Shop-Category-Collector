@@ -378,6 +378,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     ensureEngine(msg.tabId).then(send).catch(e => send({ ok: false, reason: String(e) }));
     return true;
   }
+  /* A list run's collected rows. The page origin cannot reach the extension's
+     database, so the worker keeps them — see store.js runrows for why they are
+     no longer carried in the run record itself. */
+  if (msg && msg.type === "runRows") {
+    (async () => {
+      try {
+        if (msg.op === "append") return send({ ok: true, n: await self.CatalogStore.appendRunRows(msg.runId, msg.items) });
+        if (msg.op === "get") return send({ ok: true, rows: await self.CatalogStore.getRunRows(msg.runId) });
+        if (msg.op === "clear") { await self.CatalogStore.clearRunRows(msg.runId); return send({ ok: true }); }
+        send({ ok: false });
+      } catch (e) { send({ ok: false, reason: String((e && e.message) || e) }); }
+    })();
+    return true;
+  }
   if (msg && msg.type === "checkFiles") {
     checkForReplacedFiles().then(v => send({ ready: v })).catch(() => send({ ready: false }));
     return true;

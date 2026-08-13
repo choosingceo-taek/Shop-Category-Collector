@@ -24,7 +24,7 @@
    so both stay independently testable. */
 (function (root) {
   "use strict";
-  const DB = "shopcat", VER = 2;
+  const DB = "shopcat", VER = 3;
   let _db = null;
 
   function open() {
@@ -45,6 +45,18 @@
         if (!db.objectStoreNames.contains("snapshots")) {
           const s = db.createObjectStore("snapshots", { keyPath: "id" });   // "2026-W32"
           s.createIndex("start", "start", { unique: false });
+        }
+        /* The rows a list run has collected so far.
+
+           They used to live in the run record in chrome.storage.local, which
+           holds 10 MB — measured: the team's 456-entry list at 60 products
+           each is 13.7 MB, and the write fails outright ("kQuotaBytes quota
+           exceeded"), losing the whole run's spreadsheet. It was also rewritten
+           in full after every URL, so a long list serialised gigabytes on its
+           way through. Here it is appended in chunks and read once at the end. */
+        if (!db.objectStoreNames.contains("runrows")) {
+          const r = db.createObjectStore("runrows", { keyPath: "id", autoIncrement: true });
+          r.createIndex("runId", "runId", { unique: false });
         }
       };
       req.onsuccess = () => { _db = req.result; res(_db); };
@@ -348,16 +360,95 @@
     keys.forEach(k => P.delete(k));
     return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   }
+  /* ---- keeping the catalog from growing without end -----------------------
+
+     Measured on this database: about 283 bytes per product once IndexedDB has
+     warmed up, against a quota of ~150 GB — so DISK is never the constraint.
+     What does degrade is the work done on every LAB open: allProducts() reads
+     and repairs the whole table, and the trend maths runs over it. A designer
+     scanning eight lists weekly adds roughly 25,000 products a year.
+
+     The weekly snapshot is what makes pruning safe: each week's numbers are
+     frozen in a few KB, so a year of history survives even after its products
+     are gone. Old products are the working set, not the record.
+
+     Nothing is deleted on a schedule. This is the tool a person points at a
+     window they no longer need, and it says exactly what it removed. */
+  async function pruneOlderThan(cutoffMs) {
+    if (!isFinite(cutoffMs)) return { removed: 0, kept: 0 };
+    const db = await open();
+    const items = await all("products");
+    const doomed = items.filter(p => (p.addedAt || 0) < cutoffMs).map(p => p.key);
+    if (doomed.length) await removeProducts(doomed);
+    return { removed: doomed.length, kept: items.length - doomed.length };
+  }
+
+  /* What the catalog weighs right now — products, the frozen weeks, and what
+     the browser says the whole extension database is using. */
+  async function usage() {
+    const [products, snapshots, scans] = await Promise.all([
+      all("products"), all("snapshots"), all("scans"),
+    ]);
+    let bytes = 0, quota = 0;
+    try {
+      const est = await navigator.storage.estimate();
+      bytes = est.usage || 0; quota = est.quota || 0;
+    } catch (e) {}
+    const times = products.map(p => p.addedAt || 0).filter(Boolean);
+    return {
+      products: products.length, snapshots: snapshots.length, scans: scans.length,
+      bytes, quota,
+      oldest: times.length ? Math.min(...times) : 0,
+      newest: times.length ? Math.max(...times) : 0,
+    };
+  }
+
   async function clearAll() {
     const db = await open();
-    const names = ["products", "scans", "projects", "snapshots"];
+    const names = ["products", "scans", "projects", "snapshots", "runrows"];
     const t = db.transaction(names, "readwrite");
     names.forEach(n => t.objectStore(n).clear());
     return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   }
 
+  /* ---- rows of a run in progress -----------------------------------------
+     Written by the worker on behalf of the content script (the page origin has
+     no access to the extension's database), read once when the list finishes,
+     and cleared as soon as the spreadsheet is out. */
+  async function appendRunRows(runId, items) {
+    if (!runId || !items || !items.length) return 0;
+    const db = await open();
+    await new Promise((res, rej) => {
+      const t = db.transaction("runrows", "readwrite");
+      t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+      t.objectStore("runrows").add({ runId, at: Date.now(), items });
+    });
+    return items.length;
+  }
+
+  async function getRunRows(runId) {
+    if (!runId) return [];
+    const db = await open();
+    const chunks = await req2p(db.transaction("runrows", "readonly")
+      .objectStore("runrows").index("runId").getAll(IDBKeyRange.only(runId)));
+    return [].concat.apply([], (chunks || []).sort((a, b) => a.id - b.id).map(c => c.items || []));
+  }
+
+  async function clearRunRows(runId) {
+    const db = await open();
+    const t = db.transaction("runrows", "readwrite");
+    const S = t.objectStore("runrows");
+    if (runId) {
+      const keys = await req2p(S.index("runId").getAllKeys(IDBKeyRange.only(runId)));
+      (keys || []).forEach(k => S.delete(k));
+    } else S.clear();
+    return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
+  }
+
   const API = { open, putScan, allProducts, allScans, allProjects, allSnapshots,
+    appendRunRows, getRunRows, clearRunRows,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
+    pruneOlderThan, usage,
     clearAll, productKey, merge, dedupe, cleanImage, cleanBrand };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;

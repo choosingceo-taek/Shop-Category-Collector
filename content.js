@@ -650,7 +650,7 @@ async function queueHealthExport(q) {
        collected nothing there is no spreadsheet either, and a bare "1 site
        needs attention" leaves the designer looking for a file that was never
        written. */
-    const collected = ((q && q.rows) || []).length;
+    const collected = (q && q.rowCount) || 0;
     await report(collected
       ? `Excel saved · ${bad.length} of ${recs.length} site${recs.length === 1 ? "" : "s"} need attention`
       : `No products collected, so there is no Excel — ${bad.length} of ${recs.length} site${recs.length === 1 ? "" : "s"} came back empty or broken.`);
@@ -665,8 +665,21 @@ async function queueHealthExport(q) {
    file is built once here, at the end, with every brand in it (excel.js groups
    the rows by brand). Also runs when the user stops early, so stopping still
    yields the work already done. */
+/* The run's rows live in the extension's database (store.js runrows), reached
+   through the worker because a content script runs in the page's origin. */
+function runRows(op, runId, items) {
+  return new Promise(res => {
+    try {
+      chrome.runtime.sendMessage({ type: "runRows", op, runId, items }, r => {
+        void chrome.runtime.lastError; res(r || null);
+      });
+    } catch (e) { res(null); }
+  });
+}
+
 async function queueExport(q) {
-  const rows = (q && q.rows) || [];
+  const got = await runRows("get", q && q.runId);
+  const rows = (got && got.rows) || [];
   /* A run that collected nothing has to SAY so.
 
      There is no spreadsheet to write, so this used to return in silence, and
@@ -712,6 +725,9 @@ async function queueExport(q) {
     }
     const brands = [...new Set(rows.map(r => r.brand).filter(Boolean))];
     await report(`List done — ${total} products from ${brands.length} brands saved as one Excel file`);
+    /* The rows are NOT cleared here. They are one run's worth, they are cleared
+       when the next run starts, and keeping them means the spreadsheet can be
+       rebuilt from what was collected without walking every shop again. */
   } catch (e) {
     await report("List Excel failed: " + (e && e.message || e) + " (use ⬇ Excel in the panel to retry)");
   }
@@ -1079,7 +1095,13 @@ async function runStep(j) {
           if (!r.brand && ent.brand) r.brand = ent.brand;
           if (!r.category && ent.label) r.category = ent.label;
         });
-        queue.rows = (queue.rows || []).concat(keptRows);
+        /* The rows go to the extension's database, not into the run record.
+           Measured: the team's 456-entry list at 60 products each is 13.7 MB of
+           run record, and chrome.storage.local refuses anything over 10 MB —
+           the write fails and the whole run's spreadsheet is lost. The record
+           now carries only the count. */
+        await runRows("append", queue.runId, keptRows);
+        queue.rowCount = (queue.rowCount || 0) + keptRows.length;
         await setQueue(queue);
         await catalogSave(j, a, kept, total, queue);
         await report(`${total} collected — one Excel file when the list finishes`);
@@ -1275,7 +1297,9 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
     (async () => {
       const tabId = await myTabId();
       await clear();                              // any half-finished job is replaced
-      await setQueue({ active: true, tabId, listId: m.listId || "", name: m.name || "",
+      const runId = "r" + Date.now() + "-" + Math.floor(Math.random() * 1e6);
+      await runRows("clear", "");                       // no rows from an abandoned run
+      await setQueue({ active: true, runId, rowCount: 0, tabId, listId: m.listId || "", name: m.name || "",
         list: m.list, idx: 0, rows: [],
         maxItems: m.maxItems == null ? DEFAULT_MAX_ITEMS : m.maxItems,
         withSpec: m.withSpec !== false, filters: m.filters || {}, startedAt: Date.now() });
@@ -1299,7 +1323,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
       send({ ok: true });
       // stopping early still hands over what was collected, in one file — then
       // the job is closed so the half-finished URL doesn't carry on scanning
-      if (q && (q.rows || []).length) await queueExport(q);
+      if (q && (q.rowCount || 0)) await queueExport(q);
       // Stopping early still hands over the failure report — but only for the
       // URLs that actually finished (idx points at the one that was cut short;
       // calling an interrupted scan "broken" would send the developer chasing
