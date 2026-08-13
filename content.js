@@ -1309,7 +1309,10 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
       const runId = "r" + Date.now() + "-" + Math.floor(Math.random() * 1e6);
       await runRows("clear", "");                       // no rows from an abandoned run
       await setQueue({ active: true, runId, rowCount: 0, tabId, listId: m.listId || "", name: m.name || "",
-        list: m.list, idx: 0, rows: [],
+        // rows themselves live in IndexedDB (runrows) — the queue record holds
+        // only the count, because 10 MB of chrome.storage.local cannot hold a
+        // team-sized run and losing it loses the whole spreadsheet
+        list: m.list, idx: 0,
         maxItems: m.maxItems == null ? DEFAULT_MAX_ITEMS : m.maxItems,
         withSpec: m.withSpec !== false, filters: m.filters || {}, startedAt: Date.now() });
       send({ ok: true, count: m.list.length });

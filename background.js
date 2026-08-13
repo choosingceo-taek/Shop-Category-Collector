@@ -168,7 +168,7 @@ async function syncDynamicScripts() {
 chrome.runtime.onInstalled.addListener(() => { syncDynamicScripts(); });
 chrome.runtime.onStartup.addListener(() => { syncDynamicScripts(); });
 try {
-  chrome.permissions.onAdded.addListener(() => { syncDynamicScripts(); });
+  chrome.permissions.onAdded.addListener(() => { syncDynamicScripts(); armGrantedTabs(); });
   chrome.permissions.onRemoved.addListener(() => { syncDynamicScripts(); });
 } catch (e) {}
 
@@ -384,18 +384,74 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.wpb_lists) syncSchedules();
 });
 
-/* A list run navigates one tab through every URL. On sites without a static
-   content script nothing would come back to life after each navigation, so the
-   run would stop at the first such URL — re-inject as each page finishes
-   loading, but only for the tab that owns the active run. */
-chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.status !== "complete") return;
-  chrome.storage.local.get("wpb_queue", o => {
-    const q = o && o.wpb_queue;
-    if (!q || !q.active || q.tabId !== tabId) return;
-    ensureEngine(tabId).catch(() => {});
+/* The grab button has to be there the moment a shop is on screen.
+
+   Static content scripts are matched by PATH, and the team's list is written
+   in paths: `www.walmart.com/browse/*`, `/c/*`, `/shop/*`. Land on the shop's
+   home page, on a product page, or on any address shape the list does not
+   spell out, and no script runs — so no button, on a site we hold full
+   permission for. Refreshing only helps when the path happens to match, which
+   is why it reads as "sometimes it works": measured, /browse/women had the
+   button and / and /ip/… did not.
+
+   Permission is the real question, and we can answer it per site. When the
+   origin is granted the engine goes in as the page settles, whatever the path.
+   That also covers the two cases a page load never fixed: a tab that was
+   already open when the site was allowed, and shops that route in the page
+   (changeInfo.url arrives for exactly the origins we hold, so a client-side
+   navigation is a navigation here too).
+
+   Costs nothing on the rest of the web: without permission there is no url to
+   read and nothing is asked of the tab. */
+const lastPut = new Map();               // tabId -> "url@when", so a burst of
+chrome.tabs.onRemoved.addListener(id => lastPut.delete(id));  // SPA hops is one
+
+function grantedFor(url) {
+  return new Promise(res => {
+    let origin = "";
+    try { origin = new URL(url).origin + "/*"; } catch (e) { return res(false); }
+    try { chrome.permissions.contains({ origins: [origin] }, v => { void chrome.runtime.lastError; res(!!v); }); }
+    catch (e) { res(false); }
   });
+}
+
+chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
+  const settled = info.status === "complete";
+  // a shop that routes in the page: the address changed on a document that is
+  // already finished. Mid-load url changes are left to the "complete" that
+  // follows, so nothing is injected into a half-built page.
+  const routed = !!info.url && tab && tab.status === "complete";
+  if (!settled && !routed) return;
+  // no url means no host permission for this tab — nothing to do, cheaply
+  const url = info.url || (tab && tab.url) || "";
+  if (!/^https?:/i.test(url)) return;
+
+  // a run drives one tab through many URLs; that tab is re-armed regardless
+  const q = await new Promise(r => chrome.storage.local.get("wpb_queue", o => r((o || {}).wpb_queue)));
+  const owns = q && q.active && q.tabId === tabId;
+
+  if (!owns) {
+    const was = lastPut.get(tabId);
+    if (was === url) return;               // same address, already handled
+    if (!await grantedFor(url)) return;
+    lastPut.set(tabId, url);
+  }
+  ensureEngine(tabId).catch(() => {});
 });
+
+/* Allowing a site is the moment the button should appear on it — not after a
+   refresh the person has no reason to expect. Registration alone only reaches
+   the NEXT page load, so the tabs already open on that site are handed the
+   engine directly. */
+async function armGrantedTabs() {
+  try {
+    const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+    for (const t of tabs) {
+      if (!t.url || !await grantedFor(t.url)) continue;
+      try { await ensureEngine(t.id); } catch (e) {}
+    }
+  } catch (e) {}
+}
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   if (msg && msg.type === "ensureEngine" && msg.tabId != null) {
