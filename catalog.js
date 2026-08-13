@@ -190,8 +190,19 @@
       .filter(h => h && h.mark && h.mark !== "\u2705")
       .sort((a, b) => (b.ts || 0) - (a.ts || 0))
       .slice(0, 30);
+    const need = [...needOrigins];
     const seen = [...blockedBy].filter(Boolean);
-    if (seen.length) {
+    if (need.length) {
+      /* Not a broken scan and not a broken address: Market Lens simply has no
+         access to the host the pictures are on. Saying that is only half the
+         job — the button beside it is the other half, and the click is what
+         Chrome requires to grant it. */
+      bad.unshift({ mark: "\u26a0\ufe0f", ts: Date.now(), url: "", grant: need,
+        why: `The photos for ${need.length} site${need.length === 1 ? "" : "s"} are hosted ` +
+             `somewhere Market Lens cannot reach (${need.map(o => o.replace(/^https?:\/\//, "")
+               .replace(/\/\*$/, "")).slice(0, 3).join(", ")}). ` +
+             `Nothing is wrong with the scan — this needs your permission.` });
+    } else if (seen.length) {
       bad.unshift({ mark: "\u26a0\ufe0f", ts: Date.now(), url: "",
         why: `${seen.slice(0, 4).join(", ")}: some photos would not load even when ` +
              `fetched here. The addresses were collected — the shop is refusing them.` });
@@ -206,8 +217,25 @@
       `The spreadsheet and the catalog still hold everything that WAS collected \u2014 ` +
       `this is what did not come through.</span>` +
       bad.map(h => `<span class="cw"><b>${esc(h.mark)}</b> ${esc(healthWord(h))}` +
+        (h.grant ? ` <button class="cgrant">Show these photos</button>` : "") +
         (h.url ? ` <a href="${esc(h.url)}" target="_blank" rel="noreferrer">open \u2197</a>` : "") +
         `</span>`).join("");
+    const gb = $("#checkbox").querySelector(".cgrant");
+    if (gb) gb.addEventListener("click", () => grantImageHosts(need));
+  }
+
+  /* The grant has to happen inside the click — Chrome requires the gesture —
+     so nothing is awaited before asking. Afterwards the failed addresses are
+     forgotten and the views redrawn, which is what retries them. */
+  function grantImageHosts(origins) {
+    try {
+      chrome.permissions.request({ origins }, granted => {
+        void chrome.runtime.lastError;
+        if (!granted) return;
+        needOrigins.clear(); blockedBy.clear(); viaWorker.clear();
+        redrawAll();
+      });
+    } catch (e) {}
   }
 
   function wireCheckBar() {
@@ -816,6 +844,14 @@
      Only failures take this path: an image the page can load itself never
      costs a message. What stays IMAGE BLOCKED after it is genuinely gone. */
   const viaWorker = new Map();                    // url -> Promise<dataURL|null>
+  /* Hosts the worker could not reach because the extension does not hold them.
+
+     Most shops serve photos from a subdomain of their own, which we already
+     hold. Some do not — Aritzia's are on Adobe Scene7, and Cloudinary,
+     Amplience and Contentful are just as common — and no list of ours will
+     ever name them all. That is a permission, not a bug, and a permission has
+     a fix a person can apply in one click. */
+  const needOrigins = new Set();
   function workerImage(url) {
     if (viaWorker.has(url)) return viaWorker.get(url);
     const p = new Promise(res => {
@@ -825,6 +861,7 @@
       try {
         chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
           void chrome.runtime.lastError;
+          if (r && r.need) needOrigins.add(r.need);
           finish(r && r.ok && r.base64
             ? `data:image/${r.ext === "jpg" ? "jpeg" : (r.ext || "png")};base64,${r.base64}` : null);
         });

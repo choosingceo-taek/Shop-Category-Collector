@@ -433,8 +433,12 @@ const hostOf = u => { try { return new URL(u || location.href).hostname.replace(
    fabric column, which is the column this tool exists for. So on a repaired
    page the site-neutral reader (JSON-LD, then visible text) goes first and
    the adapter stays as the backup. */
-async function readDetail(a, url, repaired) {
-  if (!repaired || a.id === "generic") return a.fetchDetail(url);
+/* `have` is what the listing already gave us for this row. An adapter that
+   would otherwise open the product page just to find a picture can skip that
+   when the tile already supplied one — sixty saved page loads on a shop whose
+   grid renders its photos. */
+async function readDetail(a, url, repaired, have) {
+  if (!repaired || a.id === "generic") return a.fetchDetail(url, have);
   const g = self.SITES && SITES.get && SITES.get("generic");
   let open = null;
   if (g && typeof g.fetchDetail === "function") {
@@ -442,7 +446,7 @@ async function readDetail(a, url, repaired) {
     if (open && open.composition) return open;
   }
   let own = null;
-  try { own = await a.fetchDetail(url); } catch (e) {}
+  try { own = await a.fetchDetail(url, have); } catch (e) {}
   return (own && own.composition) ? own : (open || own);
 }
 
@@ -863,6 +867,9 @@ async function queueAdvance() {
   await setQueue(q);
   await closeJob();
   const next = q.list[q.idx];
+  /* Long enough for the caller's reply to leave before the page is torn down.
+     It was 1500ms, which is a second of nothing per URL — twenty seconds
+     across the team's list — and the ack does not need that long. */
   setTimeout(() => { try {
     // A fragment-only step (Gap: next category differs only after the #) never
     // fires a page load on href assignment, so nothing would restart the scan
@@ -870,7 +877,7 @@ async function queueAdvance() {
     const here = location.href.split("#")[0];
     location.href = next.url;
     if (String(next.url).split("#")[0] === here) location.reload();
-  } catch (e) {} }, 1500);
+  } catch (e) {} }, 400);
   return true;
 }
 
@@ -941,9 +948,15 @@ async function runStep(j) {
       // Zara hold whole categories on one page and need more than Target's 20)
       const rounds = typeof a.lazyScroll === "number" ? a.lazyScroll : 20;
       let lastN = -1, lastH = -1, stable = 0;
+      /* A grid that is already fully rendered still has to prove it is, so it
+         pays the stability rounds every time — three of them, and at 700ms
+         that was two seconds per URL doing nothing. The rule is unchanged
+         (count and height both steady twice); only the wait between looks is
+         shorter, which costs a lazy grid nothing because it is bounded by the
+         same stability test rather than by the clock. */
       for (let i = 0; i < rounds && stable < 2; i++) {
         window.scrollTo(0, document.body.scrollHeight);
-        await sleep(700);
+        await sleep(450);
         const live = await g();
         if (!live || !live.active || live.paused) return;   // honor pause/stop mid-scroll
         let n = 0; try { n = (a.scrapeList(document, location.href) || []).length; } catch (e) {}
@@ -1060,7 +1073,13 @@ async function runStep(j) {
     // hidden tabs (down to about once a minute), so each sleep became the
     // bottleneck. A small concurrency removes both problems and stays polite —
     // it is fewer simultaneous requests than the page itself makes.
-    const LANES = 4;
+    /* Measured on a three-shop run of 60 products each: the detail step was
+       7.8 of the 10.7 seconds a shop took, and almost all of that was waiting
+       for a response rather than doing anything. Four lanes left the tab idle.
+       Eight is still fewer simultaneous requests than a browser opens for one
+       page of a shop (six per host plus preconnects), and it roughly halves
+       the phase that dominates the run. */
+    const LANES = 8;
     const applyDetail = (it, d) => {
       if (d && typeof d === "object") {
             it.fabric_composition = d.composition || "";
@@ -1112,7 +1131,10 @@ async function runStep(j) {
       const slice = j.items.slice(i, i + LANES);
       await Promise.all(slice.map(async it => {
         if (it._specDone) return;
-        try { applyDetail(it, await readDetail(a, it.product_url, j.repair)); }
+        try {
+          applyDetail(it, await readDetail(a, it.product_url, j.repair,
+            { image: !!String(it.image_url || "").trim() }));
+        }
         catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run
         it._specDone = true;
       }));

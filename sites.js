@@ -1789,7 +1789,7 @@
       } catch (e) { return { composition: "", image: "" }; }
     }
 
-    async function fetchDetail(url) {
+    async function fetchDetail(url, have) {
       const empty = r => ({ composition: "", colorways: "", design: "", reason: r });
       /* One bulk pull covers the whole collection — but it is enrichment, not
          a verdict. When its body_html states no blend, the chain keeps going
@@ -1827,7 +1827,12 @@
          given nothing — produced sixty cards reading NO IMAGE for products the
          shop photographs. One page fetch answers both, and only rows that are
          actually short of something pay for it. */
-      if (!out.composition || !out.image_url) {
+      /* The listing may already have supplied the picture. Then the page is
+         only worth opening if the blend is still missing — otherwise every
+         row on a shop whose grid renders its photos paid for a page load
+         that could not tell us anything new. */
+      const wantImage = !out.image_url && !(have && have.image);
+      if (!out.composition || wantImage) {
         const pdp = await compFromPdp(url);
         if (pdp && pdp.composition && !out.composition) { out.composition = pdp.composition; out.reason = ""; }
         if (pdp && pdp.image && !out.image_url) out.image_url = pdp.image;

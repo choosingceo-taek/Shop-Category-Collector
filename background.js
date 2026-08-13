@@ -637,6 +637,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   }
   if (msg && msg.type === "fetchImage" && msg.url) {
     (async () => {
+      /* Say WHY, not just no.
+
+         The worker can reach any host the extension holds — which is the brand
+         domains, and most shops serve their photos from a subdomain of their
+         own. Some do not: Aritzia's are on Adobe Scene7, and plenty of shops
+         use Cloudinary, Amplience or Contentful. For those the fetch fails for
+         a reason a person can fix in one click, and it is worth telling them
+         apart from an address that is genuinely dead. */
+      let origin = "";
+      try { origin = new URL(msg.url).origin + "/*"; } catch (e) {}
+      if (origin) {
+        const held = await new Promise(r => {
+          try { chrome.permissions.contains({ origins: [origin] }, v => { void chrome.runtime.lastError; r(!!v); }); }
+          catch (e) { r(false); }
+        });
+        if (!held) { send({ ok: false, need: origin, error: "no access to " + origin }); return; }
+      }
       try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 10000);
