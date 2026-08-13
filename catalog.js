@@ -117,6 +117,7 @@
     if (!$("#v-brands").hidden) renderBrands();
     paintStats();
     paintDataChip();
+    paintCheck();
   }
 
   /* ---- what the catalog is holding ----------------------------------------
@@ -156,6 +157,63 @@
       `${u.products.toLocaleString()} products · ${u.snapshots} frozen weeks · ${span} · ` +
       `${MB(u.bytes || 0)} of ${u.quota ? MB(u.quota) : "the browser's"} space. ` +
       "This catalog lives in THIS browser only.";
+  }
+
+  /* ---- what the last scan thought of its own results ----------------------
+
+     Every fault in this tool's history arrived the same way: the designer
+     opened the LAB, saw something wrong — a shop split into drop names, sixty
+     grey boxes, an empty fabric column — and reported it. The scan had
+     already graded itself each time. The grade just went to `devsitecheck()`
+     in the service worker console, which is not a place a designer goes, so
+     the tool knowing was worth nothing.
+
+     This is that grade, on the screen they open anyway. Clean scans render
+     nothing at all, so it costs no height in the normal case, and the
+     exceptions are the only thing it ever shows. */
+  function healthWord(rec) {
+    if (rec.why) return rec.why;                       // written at scan time
+    // records from before this existed, and the worker's stall entries
+    if (!rec.count) return `${rec.brand || rec.label || "This site"}: nothing was collected.`;
+    return `${rec.brand || rec.label || "This site"}: ${rec.note || "needs a look"}.`;
+  }
+
+  async function paintCheck() {
+    const bar = $("#checkbar");
+    if (!bar) return;
+    let health = {};
+    try {
+      health = await new Promise(r =>
+        chrome.storage.local.get("wpb_sitehealth", o => r((o || {}).wpb_sitehealth || {})));
+    } catch (e) { return; }
+    const bad = Object.values(health)
+      .filter(h => h && h.mark && h.mark !== "\u2705")
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+      .slice(0, 30);
+    const seen = [...blockedBy].filter(Boolean);
+    if (seen.length) {
+      bad.unshift({ mark: "\u26a0\ufe0f", ts: Date.now(), url: "",
+        why: `${seen.slice(0, 4).join(", ")}: some photos would not load even when ` +
+             `fetched here. The addresses were collected — the shop is refusing them.` });
+    }
+    bar.hidden = !bad.length;
+    if (!bad.length) return;
+    $("#checkn").textContent = bad.length === 1
+      ? "1 site needs a look" : `${bad.length} sites need a look`;
+    const when = bad[0] && bad[0].ts ? new Date(bad[0].ts).toLocaleString() : "";
+    $("#checkbox").innerHTML =
+      `<span class="cwhen">From the last scans${when ? " \u00b7 " + esc(when) : ""}. ` +
+      `The spreadsheet and the catalog still hold everything that WAS collected \u2014 ` +
+      `this is what did not come through.</span>` +
+      bad.map(h => `<span class="cw"><b>${esc(h.mark)}</b> ${esc(healthWord(h))}` +
+        (h.url ? ` <a href="${esc(h.url)}" target="_blank" rel="noreferrer">open \u2197</a>` : "") +
+        `</span>`).join("");
+  }
+
+  function wireCheckBar() {
+    const chip = $("#checkchip"), box = $("#checkbox");
+    if (!chip) return;
+    chip.addEventListener("click", () => { box.hidden = !box.hidden; });
   }
 
   function wireDataBox() {
@@ -243,6 +301,7 @@
   }
 
   wireDataBox();
+  wireCheckBar();
 
   async function load() {
     // one product, one row — see store.dedupe for what counts as the same product
@@ -280,6 +339,9 @@
     if (!$("#v-brands").hidden) renderBrands();
     paintStats();
     paintDataChip();
+    // the scan's own verdict, on the first paint — a run that collected
+    // nothing has no products to redraw, and that is exactly when it matters
+    paintCheck();
   }
 
   function fillFilters() {
@@ -783,12 +845,25 @@
         if (img.isConnected) blocked(img, src);
       }, { once: true }));
   }
+  /* What the LAB can see and the scan could not.
+
+     A photo that fails only when it is displayed is invisible at scan time —
+     the address was collected, so the scan graded the page healthy. Counting
+     them here is the other half of the tool watching itself: the shop's name
+     goes into the same band as the scan's own verdict, instead of the
+     designer counting grey boxes and telling us. */
+  const hostOfUrl = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return "a shop"; } };
+  const blockedBy = new Set();
+  let blockedPaint = null;
   function blocked(img, src) {
     const ph = document.createElement("div");
     ph.className = "thumb ph";
     ph.textContent = "IMAGE BLOCKED";
     ph.title = "the shop refused this address, and fetching it here failed too:\n" + src;
+    blockedBy.add(hostOfUrl(src));     // the CDN that refused, which is the shop
     img.replaceWith(ph);
+    clearTimeout(blockedPaint);              // one repaint for a whole grid
+    blockedPaint = setTimeout(paintCheck, 600);
   }
 
   function renderNew() {

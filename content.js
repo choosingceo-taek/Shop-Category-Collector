@@ -446,13 +446,24 @@ async function readDetail(a, url, repaired) {
   return (own && own.composition) ? own : (open || own);
 }
 
+/* One storefront is one brand. A shop that hands back several different
+   makers is either a genuine multi-brand retailer — which says so — or a shop
+   whose brand field we are misreading, and every figure grouped by brand
+   downstream is then wrong. */
+function brandsDisagree(rec) {
+  return !rec.multiBrand && (rec.saidBrands || []).length > 1;
+}
+/* Fabric was judged all-or-nothing, so a site that answered for three of
+   sixty passed as healthy. Individual products legitimately state no blend;
+   a site where almost none do is an extraction that has stopped working.
+   Same for photos — the one that mattered on Vuori. */
+const THIN_FABRIC = 0.25, THIN_PHOTO = 0.5;
 function healthMark(rec) {
   if (!rec.count) return "❌";
+  if (brandsDisagree(rec)) return "⚠️";
   if (rec.named < rec.count || rec.imaged < rec.count || rec.priced < rec.count) return "⚠️";
-  // Fabric is judged only as ALL-or-nothing, and only when details were
-  // collected: single products legitimately state no blend, but a whole site
-  // at zero means the extraction is broken — the user's core column.
-  if (rec.withSpec && rec.count && rec.fabric === 0) return "⚠️";
+  if (rec.imaged / rec.count < THIN_PHOTO) return "⚠️";
+  if (rec.withSpec && rec.count && rec.fabric / rec.count < THIN_FABRIC) return "⚠️";
   /* A rescued page is never called ready. The designer's spreadsheet is
      complete — that is the point of the rescue — but the shop is being read
      around its own adapter, and calling that ✅ would hide the stale rule
@@ -460,13 +471,54 @@ function healthMark(rec) {
   if (rec.repair) return "⚠️";
   return "✅";
 }
+/* The same verdict, said to the person who has to act on it.
+
+   healthNote() is the developer's line — "image×60, fabric×all". It is what
+   the site report has always carried, and it lives behind a console command,
+   which is why every one of these problems reached the designer as a screen
+   full of grey boxes instead of a sentence. This is the sentence. It names
+   the shop, what is wrong with what came back, and whether the spreadsheet
+   can still be trusted. */
+function healthWhy(rec) {
+  const who = rec.brand || rec.label || "This site";
+  if (!rec.count) {
+    return `${who}: nothing was collected. The page may need scrolling, ` +
+      `may have asked for a region or consent choice, or may block automated visits.`;
+  }
+  const parts = [];
+  if (brandsDisagree(rec)) {
+    parts.push(`the shop gave ${rec.saidBrands.length} different brand names ` +
+      `(${rec.saidBrands.slice(0, 3).join(", ")}…) — one shop should be one brand, ` +
+      `so it is filed under the name in your list`);
+  }
+  if (rec.imaged === 0) parts.push(`no photos at all (${rec.count} products)`);
+  else if (rec.imaged / rec.count < THIN_PHOTO) {
+    parts.push(`photos on only ${rec.imaged} of ${rec.count}`);
+  }
+  if (rec.withSpec && rec.fabric === 0) parts.push(`no fabric on any of the ${rec.count}`);
+  else if (rec.withSpec && rec.fabric / rec.count < THIN_FABRIC) {
+    parts.push(`fabric on only ${rec.fabric} of ${rec.count}`);
+  }
+  if (rec.named < rec.count) parts.push(`${rec.count - rec.named} without a name`);
+  if (rec.priced < rec.count) parts.push(`${rec.count - rec.priced} without a price`);
+  if (rec.repair) {
+    parts.push("the page had to be read around its usual rule — the rows are " +
+      "right, but this shop's reader is out of date");
+  }
+  if (!parts.length) return "";
+  return `${who}: ${parts.join(" · ")}.`;
+}
+
 function healthNote(rec) {
   if (!rec.count) return "0 products";
   const miss = [];
+  if (brandsDisagree(rec)) miss.push(`brand×${(rec.saidBrands || []).length} names`);
   if (rec.named < rec.count) miss.push(`name×${rec.count - rec.named}`);
   if (rec.imaged < rec.count) miss.push(`image×${rec.count - rec.imaged}`);
   if (rec.priced < rec.count) miss.push(`price×${rec.count - rec.priced}`);
-  if (rec.withSpec && rec.count && rec.fabric === 0) miss.push("fabric×all");
+  if (rec.withSpec && rec.count && rec.fabric / rec.count < THIN_FABRIC) {
+    miss.push(rec.fabric ? `fabric×${rec.count - rec.fabric}` : "fabric×all");
+  }
   const base = miss.length ? `${rec.count} found · missing ${miss.join(" ")}` : `${rec.count} found · complete`;
   return rec.repair ? `${base} · recovered by reading the page (${rec.repair.adapter} adapter kept none)` : base;
 }
@@ -534,16 +586,26 @@ async function diagnoseDetail(item) {
 async function recordHealth(j, a, ent) {
   try {
     const filled = f => j.items.filter(it => String(it[f] || "").trim()).length;
+    /* What the SHOP said the brand was, before the list entry's name is
+       applied over it. Set Active writes its drop there ("JUL 2026 - GONE
+       BANANAS"), and a single storefront that names itself several different
+       ways is a shop we are reading wrong — the kind of thing that used to be
+       invisible because every row still had a name, a photo, a price and a
+       blend, so the check said the page was fine. */
+    const saidBrands = [...new Set(j.items
+      .map(it => String(it.brand || "").trim()).filter(Boolean))].slice(0, 8);
     const rec = {
       url: j.startUrl || location.href, sig: j.sig || collectionSig(location.href),
       adapter: a.id, brand: (ent && ent.brand) || "", label: (ent && ent.label) || "",
       count: j.items.length, named: filled("name"), imaged: filled("image_url"), priced: filled("price"),
       fabric: filled("fabric_composition"), withSpec: !!j.withSpec,
+      saidBrands, multiBrand: !!a.multiBrand,
       ts: Date.now(),
     };
     // the page was read around its adapter — the spreadsheet is whole, the rule is not
     if (j.repair) rec.repair = j.repair;
     rec.mark = healthMark(rec);
+    rec.why = healthWhy(rec);
     // Photograph the page only when something is wrong AND we are still looking
     // at the scanned collection (single-page scans stay on it; a paginated run
     // may have walked off it, and diagnosing the wrong page would mislead).
