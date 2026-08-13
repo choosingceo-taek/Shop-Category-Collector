@@ -748,16 +748,21 @@
     fill.style.width = Math.round((done / Math.max(1, total)) * 100) + "%";
   }
 
-  async function paintAuto() {
+  /* keepNote: after a run the note carries the outcome — what was written, or
+     why nothing was. Repainting the button must not overwrite it; that message
+     is the only thing that says whether the click did anything. */
+  async function paintAuto(keepNote) {
     const dir = await knownFolder(false);
     $("#uauto").textContent = dir ? "⚡ Update now" : "📂 Choose my Market Lens folder";
+    if (keepNote) return;
     $("#uautonote").textContent = dir
-      ? `writes straight into ${dir.name} — then press ↻`
+      ? `writes straight into ${dir.name || "your Market Lens folder"} — then press ↻`
       : "one time only: point at the folder Chrome loaded, and updates become one click";
   }
 
   $("#uauto").addEventListener("click", async () => {
     const btn = $("#uauto"), was = btn.textContent;
+    let said = false;                       // did this run leave a message?
     try {
       let dir = await knownFolder(true);
       if (!dir) {
@@ -774,6 +779,7 @@
             ? `That folder holds "${here.name}". Pick the Market Lens folder itself.`
             : "That folder has no manifest.json in it. Pick the folder Chrome loaded — " +
               "the one that CONTAINS manifest.json, not the folder above it.";
+          said = true;
           return;
         }
         await I.saveFolder(dir);
@@ -782,13 +788,11 @@
         toast(`Folder remembered (${dir.name}) — press Update now`);
         return;
       }
-      /* Reading the zip's BYTES needs access to github.com — a plain download
-         does not, but we have to unzip it. Asked for inside the click, the way
-         every other origin here is, and never held when it is not being used. */
-      const GH = { origins: ["https://github.com/*", "https://codeload.github.com/*"] };
-      const allowed = await new Promise(r => chrome.permissions.contains(GH, v => { void chrome.runtime.lastError; r(!!v); }))
-        || await new Promise(r => chrome.permissions.request(GH, v => { void chrome.runtime.lastError; r(!!v); }));
-      if (!allowed) throw new Error("access to github.com was declined");
+      /* Reading the zip's BYTES needs access to its host — a plain download
+         does not, but this has to unzip it. Declared in the manifest rather
+         than asked for at the moment of use: a designer who presses Block on
+         that prompt has broken their own updates, and the shop origins are the
+         ones worth asking about. It is where Market Lens itself comes from. */
       btn.disabled = true; btn.textContent = "Downloading…";
       const res = await fetch(ZIP_URL + "?t=" + Date.now(), { cache: "no-store" });
       if (!res.ok) throw new Error("download failed (" + res.status + ")");
@@ -796,19 +800,20 @@
       btn.textContent = "Installing…";
       const out = await I.install(dir, buf, (d, t) => setBar(d, t));
       $("#uautonote").textContent =
-        `v${out.version} written into ${dir.name} · ${out.written} files.`;
+        `v${out.version} written into ${dir.name || "your folder"} · ${out.written} files.`;
+      said = true;
       toast(`v${out.version} is in your folder`);
       await paintReload(true);
       refreshUpdBox();
     } catch (e) {
       const m = (e && e.message) || String(e);
       if (/abort/i.test(m)) { /* the picker was dismissed — say nothing */ }
-      else $("#uautonote").textContent = "Could not finish: " + m + " — try the manual steps below.";
+      else { $("#uautonote").textContent = "Could not finish: " + m + " — try the manual steps below."; said = true; }
     } finally {
       btn.disabled = false;
       if (btn.textContent === "Downloading…" || btn.textContent === "Installing…") btn.textContent = was;
       $("#ubar").hidden = true;
-      paintAuto();
+      paintAuto(said);
     }
   });
 
@@ -861,6 +866,16 @@
     chrome.tabs.create({ url: "chrome://extensions" }, () => {
       if (chrome.runtime.lastError) toast("Open chrome://extensions yourself — Chrome blocked the shortcut");
     });
+  });
+
+  /* The banner at the top of the panel is the same update, offered where a
+     newer version is first noticed. It is wired here, once, rather than inside
+     the callback that unhides it — a button whose handler arrives later is a
+     button that does nothing if it is pressed early. */
+  $("#upnow").addEventListener("click", () => {
+    $("#updbox").hidden = false;
+    refreshUpdBox(); paintAuto(); paintReload(false);
+    $("#uauto").click();
   });
 
   $("#addbtn").addEventListener("click", addCurrentPage);
@@ -1187,13 +1202,15 @@
           $("#upready").hidden = false;
           return;
         }
+        /* A new version has to be visible without going looking for it. The
+           banner is the whole update: one button, the same one the version
+           chip carries, so nobody has to know where GitHub is. */
         chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
           void chrome.runtime.lastError;
           if (!r || !r.newer) return;
           $("#upver").textContent = "v" + r.latest;
           $("#upcur").textContent = "v" + r.current;
           $("#upnote").hidden = false;
-          $("#upget").onclick = () => chrome.tabs.create({ url: r.zip });
         });
       });
       // ask the worker to look at the folder right now, so opening the panel
