@@ -556,7 +556,79 @@
       ? '<path d="M8 5.5v13l11-6.5z"/>'                      // ▶ resume
       : '<path d="M9 5.5h3v13H9zM14 5.5h3v13h-3z"/>';        // ⏸ hold
     $("#jreset").disabled = !busy;
+    /* The file is offered only when a finished run has rows waiting. Asleep
+       during a run — its rows are still arriving — and asleep when there is
+       nothing to put in it. */
+    const x = $("#jxlsx");
+    x.disabled = busy || !(queue && !queue.active && (queue.rowCount || 0) > 0);
+    x.title = x.disabled
+      ? "The Excel of a finished run is taken from here"
+      : `Take the last run as an Excel file — ${queue.rowCount} products`;
   }
+
+  /* Build the last run's spreadsheet, here, on demand.
+
+     A run no longer writes one by itself: it fills the catalog, and PRODUCTS
+     and the LAB have every shop's products the moment that shop finishes.
+     Making the file costs a download of every photo in the run, so it waits
+     to be asked for. The panel loads ExcelJS itself, so this does not depend
+     on the scanned tab still being open. */
+  async function exportRunExcel() {
+    const q = await load(QUEUE);
+    if (!q || q.active || !(q.rowCount > 0)) return;
+    const btn = $("#jxlsx");
+    btn.disabled = true;
+    const say = m => { $("#livetext").textContent = m; };
+    try {
+      say(`Building the Excel… ${q.rowCount} products`);
+      const got = await new Promise(r => {
+        try {
+          chrome.runtime.sendMessage({ type: "runRows", op: "get", runId: q.runId },
+            x => { void chrome.runtime.lastError; r(x || null); });
+        } catch (e) { r(null); }
+      });
+      const rows = (got && got.rows) || [];
+      if (!rows.length) { say("That run's rows are gone — scan again to rebuild it."); return; }
+      const fetchImage = url => new Promise(r => {
+        try {
+          chrome.runtime.sendMessage({ type: "fetchImage", url }, x => {
+            void chrome.runtime.lastError;
+            r(x && x.ok ? x : null);
+          });
+        } catch (e) { r(null); }
+      });
+      const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
+        ExcelJS: window.ExcelJS, fetchImage, filters: q.filters || {},
+        onProgress: (i, total) => say(`Building the Excel… photos ${i}/${total}`),
+      });
+      const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const filename = `${tag}_${rows.length}items_${stamp}.xlsx`;
+      let b64 = "";
+      for (let i = 0; i < bytes.length; i += 0x8000)
+        b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      b64 = btoa(b64);
+      const saved = await new Promise(res => {
+        try {
+          chrome.runtime.sendMessage({ type: "downloadXlsx", filename, b64 },
+            r => res(!chrome.runtime.lastError && !!(r && r.ok)));
+        } catch (e) { res(false); }
+      });
+      if (!saved) {
+        const url = URL.createObjectURL(new Blob([bytes],
+          { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+        const el = document.createElement("a");
+        el.href = url; el.download = filename;
+        document.body.appendChild(el); el.click(); el.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+      say(`Saved — ${filename}`);
+      toast("Excel saved");
+    } catch (e) {
+      say("Could not build the Excel: " + ((e && e.message) || e));
+    } finally { paintLive(); }
+  }
+  $("#jxlsx").addEventListener("click", exportRunExcel);
 
   // ---- products -------------------------------------------------------------
   async function refreshProducts() {

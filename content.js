@@ -718,14 +718,15 @@ async function queueHealthExport(q) {
       name: q.name || "list", at: Date.now(), text,
       bad: bad.length, total: recs.length,
     });
-    /* The LAST line the panel shows has to be the whole story. When the run
-       collected nothing there is no spreadsheet either, and a bare "1 site
-       needs attention" leaves the designer looking for a file that was never
-       written. */
+    /* The LAST line the panel shows has to be the whole story: what was
+       collected, where it already is, and what is worth a look. The file is
+       no longer part of it — a run fills the catalog, and the spreadsheet is
+       taken with ⬇ when it is wanted. */
     const collected = (q && q.rowCount) || 0;
+    const need = `${bad.length} of ${recs.length} site${recs.length === 1 ? "" : "s"} need attention`;
     await report(collected
-      ? `Excel saved · ${bad.length} of ${recs.length} site${recs.length === 1 ? "" : "s"} need attention`
-      : `No products collected, so there is no Excel — ${bad.length} of ${recs.length} site${recs.length === 1 ? "" : "s"} came back empty or broken.`);
+      ? `${collected} products in PRODUCTS and the LAB · ${need} · press ⬇ for the Excel`
+      : `No products collected — ${bad.length} of ${recs.length} site${recs.length === 1 ? "" : "s"} came back empty or broken.`);
   } catch (e) { /* the report is a bonus — never fail the run over it */ }
 }
 
@@ -763,6 +764,20 @@ async function queueExport(q) {
     await report(`No products collected from ${n} site${n === 1 ? "" : "s"} — nothing to put in an Excel.`);
     return;
   }
+  /* Say what is there and where to take it. Building it here would mean
+     fetching every photo in the run for a file nobody asked for. */
+  const sites = ((q && q.list) || []).length;
+  await report(`${rows.length} products from ${sites} site${sites === 1 ? "" : "s"} — ` +
+    `in PRODUCTS and the LAB now. Press ⬇ for the Excel.`);
+  return;
+}
+
+/* The file, when it is actually wanted. Called from the panel, which loads
+   ExcelJS itself, so it does not depend on the scanned tab still being open. */
+async function queueExportNow(q) {
+  const got = await runRows("get", q && q.runId);
+  const rows = (got && got.rows) || [];
+  if (!rows.length) return;
   const a = adapter();
   if (!a) return;
   const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);
@@ -833,6 +848,16 @@ async function queueAdvance() {
   if (q.idx >= q.list.length) {
     q.active = false; q.finishedAt = Date.now();
     await setQueue(q);
+    /* The spreadsheet is NOT written here any more.
+
+       A run's job is to fill the catalog — PRODUCTS and the LAB have every
+       shop's products as soon as that shop finishes. The file is a separate
+       act: it costs a download of every thumbnail in the run, and a designer
+       who scanned to look at the LAB never asked for one. So the rows are
+       kept and the panel offers to take the file when it is wanted.
+
+       The rows survive until the next run starts, so the file can still be
+       made later without re-scanning. */
     await queueExport(q);          // job is still active here, so progress shows
     await queueHealthExport(q);    // failures (if any) are kept for devsitecheck()
     await closeJob();
