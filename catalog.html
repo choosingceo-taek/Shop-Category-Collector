@@ -326,11 +326,12 @@
           <option value="">All products</option>
         </select>
       </div>
+      <!-- One measure of time: when a row was first collected. The shop's own
+           publish date is collected but not shown — only Shopify states one,
+           so it was blank for most brands, and it means "made visible in the
+           store", which is why a re-listed item read as new and a long-listed
+           one read as 2025. -->
       <div class="fs"><span class="lg">Period</span>
-        <select id="datebasis" title="What the period counts — first collected (when we first saw it) or published (when the shop posted it)">
-          <option value="added">By collected date</option>
-          <option value="launch">By published date</option>
-        </select>
         <select id="period" title="Period">
           <option value="">All time</option>
           <option value="7">Last 7 days</option>
@@ -347,7 +348,6 @@
           <option value="priceDown">Price high to low</option>
           <option value="name">Name</option>
           <option value="brand">Brand</option>
-          <option value="launch">Newest published</option>
         </select>
         <button id="reset">Clear filters</button>
       </div>

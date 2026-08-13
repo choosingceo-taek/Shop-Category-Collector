@@ -110,7 +110,6 @@
 
   function paintStats() {
     const brands = new Set(items.map(i => i.brand).filter(Boolean)).size;
-    const dated = items.filter(i => i.launched_at).length;
     // How many rows carry a photo at all. A screenful of NO IMAGE has two
     // possible causes and this number separates them in one glance: low here
     // means the scan collected none, high here means the shop refused to serve
@@ -122,8 +121,7 @@
     $("#stats").textContent = items.length
       ? where + `${items.length.toLocaleString()} products · ${brands} brands` +
         (merged && !scopeId ? ` · ${merged} duplicates merged` : "") +
-        ` · ${shot} with a photo` +
-        (dated ? ` · ${dated} with a published date` : "")
+        ` · ${shot} with a photo`
       : (scopeId ? where + "nothing collected yet" : "Nothing collected yet");
   }
 
@@ -191,26 +189,19 @@
   // Window for the period filter, on addedAt — the moment a product FIRST
   // entered the catalog. That is what "이번 주 신규" means to a designer: newly
   // seen this week, not merely re-scanned. Weeks start Monday.
-  /* The shop's own publish date, where the shop states one.
+  /* The shop's publish date is collected but never shown.
 
-     Only some platforms tell us: Shopify's products.json carries published_at.
-     There is no way to infer it for the rest, and guessing would be exactly the
-     kind of invented value the output rules forbid — so a product without one
-     simply has no upload date, and the date filter says how many rows it can
-     actually see rather than silently filtering on a field most rows lack. */
-  const launchedAt = i => {
-    if (!i || !i.launched_at) return null;
-    const t = Date.parse(i.launched_at);
-    return isFinite(t) ? t : null;
-  };
-  /* The shop states an instant (Shopify's published_at is a UTC timestamp),
-     and the reader lives in one timezone. Slicing the ISO string showed the
-     UTC day, so a product published on a Korean morning could read as the day
-     before. The day the designer means is the day where the designer is. */
-  const ymdLocal = t => {
-    const d = new Date(t);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
+     Only Shopify states one, so it existed for a minority of shops and was
+     blank everywhere else — a column that answers for some brands and not
+     others invites exactly the comparison it cannot support. It is also not
+     the date a designer reads it as: it is when the shop made the product
+     visible in its store, so a re-published item carries a fresh date and a
+     long-listed one carries a date from last year, which is why a "new in"
+     grid was showing 2025.
+
+     The value stays in the row (the shop said it; we do not delete facts),
+     and everything on screen dates by first collection instead — one measure,
+     the same for every shop. */
 
   const byBrand = (x, y) => {
     const a = String(x.brand || ""), b = String(y.brand || "");
@@ -247,11 +238,10 @@
       if (s && (i.site || i.source) !== s) return false;
       if (projKeys && !projKeys.has(i.key)) return false;
       if (range) {
-        // "수집일" = when we first saw it; "업로드일" = when the shop published
-        // it. A row with no upload date is dropped from an upload-date window
-        // rather than falling back to a different measure.
-        const t = $("#datebasis").value === "launch" ? launchedAt(i) : (i.addedAt || 0);
-        if (t == null || !(t >= range.from && t < range.to)) return false;
+        // One measure of time: when this row was first collected. Every shop
+        // is counted the same way, whether or not it publishes a date.
+        const t = i.addedAt || 0;
+        if (!(t >= range.from && t < range.to)) return false;
       }
       if (q) {
         const hay = [i.name, i.fabric_composition, i.colorways, i.brand, i.design].join(" ").toLowerCase();
@@ -265,7 +255,6 @@
       : sort === "priceDown" ? (priceNum(y.price) ?? -1) - (priceNum(x.price) ?? -1)
       : sort === "name" ? String(x.name).localeCompare(String(y.name))
       // newest upload first; rows with no upload date go last, never guessed at
-      : sort === "launch" ? ((launchedAt(y) ?? -1) - (launchedAt(x) ?? -1))
       // no brand sinks to the bottom; written out rather than using a U+FFFF
       // sentinel, which makes the file invalid UTF-8 and blocks the extension
       : sort === "brand" ? (byBrand(x, y) || (y.addedAt || 0) - (x.addedAt || 0))
@@ -407,9 +396,9 @@
     const b = $("#brand").value, c = $("#cat").value, s = $("#src").value;
     const scope = [b, c, s].filter(Boolean).join(" · ");
     // say plainly which slice this is, so the file still explains itself later
-    const basis = $("#datebasis").value === "launch" ? "published" : "collected";
-    const periodLabel = ({ "7": `last 7 days ${basis}`, "14": `last 14 days ${basis}`, "30": `last 30 days ${basis}`,
-      thisweek: `this week ${basis}`, lastweek: `last week ${basis}` })[$("#period").value] || "";
+    const periodLabel = ({ "7": "last 7 days collected", "14": "last 14 days collected",
+      "30": "last 30 days collected", thisweek: "this week collected",
+      lastweek: "last week collected" })[$("#period").value] || "";
     const proj = projects.find(p => p.id === $("#projf").value);
     const today = new Date().toISOString().slice(0, 10);
     const html = window.ReportGen.build(rows, images, {
@@ -480,7 +469,7 @@
   $("#xlsx").addEventListener("click", exportXlsx);
 
   // the search box serves whichever product view is open
-  ["q", "brand", "cat", "src", "sort", "period", "datebasis", "projf"].forEach(id =>
+  ["q", "brand", "cat", "src", "sort", "period", "projf"].forEach(id =>
     $("#" + id).addEventListener("input", () => {
       render();
       if (id === "q") {
@@ -490,7 +479,7 @@
     }));
   $("#reset").addEventListener("click", () => {
     ["q", "brand", "cat", "src", "period", "projf"].forEach(id => { $("#" + id).value = ""; });
-    $("#sort").value = "new"; $("#datebasis").value = "added"; render();
+    $("#sort").value = "new"; render();
   });
 
   // ---- scan lists tab -------------------------------------------------------
@@ -588,15 +577,6 @@
       ? `<img class="thumb" src="${esc(i.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
       : `<div class="thumb ph">NO IMAGE</div>`;
     const link = i.product_url ? `<a href="${esc(i.product_url)}" target="_blank" rel="noopener">` : "";
-    /* What the shop itself says, never our own guess: the date it published
-       this product to its online store. Only Shopify states one, so most rows
-       carry nothing here — and the tooltip says whose date it is, because
-       "published" is not the same as "designed" or "arrived in this
-       category". */
-    const launched = i.launched_at && isFinite(Date.parse(i.launched_at))
-      ? `<div class="fb" title="The shop's own published date for this product${
-          i.launched_at ? " (" + esc(i.launched_at) + ")" : ""}">Published ${
-          ymdLocal(Date.parse(i.launched_at))}</div>` : "";
     return `<div class="c">
       ${link}${img}${link ? "</a>" : ""}
       <div class="body">
@@ -604,8 +584,7 @@
         <div class="nm">${link}${esc(i.name || "(untitled)")}${link ? "</a>" : ""}</div>
         ${i.price ? `<div class="pr${onSale ? " sale" : ""}">${esc(i.price)}${onSale ? `<s>${esc(i.price_was)}</s>` : ""}</div>` : ""}
         ${i.fabric_composition ? `<div class="fb">${esc(i.fabric_composition)}</div>` : ""}
-        ${launched}
-      </div></div>`;
+        </div></div>`;
   }
 
   const EMPTY_FEED = `<div class="empty">Nothing scanned yet.<br>
