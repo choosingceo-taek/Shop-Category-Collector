@@ -219,8 +219,14 @@
     border-bottom:1px solid var(--line); padding-bottom:6px; }
   .brandsec b { font-size:13px; text-transform:uppercase; letter-spacing:.06em; }
   .brandsec span { color:var(--muted); font-size:11.5px; }
-  .c .thumb.ph { display:flex; align-items:center; justify-content:center;
-    color:var(--muted); font-size:10px; letter-spacing:.08em; }
+  /* A refused photo names the host and the reason. "IMAGE BLOCKED" alone sent
+     the same report back three times with nothing anyone could act on. */
+  .c .thumb.ph { display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:3px; padding:8px; text-align:center;
+    color:var(--muted); font-size:9.5px; letter-spacing:.04em; line-height:1.35; }
+  .c .thumb.ph b { font-weight:600; color:var(--ink2); word-break:break-all; }
+  .c .thumb.ph span { opacity:.8; }
+  .checkbox .ccopy, .checkbox .cgrant { font-size:11px; padding:1px 8px; margin-left:6px; }
 
   .brandwrap { display:grid; grid-template-columns:220px 1fr; gap:22px; align-items:start; }
   @media (max-width:760px) { .brandwrap { grid-template-columns:1fr; } }

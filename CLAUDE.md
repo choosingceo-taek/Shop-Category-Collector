@@ -560,6 +560,17 @@
     `shopifyImage`가 `images[0]`·`featured_image`만 봐서 VUORI에서 빈손이었다.
   - 조성 **또는 사진**이 비면 PDP를 읽는다. 이미 파싱한 문서라 og:image·JSON-LD image를
     같이 꺼내는 비용은 0이고, **부족한 행만** PDP를 부른다.
+- **세 번 고쳤는데 같은 보고가 왔다 — 실패가 이유를 안 말했기 때문이다**(v1.99.0,
+  사용자 3회 보고 "vuori·nike·lululemon·adidas 여전히 image blocked"). v1.94는
+  워커 재요청, v1.96은 권한 구분을 넣었고 **테스트는 통과했다.** 그런데 실제로는
+  여전히 안 나오고, **화면에 있는 것은 "IMAGE BLOCKED" 다섯 글자뿐**이라 매번
+  원인을 추측해야 했다(CDN 호스트 · CSP · referrer 세 번 다 빗나감).
+  **그게 진짜 결함이다** — v1.95의 규칙("도구가 스스로 말했겠는가")을 사진 실패에는
+  적용하지 않았다.
+  → 이제 실패가 **호스트와 사유를 카드에 직접 적는다**(`images.lululemon.com` /
+  `HTTP 403`). 워커는 `{ok:false, error, need}`로 답하고, LAB이 그걸 모아
+  검사 밴드에 넣고 **Copy this line** 버튼을 단다 — 콘솔을 열지 않고 사유를
+  그대로 보낼 수 있다. 사유가 없으면 다음 라운드도 추측이 된다.
 - **"IMAGE BLOCKED"는 주소가 죽은 게 아니라 묻는 사람이 문제다**(v1.94.0, 사용자 보고
   nike·lululemon·adidas). LAB은 `chrome-extension://`이고 이 몰들은 사진을 **자기
   사이트에만** 내준다(CORS 헤더 없음·Referer 검사). 주소도 수집도 정상인데 카드만 회색.

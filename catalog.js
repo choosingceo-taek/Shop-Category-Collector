@@ -203,9 +203,10 @@
                .replace(/\/\*$/, "")).slice(0, 3).join(", ")}). ` +
              `Nothing is wrong with the scan — this needs your permission.` });
     } else if (seen.length) {
-      bad.unshift({ mark: "\u26a0\ufe0f", ts: Date.now(), url: "",
-        why: `${seen.slice(0, 4).join(", ")}: some photos would not load even when ` +
-             `fetched here. The addresses were collected — the shop is refusing them.` });
+      bad.unshift({ mark: "\u26a0\ufe0f", ts: Date.now(), url: "", copy: true,
+        why: `Photos refused — ` + seen.slice(0, 4).map(h =>
+          `${h} (${failWhy.get(h) || "refused"})`).join(" \u00b7 ") +
+        `. The addresses were collected correctly; the shop will not serve them here.` });
     }
     bar.hidden = !bad.length;
     if (!bad.length) return;
@@ -218,10 +219,20 @@
       `this is what did not come through.</span>` +
       bad.map(h => `<span class="cw"><b>${esc(h.mark)}</b> ${esc(healthWord(h))}` +
         (h.grant ? ` <button class="cgrant">Show these photos</button>` : "") +
+        (h.copy ? ` <button class="ccopy">Copy this line</button>` : "") +
         (h.url ? ` <a href="${esc(h.url)}" target="_blank" rel="noreferrer">open \u2197</a>` : "") +
         `</span>`).join("");
     const gb = $("#checkbox").querySelector(".cgrant");
     if (gb) gb.addEventListener("click", () => grantImageHosts(need));
+    /* One button, so the exact reason can be sent on without anyone
+       retyping it or being asked to open a developer console. */
+    const cb = $("#checkbox").querySelector(".ccopy");
+    if (cb) cb.addEventListener("click", () => {
+      const line = [...blockedBy].map(h => `${h}: ${failWhy.get(h) || "refused"}`).join("\n");
+      navigator.clipboard.writeText(line).then(
+        () => { cb.textContent = "Copied"; },
+        () => { cb.textContent = line.slice(0, 60); });
+    });
   }
 
   /* The grant has to happen inside the click — Chrome requires the gesture —
@@ -852,16 +863,28 @@
      ever name them all. That is a permission, not a bug, and a permission has
      a fix a person can apply in one click. */
   const needOrigins = new Set();
+  /* Why each host failed, in the shop's own words where there are any.
+
+     Three fixes have been shipped for missing photos and the report came back
+     the same each time. That is the real defect: the failure never said what
+     it was, so every round was a guess. It now carries the reason — the HTTP
+     status the shop answered with, or the network error, or the missing
+     permission — and shows it on the card and in the band, where it can be
+     read and sent on without anyone opening a console. */
+  const failWhy = new Map();                      // host -> reason
   function workerImage(url) {
     if (viaWorker.has(url)) return viaWorker.get(url);
     const p = new Promise(res => {
       let done = false;
       const finish = v => { if (!done) { done = true; res(v); } };
-      setTimeout(() => finish(null), 15000);
+      setTimeout(() => { failWhy.set(hostOfUrl(url), "no answer in 15s"); finish(null); }, 15000);
       try {
         chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
           void chrome.runtime.lastError;
           if (r && r.need) needOrigins.add(r.need);
+          if (!r || !r.ok) failWhy.set(hostOfUrl(url),
+            (r && r.need) ? "Market Lens has no access to this host"
+              : (r && r.error) || "the request failed");
           finish(r && r.ok && r.base64
             ? `data:image/${r.ext === "jpg" ? "jpeg" : (r.ext || "png")};base64,${r.base64}` : null);
         });
@@ -893,11 +916,14 @@
   const blockedBy = new Set();
   let blockedPaint = null;
   function blocked(img, src) {
+    const host = hostOfUrl(src);
     const ph = document.createElement("div");
     ph.className = "thumb ph";
-    ph.textContent = "IMAGE BLOCKED";
+    /* The card names the host and the reason. "IMAGE BLOCKED" on its own sent
+       the designer back to us three times with nothing to go on. */
+    ph.innerHTML = `<b>${esc(host)}</b><span>${esc(failWhy.get(host) || "refused")}</span>`;
     ph.title = "the shop refused this address, and fetching it here failed too:\n" + src;
-    blockedBy.add(hostOfUrl(src));     // the CDN that refused, which is the shop
+    blockedBy.add(host);               // the CDN that refused, which is the shop
     img.replaceWith(ph);
     clearTimeout(blockedPaint);              // one repaint for a whole grid
     blockedPaint = setTimeout(paintCheck, 600);
