@@ -680,7 +680,7 @@
   $("#verchip").addEventListener("click", () => {
     const box = $("#updbox");
     box.hidden = !box.hidden;
-    if (!box.hidden) refreshUpdBox();
+    if (!box.hidden) { refreshUpdBox(); paintAuto(); }
   });
 
   function refreshUpdBox() {
@@ -715,6 +715,81 @@
       if (r && r.ok) { $("#udlnote").textContent = "saved as market-lens.zip in Downloads"; toast("Downloading market-lens.zip"); }
       else { chrome.tabs.create({ url: ZIP_URL }); $("#udlnote").textContent = "opened the download in a tab"; }
     });
+  });
+
+  /* ---- the one click ------------------------------------------------------
+
+     The browser can do the two steps a person kept losing: it downloads the
+     zip, unzips it and writes the files into the extension's own folder. That
+     needs the folder once — showDirectoryPicker, whose grant persists — and
+     after that every update is this button.
+
+     The reload is not automated on purpose: chrome.runtime.reload() was
+     measured on an unpacked extension and does not reliably bring it back.
+     One click beats a disappeared extension. */
+  const I = window.LensInstaller;
+  let extDir = null;
+
+  async function knownFolder(ask) {
+    if (!extDir) extDir = await I.loadFolder();
+    return (await I.folderReady(extDir, ask)) ? extDir : null;
+  }
+
+  function setBar(done, total) {
+    const bar = $("#ubar"), fill = $("#ubarfill");
+    bar.hidden = false;
+    fill.style.width = Math.round((done / Math.max(1, total)) * 100) + "%";
+  }
+
+  async function paintAuto() {
+    const dir = await knownFolder(false);
+    $("#uauto").textContent = dir ? "⚡ Update now" : "📂 Choose my Market Lens folder";
+    $("#uautonote").textContent = dir
+      ? `writes straight into ${dir.name} — then press ↻`
+      : "one time only: point at the folder Chrome loaded, and updates become one click";
+  }
+
+  $("#uauto").addEventListener("click", async () => {
+    const btn = $("#uauto"), was = btn.textContent;
+    try {
+      let dir = await knownFolder(true);
+      if (!dir) {
+        // the picker needs the click, so it runs first and nothing else does
+        dir = await window.showDirectoryPicker({ mode: "readwrite", id: "mlens-ext" });
+        await I.saveFolder(dir);
+        extDir = dir;
+        await paintAuto();
+        toast("Folder remembered — press Update now");
+        return;
+      }
+      /* Reading the zip's BYTES needs access to github.com — a plain download
+         does not, but we have to unzip it. Asked for inside the click, the way
+         every other origin here is, and never held when it is not being used. */
+      const GH = { origins: ["https://github.com/*", "https://codeload.github.com/*"] };
+      const allowed = await new Promise(r => chrome.permissions.contains(GH, v => { void chrome.runtime.lastError; r(!!v); }))
+        || await new Promise(r => chrome.permissions.request(GH, v => { void chrome.runtime.lastError; r(!!v); }));
+      if (!allowed) throw new Error("access to github.com was declined");
+      btn.disabled = true; btn.textContent = "Downloading…";
+      const res = await fetch(ZIP_URL + "?t=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) throw new Error("download failed (" + res.status + ")");
+      const buf = await res.arrayBuffer();
+      btn.textContent = "Installing…";
+      const out = await I.install(dir, buf, (d, t) => setBar(d, t));
+      $("#uautonote").textContent =
+        `v${out.version} written into ${dir.name} · ${out.written} files. ` +
+        "One step left: press ↻ on Market Lens.";
+      toast(`v${out.version} is in your folder — press ↻`);
+      refreshUpdBox();
+    } catch (e) {
+      const m = (e && e.message) || String(e);
+      if (/abort/i.test(m)) { /* the picker was dismissed — say nothing */ }
+      else $("#uautonote").textContent = "Could not finish: " + m + " — try the manual steps below.";
+    } finally {
+      btn.disabled = false;
+      if (btn.textContent === "Downloading…" || btn.textContent === "Installing…") btn.textContent = was;
+      $("#ubar").hidden = true;
+      paintAuto();
+    }
   });
 
   $("#uext").addEventListener("click", () => {

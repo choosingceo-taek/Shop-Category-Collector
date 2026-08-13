@@ -186,6 +186,13 @@
   .updbox button { font-size:11.5px; padding:3px 9px; flex:none; }
   .updbox .ufoot { color:var(--muted); font-size:10.5px; border-top:1px solid var(--line);
     padding-top:6px; margin-top:2px; }
+  .updbox .uone { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:7px; }
+  .updbox .uone .unote { flex-basis:100%; color:var(--muted); font-size:10.5px; }
+  .updbox .ubar { height:4px; border-radius:999px; background:var(--wash); overflow:hidden;
+    margin:0 0 8px; }
+  .updbox .ubar i { display:block; height:100%; width:0; background:var(--ink); transition:width .2s ease; }
+  .umanual { margin:2px 0 6px; }
+  .umanual summary { cursor:pointer; color:var(--muted); font-size:10.5px; margin-bottom:6px; }
   .explist { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
   .explist .cap { color:var(--muted); flex:1; }
   .explist button { font-size:10.5px; padding:4px 9px; letter-spacing:.05em; }
@@ -382,14 +389,24 @@
   <!-- Opened from the version chip. Three steps, in order, each with the
        button that performs it. -->
   <div class="updbox" id="updbox" hidden>
-    <div class="ustep"><b>1</b><button id="udl">⬇ Download the latest</button>
-      <span id="udlnote">saves one .zip to your Downloads</span></div>
-    <div class="ustep"><b>2</b><span>Unzip it and copy everything into your
-      <b>Market Lens folder</b>, replacing what is there. Keep the same folder —
-      that is what keeps your lists and collected products.</span></div>
-    <div class="ustep"><b>3</b><button id="uext">Open chrome://extensions</button>
-      <span>then press <b>↻</b> on Market Lens. The shop tabs you have open pick
-      it up on their own.</span></div>
+    <!-- One click, once the folder is known. The browser can download, unzip
+         and write the files itself; what it cannot safely do is reload the
+         extension, so that stays a person's click. -->
+    <div class="uone">
+      <button id="uauto" class="solid">⚡ Update now</button>
+      <button id="uext">Open chrome://extensions</button>
+      <div class="unote" id="uautonote"></div>
+    </div>
+    <div class="ubar" id="ubar" hidden><i id="ubarfill"></i></div>
+    <details class="umanual">
+      <summary>Do it by hand instead</summary>
+      <div class="ustep"><b>1</b><button id="udl">⬇ Download the latest</button>
+        <span id="udlnote">saves one .zip to your Downloads</span></div>
+      <div class="ustep"><b>2</b><span>Unzip it and copy everything into your
+        <b>Market Lens folder</b>, replacing what is there. Keep the same folder —
+        that is what keeps your lists and collected products.</span></div>
+      <div class="ustep"><b>3</b><span>press <b>↻</b> on Market Lens.</span></div>
+    </details>
     <div class="ufoot" id="ufoot"></div>
   </div>
 
@@ -592,6 +609,7 @@
   <script src="sites.js"></script>
   <script src="store.js"></script>
   <script src="lists.js"></script>
+  <script src="installer.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

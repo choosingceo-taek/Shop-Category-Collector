@@ -19,7 +19,7 @@ rm -f "$OUT"
 # 패널/카탈로그 페이지와 그 스크립트, 아이콘
 zip -q "$OUT" \
   manifest.json \
-  background.js store.js update.js \
+  background.js store.js update.js installer.js \
   exceljs.min.js excel.js sites.js content.js fab.js md-capture.js \
   sidepanel.html sidepanel.js lists.js \
   catalog.html catalog.js lab.js \
