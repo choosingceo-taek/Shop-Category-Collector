@@ -714,10 +714,35 @@
   const ZIP_URL = "https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip";
   const running = chrome.runtime.getManifest().version;
   $("#verchip").textContent = "v" + running;
-  $("#verchip").addEventListener("click", () => {
+  /* The chip IS the update.
+
+     It used to open a box that then needed a second click. Once the folder is
+     known and there is something newer, the press does the whole thing:
+     download, unzip, write, and — on a browser that has been shown to survive
+     it — reload. Nothing here is a new capability; it is the two clicks that
+     already existed, collapsed into the one the designer reaches for. */
+  let newerNow = null;                       // last answer from the worker
+  function checkNewer() {
+    return new Promise(res => {
+      try {
+        chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
+          void chrome.runtime.lastError;
+          newerNow = !!(r && r.newer);
+          res(newerNow);
+        });
+      } catch (e) { res(false); }
+    });
+  }
+
+  $("#verchip").addEventListener("click", async () => {
     const box = $("#updbox");
-    box.hidden = !box.hidden;
-    if (!box.hidden) { refreshUpdBox(); paintAuto(); paintReload(false); }
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    refreshUpdBox(); await paintAuto(); paintReload(false);
+    // Only when there is something to install and somewhere to put it. With no
+    // folder yet the first press has to be the folder question, and with
+    // nothing newer the press is someone looking, not asking for an install.
+    if (await knownFolder(false) && await checkNewer()) $("#uauto").click();
   });
 
   function refreshUpdBox() {
@@ -835,6 +860,7 @@
       toast(`v${out.version} is in your folder`);
       await paintReload(true);
       refreshUpdBox();
+      await maybeAutoReload(out.version);
     } catch (e) {
       const m = (e && e.message) || String(e);
       if (/abort/i.test(m)) { /* the picker was dismissed — say nothing */ }
@@ -882,15 +908,45 @@
     }
   }
 
-  $("#ureload").addEventListener("click", () => {
-    /* Open chrome://extensions FIRST. If the reload does come back, the tab is
-       harmless; if it does not, the person is already looking at the page where
-       one click brings it back, instead of at an extension that vanished. */
-    chrome.tabs.create({ url: "chrome://extensions" }, () => void chrome.runtime.lastError);
-    $("#uautonote").textContent = "Reloading… if Market Lens does not come back by itself, " +
-      "press ↻ on the page that just opened.";
+  function doReload(safetyNet) {
+    /* The safety net opens chrome://extensions FIRST, so a reload that does
+       not come back leaves the person looking at the page that brings it back
+       rather than at an extension that vanished. It is only needed while this
+       browser is unproven — once it has come back once, an extra tab on every
+       update is just litter. */
+    if (safetyNet) {
+      chrome.tabs.create({ url: "chrome://extensions" }, () => void chrome.runtime.lastError);
+      $("#uautonote").textContent = "Reloading… if Market Lens does not come back by itself, " +
+        "press ↻ on the page that just opened.";
+    }
     chrome.runtime.sendMessage({ type: "reloadSelf" }, () => void chrome.runtime.lastError);
-  });
+  }
+  $("#ureload").addEventListener("click", () => doReload(true));
+
+  /* Reload without being asked — but only where that is known to be safe.
+
+     chrome.runtime.reload() takes an unpacked extension down and, in the test
+     browser, never brought it back. That browser loads extensions from the
+     command line and cannot speak for a desktop Chrome, so the extension
+     settles it in the only place that counts: the first reload is a click, it
+     leaves a note, and coming back clears the note and records that this
+     browser survives it. From then on the update can finish by itself, which
+     is what makes the chip a single press.
+
+     A run in progress is never interrupted — reloading mid-scan would lose the
+     spreadsheet, and the update is not urgent enough to cost a morning. */
+  async function maybeAutoReload(v) {
+    const st = await reloadVerdict();
+    if (st[RELOAD_OK] !== true) return;          // unproven — leave it a click
+    const q = await load(QUEUE);
+    if (q && q.active) {
+      $("#uautonote").textContent += " A scan is running, so the reload is left " +
+        "until it finishes — press ↻ Reload now then.";
+      return;
+    }
+    $("#uautonote").textContent = `v${v} installed — reloading Market Lens…`;
+    setTimeout(() => doReload(false), 600);      // let the message paint first
+  }
 
   $("#uext").addEventListener("click", () => {
     chrome.tabs.create({ url: "chrome://extensions" }, () => {
