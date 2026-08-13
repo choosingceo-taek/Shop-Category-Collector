@@ -173,6 +173,19 @@
   .upnote .uphow { color:var(--muted); font-size:11px; margin:3px 0 8px; }
   .upnote button { width:100%; font-size:11px; font-weight:700; letter-spacing:.05em; }
   .upnote.ready { border-color:rgba(46,139,87,.55); background:rgba(46,139,87,.07); }
+  .verchip { flex:none; font-size:10px; padding:2px 7px; border-radius:999px;
+    background:var(--wash); border:1px solid transparent; color:var(--muted); }
+  .verchip:hover { color:var(--ink); border-color:var(--line2); }
+  .verchip.new { background:#e8f4ec; color:#1f6b42; border-color:rgba(46,139,87,.4); font-weight:700; }
+  .updbox { background:var(--card); margin:0 12px 10px; padding:10px 11px;
+    border-radius:var(--r); box-shadow:0 1px 2px rgba(0,0,0,.05); font-size:11.5px;
+    line-height:1.5; color:var(--ink2); }
+  .updbox .ustep { display:flex; gap:7px; align-items:flex-start; margin-bottom:7px; }
+  .updbox .ustep b:first-child { flex:none; width:15px; height:15px; border-radius:999px;
+    background:var(--ink); color:var(--card); font-size:9.5px; text-align:center; line-height:15px; }
+  .updbox button { font-size:11.5px; padding:3px 9px; flex:none; }
+  .updbox .ufoot { color:var(--muted); font-size:10.5px; border-top:1px solid var(--line);
+    padding-top:6px; margin-top:2px; }
   .explist { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
   .explist .cap { color:var(--muted); flex:1; }
   .explist button { font-size:10.5px; padding:4px 9px; letter-spacing:.05em; }
@@ -358,7 +371,27 @@
       <button class="tab on" data-view="collector">Collector</button>
       <button class="tab" data-view="products">Products</button>
     </div>
+    <!-- The version, and the way to replace it. It rides the header row that
+         already exists, so it costs no height until it is opened. Chrome never
+         updates a folder you loaded yourself, so "download it again" IS the
+         update path and it should be one obvious place rather than a link in a
+         chat message. -->
+    <button class="verchip" id="verchip" title="Version — click to update">v…</button>
   </header>
+
+  <!-- Opened from the version chip. Three steps, in order, each with the
+       button that performs it. -->
+  <div class="updbox" id="updbox" hidden>
+    <div class="ustep"><b>1</b><button id="udl">⬇ Download the latest</button>
+      <span id="udlnote">saves one .zip to your Downloads</span></div>
+    <div class="ustep"><b>2</b><span>Unzip it and copy everything into your
+      <b>Market Lens folder</b>, replacing what is there. Keep the same folder —
+      that is what keeps your lists and collected products.</span></div>
+    <div class="ustep"><b>3</b><button id="uext">Open chrome://extensions</button>
+      <span>then press <b>↻</b> on Market Lens. The shop tabs you have open pick
+      it up on their own.</span></div>
+    <div class="ufoot" id="ufoot"></div>
+  </div>
 
   <main>
     <!-- COLLECTOR — add whatever page you're on, then curate the list -->

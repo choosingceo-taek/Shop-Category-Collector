@@ -664,6 +664,65 @@
     toast(on ? `Scanning automatically — ${L.scheduleLabel(curList.schedule)}` : "Automatic scan off");
   });
 
+  /* ---- getting the new version -------------------------------------------
+
+     Chrome never updates an extension you loaded from a folder yourself — the
+     files on disk ARE the extension. So "download it again" is not a fallback,
+     it is the update path, and it belongs in one obvious place instead of a
+     link somebody has to find in a chat message.
+
+     Three steps, each with the button that performs it: fetch the zip, replace
+     the folder, reload. Step 3 can be opened from here — an extension may open
+     chrome://extensions itself (checked, not assumed). */
+  const ZIP_URL = "https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip";
+  const running = chrome.runtime.getManifest().version;
+  $("#verchip").textContent = "v" + running;
+  $("#verchip").addEventListener("click", () => {
+    const box = $("#updbox");
+    box.hidden = !box.hidden;
+    if (!box.hidden) refreshUpdBox();
+  });
+
+  function refreshUpdBox() {
+    const foot = $("#ufoot");
+    foot.textContent = `You are running v${running}. Checking…`;
+    chrome.storage.local.get("wpb_filesready", o => {
+      const ready = (o || {}).wpb_filesready;
+      if (ready && ready.onDisk) {
+        foot.textContent = `v${ready.onDisk} is already in your folder — step 3 is all that is left.`;
+        return;
+      }
+      chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
+        void chrome.runtime.lastError;
+        foot.textContent = !r || !r.ok
+          ? `You are running v${running}. Could not reach GitHub to check for a newer one.`
+          : r.newer
+            ? `v${r.latest} is available — you are running v${running}.`
+            : `v${running} is the latest. Downloading again is harmless.`;
+      });
+    });
+  }
+
+  $("#udl").addEventListener("click", () => {
+    const btn = $("#udl"), was = btn.textContent;
+    btn.disabled = true; btn.textContent = "Downloading…";
+    /* Through the downloads API rather than a link, so it lands with a name
+       the designer will recognise in the folder rather than the branch name
+       GitHub would have given it. */
+    chrome.runtime.sendMessage({ type: "downloadUrl", url: ZIP_URL, filename: "market-lens.zip" }, r => {
+      void chrome.runtime.lastError;
+      btn.disabled = false; btn.textContent = was;
+      if (r && r.ok) { $("#udlnote").textContent = "saved as market-lens.zip in Downloads"; toast("Downloading market-lens.zip"); }
+      else { chrome.tabs.create({ url: ZIP_URL }); $("#udlnote").textContent = "opened the download in a tab"; }
+    });
+  });
+
+  $("#uext").addEventListener("click", () => {
+    chrome.tabs.create({ url: "chrome://extensions" }, () => {
+      if (chrome.runtime.lastError) toast("Open chrome://extensions yourself — Chrome blocked the shortcut");
+    });
+  });
+
   $("#addbtn").addEventListener("click", addCurrentPage);
   $("#catalog").addEventListener("click", () =>
     chrome.tabs.create({ url: chrome.runtime.getURL("catalog.html") }));

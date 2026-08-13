@@ -392,6 +392,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     })();
     return true;
   }
+  /* Fetch a file to the user's Downloads under a name they will recognise.
+     The panel cannot name a cross-origin download by itself. */
+  if (msg && msg.type === "downloadUrl" && msg.url) {
+    chrome.downloads.download({ url: msg.url, filename: msg.filename || "download" },
+      id => send({ ok: !chrome.runtime.lastError && id != null, id }));
+    return true;
+  }
   if (msg && msg.type === "checkFiles") {
     checkForReplacedFiles().then(v => send({ ready: v })).catch(() => send({ ready: false }));
     return true;
