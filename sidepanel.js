@@ -145,17 +145,17 @@
       add.textContent = label; add.disabled = !on;
       add.title = why || "Add the page you are on (the round button on the page does this too)";
     };
-    if (!read) return set("＋ This page", false, "Reading the page…");
-    if (read.kind === "internal") return set("＋ This page", false, "A browser page can't be collected");
+    if (!read) return set("＋ Page", false, "Reading the page…");
+    if (read.kind === "internal") return set("＋ Page", false, "A browser page can't be collected");
     if (urlInList(read.url)) {
       const brand = brandOfRead(read);
-      return set("✓ In list", false,
+      return set("✓ Added", false,
         `${brand} — already in ${curList ? curList.name : "this list"}`);
     }
     const brand = brandOfRead(read);
     const cat = cleanLabel((read.ctx && read.ctx.category) || (tab && tab.title || ""), brand, read.host)
       || L.labelFromUrl(read.url) || read.host;
-    set("＋ This page", true, `Add as ${brand} · ${cat}`);
+    set("＋ Page", true, `Add as ${brand} · ${cat}`);
   }
 
   // ---- the list -------------------------------------------------------------
@@ -350,9 +350,11 @@
     if (entries.length < 7) { listQuery = ""; $("#lq").value = ""; }
 
     if (!entries.length) {
-      body.innerHTML = '<div class="lempty">No sites in this list yet.<br>' +
-        'Open a brand\'s category page and press <b>＋ Add this page</b>,<br>' +
-        'or bring a whole list in with <b>⬆ Import list</b>.</div>';
+      /* An empty list needs no paragraph. The three buttons directly above
+         are the three ways to fill it, and they are named; a sentence that
+         re-reads them out loud is furniture in the one place the list itself
+         should be. */
+      body.innerHTML = '<div class="lempty">Empty</div>';
       return;
     }
     const qIdx = e => running ? queue.list.findIndex(x => L.normUrl(x.url) === L.normUrl(e.url)) : -1;

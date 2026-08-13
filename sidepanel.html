@@ -16,20 +16,24 @@
      destinations (LAB, the run); everything else is line work. */
   :root {
     color-scheme: light;
-    /* A grouped-list palette warmed off pure grey. Neutral grey plus square
-       corners read as a form to fill in; the same layout on a warm ground
-       with generous corners reads as something to handle. The structure is
-       unchanged — only the temperature and the radii. */
-    --bg:#efece5; --card:#fff; --ink:#1d1b18; --ink2:#4a453e; --muted:#8a857c;
-    --line:#e6e1d8; --line2:#d8d2c7; --hard:#1d1b18; --wash:#f4f1ea;
-    --overlay:rgba(29,27,24,.45);
-    /* Colour is spent on state, never on decoration: a run in progress, the
-       row being scanned. The brand dots in the list are data, not ornament. */
-    --accent:#b4551a; --accent2:#c08552;
-    --cta:#1d1b18; --cta-ink:#f7f4ee; --cta-hi:#000;
+    /* Editorial: white, achromatic greys, and boxes.
+
+       The ground used to be a warm greige with generous corners, chosen when
+       the panel read as a form to fill in. It reads instead as a tint over
+       everything — and a tool whose whole job is judging colour in garment
+       photographs should put no colour of its own next to them. So: white
+       card on a neutral ground, hairline rules, near-square corners. The
+       structure is untouched; only temperature and radius. */
+    --bg:#f2f2f2; --card:#fff; --ink:#111; --ink2:#444; --muted:#8a8a8a;
+    --line:#e6e6e6; --line2:#d6d6d6; --hard:#111; --wash:#fafafa;
+    --overlay:rgba(0,0,0,.45);
+    /* The only colour left, and it is spent on state alone: a run in
+       progress, the row being scanned. */
+    --accent:#b4551a; --accent2:#8a8a8a;
+    --cta:#111; --cta-ink:#fff; --cta-hi:#000;
     --serif: ui-serif, Georgia, "Times New Roman", "Apple SD Gothic Neo", serif;
-    --r:16px;                       /* card corner — soft enough to hold */
-    --r-s:12px;                     /* controls */
+    --r:3px;                        /* boxes, not pills */
+    --r-s:2px;                      /* controls */
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
@@ -47,19 +51,25 @@
      ground is the grouping, which is why a Settings screen stays readable at
      a glance no matter how many rows it holds. */
   .fs { background:var(--card); border-radius:var(--r); padding:10px 11px;
-    margin:0 0 12px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    margin:0 0 12px; border:1px solid var(--line); }
   /* SCOPE — what this research question is watching. A micro-label rather
      than a titled card header: the word is there to name the thing once, not
      to be read again every time the panel opens, and the list of URLs is what
      the space belongs to. */
-  .fhead { display:flex; align-items:center; gap:8px; margin:0 0 7px; height:18px; }
-  .fhead .ftools { margin-left:auto; display:flex; gap:3px; align-items:center; }
+  .fhead { display:flex; align-items:center; gap:4px; margin:0 0 8px; height:26px; }
+  /* Nothing here is a duplicate — rename, delete, the two export formats and
+     the two toggles each do something the others cannot — so none was
+     removed. What was wrong was the size: six controls squeezed beside a
+     label nobody needed. The label is gone and they take the line. */
+  .fhead .ftools { display:flex; gap:4px; align-items:center; width:100%; }
   .fico { display:none; }
   .fhead .ft { min-width:0; }
   .fhead b { font-size:10px; font-weight:700; letter-spacing:.14em;
     text-transform:uppercase; color:var(--muted); }
-  .xbtn { font-size:10px; padding:2px 7px; border-radius:999px; background:var(--wash);
-    border-color:transparent; color:var(--muted); }
+  /* The two export formats are the same control twice over, so they are the
+     same shape as the rest of the row rather than two smaller pills. */
+  .xbtn { font-size:10px; height:26px; padding:0 8px; border-radius:var(--r-s);
+    background:var(--card); border:1px solid var(--line2); color:var(--ink2); flex:none; }
   .xbtn:hover { color:var(--ink); }
   /* off is a state, so it takes the muted treatment rather than vanishing */
   .iconbtn.off { opacity:.45; }
@@ -83,12 +93,11 @@
   h1 { font-size:13px; margin:0; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
   /* Segmented control, the iOS way of choosing between two views: one track,
      the chosen one lifted onto a white pill. */
-  .tabs { display:flex; gap:2px; flex:1; min-width:0; background:#e4e4e9;
-    border-radius:9px; padding:2px; }
+  .tabs { display:flex; gap:2px; flex:1; min-width:0; background:var(--wash);
+    border:1px solid var(--line); border-radius:var(--r); padding:2px; }
   .tab { flex:1; border:0; background:none; padding:5px 0 6px; font-size:12px;
-    font-weight:600; color:var(--ink2); border-radius:7px; letter-spacing:-.01em; }
-  .tab.on { background:var(--card); color:var(--ink);
-    box-shadow:0 1px 3px rgba(0,0,0,.12); }
+    font-weight:600; color:var(--muted); border-radius:2px; letter-spacing:-.01em; }
+  .tab.on { background:var(--hard); color:#fff; }
 
   main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
   .view { flex:1; overflow-y:auto; display:none; flex-direction:column; }
@@ -112,21 +121,21 @@
   /* All three carry their word now, so the bar is three labelled controls
      rather than one label and two unexplained glyphs. Run keeps the weight
      because it is the one pressed on purpose. */
-  .rbtn { display:inline-flex; align-items:center; justify-content:center; gap:6px;
-    height:38px; flex:1; min-width:0; padding:0 10px; border-radius:999px;
-    background:var(--wash); border:1px solid var(--line2); color:var(--ink);
+  .rbtn { display:inline-flex; align-items:center; justify-content:center; gap:0;
+    height:38px; flex:1; min-width:0; padding:0; border-radius:var(--r-s);
+    background:var(--card); border:1px solid var(--line2); color:var(--ink);
     transition:background .15s ease, color .15s ease, transform .12s ease, opacity .15s ease; }
   .rbtn svg { width:18px; height:18px; fill:currentColor; flex:none; }
-  .rbtn em { font-style:normal; font-weight:650; font-size:12.5px; letter-spacing:-.01em; }
-  .rbtn.go { flex:1.5; padding:0 14px; justify-content:flex-start;
-    background:var(--cta); color:var(--cta-ink); border-color:var(--cta); }
-  .rbtn em { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* The names live in title and aria-label. On screen the marks are enough:
+     a triangle, two bars, a square. */
+  .rbtn em { display:none; }
+  .rbtn.go { background:var(--cta); color:var(--cta-ink); border-color:var(--cta); }
   .rbtn.go:hover:not(:disabled) { background:var(--cta-hi); }
   .rbtn:hover:not(:disabled) { border-color:var(--hard); transform:translateY(-1px); }
   .rbtn:active:not(:disabled) { transform:scale(.96); }
   .rbtn:disabled { opacity:.32; cursor:default; }
   /* a hold in effect is a state, so it is the one thing here that takes colour */
-  .rbtn.held { background:var(--accent2); border-color:var(--accent2); color:#fff; opacity:1; }
+  .rbtn.held { background:var(--accent); border-color:var(--accent); color:#fff; opacity:1; }
 
   /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
   /* The capture card: what is about to be filed, spelled out. Brand and
@@ -162,27 +171,33 @@
   /* Lists as chips: every list and its size readable at rest, one tap to
      switch, and a "＋" that is a list rather than an unlabelled icon. */
   .lchips { display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0; }
-  .lchips button { font-size:11.5px; letter-spacing:-.01em; padding:4px 10px;
-    border-radius:999px; font-weight:600; background:var(--wash);
-    border-color:transparent; }
+  /* Boxes, like the rest. A pill among rules reads as a different family of
+     control, and these are the same thing as everything else on the card. */
+  .lchips button { font-size:11.5px; letter-spacing:-.01em; padding:5px 10px;
+    border-radius:var(--r-s); font-weight:600; background:var(--card);
+    border:1px solid var(--line2); }
   .lchips button .n { font-weight:400; opacity:.6; margin-left:5px; }
-  .lchips button.on { background:var(--hard); color:var(--bg); border-color:var(--hard); }
+  .lchips button.on { background:var(--hard); color:#fff; border-color:var(--hard); }
   .lchips button.add { font-weight:400; color:var(--muted); }
-  .iconbtn { background:var(--wash); border-color:transparent; }
-  .iconbtn { width:22px; height:22px; padding:0; display:inline-flex; align-items:center;
-    justify-content:center; flex:none; font-size:11px; border-radius:50%; }
+  /* Big enough to aim at. Boxes, like everything else here. */
+  .iconbtn { background:var(--card); border:1px solid var(--line2); }
+  .iconbtn { width:26px; height:26px; padding:0; display:inline-flex; align-items:center;
+    justify-content:center; flex:none; font-size:12px; border-radius:var(--r-s); }
+  .iconbtn:hover, .xbtn:hover { border-color:var(--hard); color:var(--ink); }
+  /* the last two sit at the far end — they take things OUT, the rest edit */
+  .fhead .ftools .xbtn:first-of-type { margin-left:auto; }
   .runrow { display:flex; gap:6px; margin-bottom:8px; }
   .upnote { border:1px solid rgba(80,200,120,.45); border-radius:var(--r); padding:10px 12px;
     margin-bottom:10px; font-size:12px; line-height:1.55; }
   .upnote .uphow { color:var(--muted); font-size:11px; margin:3px 0 8px; }
   .upnote button { width:100%; font-size:11px; font-weight:700; letter-spacing:.05em; }
   .upnote.ready { border-color:rgba(46,139,87,.55); background:rgba(46,139,87,.07); }
-  .verchip { flex:none; font-size:10px; padding:2px 7px; border-radius:999px;
+  .verchip { flex:none; font-size:10px; padding:2px 7px; border-radius:var(--r-s);
     background:var(--wash); border:1px solid transparent; color:var(--muted); }
   .verchip:hover { color:var(--ink); border-color:var(--line2); }
-  .verchip.new { background:#e8f4ec; color:#1f6b42; border-color:rgba(46,139,87,.4); font-weight:700; }
+  .verchip.new { background:var(--hard); color:#fff; border-color:var(--hard); font-weight:700; }
   .updbox { background:var(--card); margin:0 12px 10px; padding:10px 11px;
-    border-radius:var(--r); box-shadow:0 1px 2px rgba(0,0,0,.05); font-size:11.5px;
+    border-radius:var(--r); border:1px solid var(--line); font-size:11.5px;
     line-height:1.5; color:var(--ink2); }
   .updbox .ustep { display:flex; gap:7px; align-items:flex-start; margin-bottom:7px; }
   .updbox .ustep b:first-child { flex:none; width:15px; height:15px; border-radius:999px;
@@ -211,7 +226,7 @@
      to read every single time for a destination you already know. */
   .labbtn { display:block; text-align:left; margin:0 12px 10px;
     width:calc(100% - 24px); padding:10px 14px; border:0; border-radius:var(--r-s);
-    background:var(--hard); color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.18); }
+    background:var(--hard); color:#fff; }
   .labbtn:hover { background:#000; }
   .labbtn .lbmain { display:flex; align-items:center; justify-content:space-between;
     font-size:15px; font-weight:700; letter-spacing:-.01em; }
@@ -236,8 +251,8 @@
      everywhere without anything being stored. */
   .lsearch { display:flex; gap:5px; align-items:center; margin:0 0 6px; }
   .lsearch input { flex:1; min-width:0; font-size:12px; padding:5px 10px;
-    border-radius:999px; background:var(--wash); border-color:transparent; }
-  .lsearch button { font-size:11px; padding:4px 9px; border-radius:999px;
+    border-radius:var(--r-s); background:var(--card); border:1px solid var(--line2); }
+  .lsearch button { font-size:11px; padding:4px 9px; border-radius:var(--r-s);
     background:var(--wash); border-color:transparent; }
   .lsum { font-size:10.5px; color:var(--muted); margin:0 2px 5px; }
   .grp { margin-bottom:10px; border:0; border-radius:var(--r-s);
@@ -273,7 +288,8 @@
   .ent .tag.on { display:none; }
   .ent .act { border:0; background:none; color:var(--muted); padding:1px 3px; font-size:10.5px; flex:none; }
   .ent .act:hover { color:var(--ink); }
-  .lempty { color:var(--muted); font-size:12px; line-height:1.8; padding:22px 0; text-align:center; }
+  .lempty { color:var(--muted); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; padding:26px 0; text-align:center; }
 
   /* pasting is the rare path — offered beside the others, opened on demand */
   /* the appointment row — one line, same furniture as the rest of the card */
@@ -460,7 +476,11 @@
           <!-- Named for what it is FOR. "Sites" describes the rows; the point
                is the set of category pages this research question watches
                week after week — so the card says Watchlist. -->
-          <div class="fhead"><span class="ft"><b>Scope</b></span>
+          <!-- No label. The card holds one thing and the rows below say what
+               it is; a word repeated on every open is furniture. Losing it
+               gives the whole line to the tools, which were too small to aim
+               at when they were sharing it. -->
+          <div class="fhead">
             <!-- the list's OWN tools: rename it, delete it, take it out.
                  Putting sites IN is a different job and lives with Add. -->
             <span class="ftools" id="ltools">
@@ -511,9 +531,12 @@
                spent its life saying "Browser page — can't be added". -->
           <div class="adder">
             <div class="addrow">
-              <button id="addbtn" title="Add the page you are on (the round button on the page does this too)">＋ This page</button>
-              <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)">⬆ Import list</button>
-              <button id="pastetoggle" aria-expanded="false" title="Paste a block of URLs">⌨ Paste URLs</button>
+              <!-- One word each. They are three ways to do the same thing —
+                   put sites in the list — so the sentence around them was
+                   repeating "list" three times for no one. -->
+              <button id="addbtn" title="Add the page you are on (the round button on the page does this too)">＋ Page</button>
+              <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)">⬆ Import</button>
+              <button id="pastetoggle" aria-expanded="false" title="Paste a block of URLs">⌨ Paste</button>
             </div>
             <div class="bulkbox" id="bulkbox" hidden>
               <textarea id="bulk" rows="4" placeholder="Zara
@@ -552,16 +575,17 @@
              because the bar is a transport, not a form — and because at this
              size a glyph is read faster than a word. Every scan reads the
              first page only, so there is nothing to configure here. -->
+        <!-- Icons alone. The words were added when the glyphs were two grey
+             squares nobody could tell apart; they are now a triangle, two
+             bars and a square, which are the transport marks every player
+             uses, and pause still swaps to a triangle so the state it will
+             move to is visible without reading. Each keeps its title and
+             aria-label, so the name is one hover or one screen reader away. -->
         <div class="runrow" role="group" aria-label="Scan controls">
-          <button id="runlist" class="rbtn go" title="Scan every site in this list" aria-label="Scan all">
+          <button id="runlist" class="rbtn go" title="Scan all — every site in this list" aria-label="Scan all">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
             <em id="runlabel">Scan all</em>
           </button>
-          <!-- Each control says what it is. A bare glyph was unreadable at
-               this size: two grey squares told nobody which one holds and
-               which one stops, and pause and resume are the same button in
-               two states, so the button has to name the state it will move
-               to. The icon still leads; the word settles it. -->
           <button id="jpause" class="rbtn" title="Hold the run — it keeps its place" aria-label="Pause">
             <svg id="pauseicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5h3v13H9zM14 5.5h3v13h-3z"/></svg>
             <em id="pauselabel">Pause</em>
