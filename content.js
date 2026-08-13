@@ -1085,15 +1085,24 @@ async function runStep(j) {
       const queue = await getQueue();
       const inList = !!(queue && queue.active && j.queued);
       if (inList) {
-        // The engine reads brand/category off the page; when the page states
-        // neither, the list entry that sent us here carries the user's own
-        // naming — fill only the blanks from it, so Excel and LAB never have
-        // to group rows under an empty brand.
+        /* The list entry's own naming, which the user typed on the Grab card.
+
+           Brand fills blanks only: on a multi-brand page (Walmart, Target) each
+           row states its own maker and the entry's brand is just the shop.
+
+           Category, though, is the user's to name and theirs WINS. A shop only
+           knows the collection it served — Alo's faceted new-arrivals URL is
+           "/collections/new-arrivals" whether the facet is Tanks or Hoodies —
+           so deriving it from the address files four different research
+           questions under one heading, and the Excel groups by exactly this.
+           The address is the shop's answer; the label is the designer's, and
+           they were the one looking at the page. */
         const ent = queue.list[queue.idx] || {};
         const keptRows = [].concat.apply([], Object.values(kept || {}));
         keptRows.forEach(r => {
           if (!r.brand && ent.brand) r.brand = ent.brand;
-          if (!r.category && ent.label) r.category = ent.label;
+          if (ent.label) r.category = ent.label;
+          else if (!r.category) r.category = "";
         });
         /* The rows go to the extension's database, not into the run record.
            Measured: the team's 456-entry list at 60 products each is 13.7 MB of
