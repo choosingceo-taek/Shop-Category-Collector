@@ -1155,7 +1155,20 @@ async function runStep(j) {
       const ent0 = (q0 && q0.active && j.queued) ? (q0.list[q0.idx] || null) : null;
       await recordHealth(j, a, ent0);
     }
-    await report("Building Excel… (embedding thumbnails)");
+    /* A list run does NOT need a spreadsheet here.
+
+       The list produces ONE file when the last URL finishes, so the workbook
+       built at this point was thrown away — after fetching every thumbnail in
+       the shop to embed in it. Fourteen shops meant fourteen wasted workbooks
+       and every photo downloaded twice: once into a file nobody keeps, once
+       into the real one at the end.
+
+       What the code below actually uses from it is `kept` — the rows that
+       survive the export filters — and the drop summary. Those come from
+       filterKept alone, with no ExcelJS and no network at all. */
+    const queue0 = await getQueue();
+    const listRun = !!(queue0 && queue0.active && j.queued);
+    await report(listRun ? "Saving to the catalog…" : "Building Excel… (embedding thumbnails)");
     // if composition was never collected, mark the cause so the cell can explain it
     if (!j.withSpec) j.items.forEach(it => { if (!it.fabric_composition && !it._compReason) it._compReason = "not_collected"; });
     try {
@@ -1165,7 +1178,11 @@ async function runStep(j) {
         filters: j.filters || {},
         onProgress: (i, total) => report(`Building Excel… images ${i}/${total}`),
       };
-      const { bytes, kept, dropped } = await a.buildWorkbook(j.items, ctx);
+      const built = listRun
+        ? (() => { const f = self.WPBExcel.filterKept(j.items, ctx.filters);
+                   return { bytes: null, kept: { Products: f.kept }, dropped: f.dropped }; })()
+        : await a.buildWorkbook(j.items, ctx);
+      const { bytes, kept, dropped } = built;
       const total = Object.values(kept).reduce((n, v) => n + (v.length || 0), 0);
       // break the dropped list down by reason for a transparent summary
       const dropByReason = {};
@@ -1186,8 +1203,8 @@ async function runStep(j) {
          URLs used to mean four spreadsheets (plus four JSONs) that the designer
          had to merge by hand; the list is one research question, so it gets one
          file, built in queueExport() when the last URL finishes. */
-      const queue = await getQueue();
-      const inList = !!(queue && queue.active && j.queued);
+      const queue = listRun ? queue0 : await getQueue();
+      const inList = listRun || !!(queue && queue.active && j.queued);
       if (inList) {
         /* The list entry's own naming, which the user typed on the Grab card.
 
