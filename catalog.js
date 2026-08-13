@@ -1005,5 +1005,19 @@
 
   (async () => { await loadLists(); })();
   tabTo("lab");                 // LAB is the default view; hides the product filters
-  load();
+  /* A failure to open the catalog has to SAY so.
+
+     The one that actually happens: the database version went up in a release
+     and an older connection — the service worker still running the code from
+     before the reload — holds the previous one, so the open is blocked. The
+     page then shows "Loading…" for ever with an empty console, which reads as
+     "I can't get into the LAB". Now it names the one step that fixes it. */
+  load().catch(err => {
+    const msg = (err && err.message) || String(err);
+    $("#stats").textContent = "Could not open the catalog";
+    $("#labbody").innerHTML = `<div class="labempty"><b>The catalog did not open.</b><br>${
+      esc(msg)}<br><br>Nothing collected has been lost — this is about opening the file, not its contents.</div>`;
+    const grid = $("#grid");
+    if (grid) grid.innerHTML = `<div class="empty" style="grid-column:1/-1">${esc(msg)}</div>`;
+  });
 })();

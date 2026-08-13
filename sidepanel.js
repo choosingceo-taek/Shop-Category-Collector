@@ -511,11 +511,18 @@
     btn.disabled = busy || btn.dataset.empty === "1";
     $("#runlabel").textContent = busy ? "Scanning…"
       : (btn.dataset.n ? `Scan all (${btn.dataset.n})` : "Scan all");
+    /* Pause and resume are one button in two states, so it shows the state it
+       will move to — icon and word together, since two grey squares said
+       nothing about which control did what. */
     const hold = $("#jpause");
     hold.disabled = !on;
     hold.classList.toggle("held", paused);
-    hold.title = paused ? "Resume the run" : "Hold the run — it keeps its place";
+    hold.title = paused ? "Resume the run where it stopped" : "Hold the run — it keeps its place";
     hold.setAttribute("aria-label", paused ? "Resume" : "Pause");
+    $("#pauselabel").textContent = paused ? "Resume" : "Pause";
+    $("#pauseicon").innerHTML = paused
+      ? '<path d="M8 5.5v13l11-6.5z"/>'                      // ▶ resume
+      : '<path d="M9 5.5h3v13H9zM14 5.5h3v13h-3z"/>';        // ⏸ hold
     $("#jreset").disabled = !busy;
   }
 

@@ -27,10 +27,26 @@
   const DB = "shopcat", VER = 3;
   let _db = null;
 
+  /* Opening has to survive an older connection still being alive.
+
+     The database version goes up when a release adds a store. If a page opens
+     the new version while another context — typically the service worker,
+     which is still running the code from before the reload — holds the old
+     one, IndexedDB BLOCKS the upgrade and open() simply never settles. The LAB
+     then sits on "Loading…" forever with nothing in the console, which is
+     exactly what "I can't get into the LAB" looks like.
+
+     Two guards. Every connection agrees to step aside when a newer version
+     arrives (onversionchange → close), so the upgrade proceeds by itself. And
+     if something still holds on, the wait ends with an error that names the
+     remedy instead of hanging. */
   function open() {
     if (_db) return Promise.resolve(_db);
     return new Promise((res, rej) => {
       const req = indexedDB.open(DB, VER);
+      req.onblocked = () => rej(new Error(
+        "The catalog is held open by an older version of the extension. " +
+        "Reload Market Lens on chrome://extensions (↻) and open the LAB again."));
       req.onupgradeneeded = e => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains("products")) {
@@ -59,7 +75,12 @@
           r.createIndex("runId", "runId", { unique: false });
         }
       };
-      req.onsuccess = () => { _db = req.result; res(_db); };
+      req.onsuccess = () => {
+        _db = req.result;
+        // let the next version in rather than blocking it
+        _db.onversionchange = () => { try { _db.close(); } catch (e) {} _db = null; };
+        res(_db);
+      };
       req.onerror = () => rej(req.error);
     });
   }

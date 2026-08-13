@@ -54,7 +54,9 @@
   /* ---------- the button ---------- */
   #fab {
     position: relative; width: 52px; height: 52px; border-radius: 50%;
-    background: #1D1B18; color: #F7F4EE;
+    /* light disc, warm lens: the same mark the toolbar shows, so the button on
+       the page and the icon in the toolbar are recognisably one thing */
+    background: #FFFDF8; color: #1D1B18; border: 1px solid rgba(29,27,24,.10);
     box-shadow: 0 6px 22px rgba(29,27,24,.32), 0 1px 3px rgba(29,27,24,.2);
     transition: transform .18s cubic-bezier(.2,.9,.3,1.2), box-shadow .18s ease;
   }
@@ -153,13 +155,7 @@
   #msg.on { display: block; }
   #msg b { color: #1D1B18; }
 
-  .foot { border-top: 1px solid rgba(29,27,24,.08); padding: 10px 16px;
-    display: flex; align-items: center; justify-content: space-between;
-    background: rgba(29,27,24,.02); }
-  .foot button { font-size: 11.5px; color: #8A857C; }
-  .foot button:hover { color: #1D1B18; }
-  #run { font-weight: 700; color: #1D1B18; }
-  #run[disabled] { opacity: .35; cursor: default; }
+  #msg:last-child { padding-bottom: 16px; }
 </style>
 <div id="wrap">
   <div id="card">
@@ -171,18 +167,18 @@
     <div class="into">Into which list</div>
     <div id="chips"></div>
     <div id="msg"></div>
-    <div class="foot">
-      <button id="run">▶ Scan this page</button>
-      <button id="hide" title="Hide the button on this site">Hide button</button>
-    </div>
   </div>
   <button id="fab" title="Grab this page">
     <span id="pop">+1</span>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="6.4"></circle>
-      <path d="M15.8 15.8 21 21"></path>
-      <path d="M11 8.2v5.6M8.2 11h5.6"></path>
+    <!-- The lens the extension is named after, exactly as the toolbar icon
+         draws it: same geometry, same warm gradient. Two different magnifiers
+         for one product read as two products. -->
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <defs><linearGradient id="lensg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#d2691e"/><stop offset="1" stop-color="#f0a04b"/>
+      </linearGradient></defs>
+      <circle cx="10.2" cy="10.2" r="6.9" stroke="url(#lensg)" stroke-width="2.2"/>
+      <path d="M15.17 15.17 L21 21" stroke="url(#lensg)" stroke-width="2.6" stroke-linecap="round"/>
     </svg>
     <span id="count"></span>
   </button>
@@ -334,25 +330,20 @@
 
   $("#fab").addEventListener("click", () => (open ? close() : openCard()));
   $("#x").addEventListener("click", close);
-  $("#hide").addEventListener("click", async () => {
-    close();
-    await set({ [HIDDEN]: true });          // the storage listener takes it away
-  });
-  // Scanning belongs to the panel, but the page you are looking at is the one
-  // case where starting from here saves a round trip.
-  $("#run").addEventListener("click", () => {
-    const e = engine(); if (!e) return;
-    close();
-    try { e.startJob({ withSpec: true, filters: {} }); } catch (x) {}
-  });
+  /* The card does one thing: file this page into a list.
+
+     It used to carry two more buttons. "Scan this page" scanned one page on
+     its own, which is not how the work is done — a list is scanned as a list,
+     and a single page collected here without its list produced a stray
+     spreadsheet nobody asked for. "Hide button" removed the only way to
+     collect from a page, and lives in the panel where it can also be undone.
+     Both were leaving the card by a door the designer had not meant to open. */
   document.addEventListener("keydown", e => { if (e.key === "Escape" && open) close(); });
 
   // A scan running anywhere shows on the button; its controls stay in the panel.
   function paintJob() {
     const on = !!(job && job.active);
     $("#fab").classList.toggle("busy", on && !job.paused);
-    $("#run").disabled = on;
-    $("#run").textContent = on ? "Scanning…" : "▶ Scan this page";
   }
 
   /* Hiding is a setting, not a one-way door.
