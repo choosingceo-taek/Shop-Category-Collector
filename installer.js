@@ -144,8 +144,32 @@
     return await handle.requestPermission(opts) === "granted";
   }
 
+  /* The TARGET has to be the extension's own folder, not its parent.
+
+     Picking the folder above it writes a complete, valid extension one level
+     too high — and then the folder Chrome actually loaded is left stale or
+     removed, which is how "File path cannot be resolved" happens on the next
+     reload. Chrome derives an unpacked extension's ID from its path, so a
+     folder that moves is a different extension with an empty catalog. The
+     cheapest guard is the one fact that distinguishes the right folder: the
+     manifest is already sitting in it. */
+  async function isExtensionFolder(dir) {
+    try {
+      const fh = await dir.getFileHandle("manifest.json");
+      const mf = JSON.parse(await (await fh.getFile()).text());
+      return { ok: /market lens/i.test(String(mf.name || "")), name: mf.name || "", version: mf.version || "" };
+    } catch (e) { return { ok: false, name: "", version: "" }; }
+  }
+
   // ---- the whole job, from one click ---------------------------------------
   async function install(dir, zipBuffer, onProgress) {
+    const here = await isExtensionFolder(dir);
+    if (!here.ok) {
+      throw new Error(here.name
+        ? `that folder holds "${here.name}", not Market Lens`
+        : "that folder has no manifest.json in it — pick the Market Lens folder itself, " +
+          "the one Chrome loaded, not the folder above it");
+    }
     const entries = stripTopFolder(await unzip(zipBuffer));
     if (!looksLikeTheExtension(entries))
       throw new Error("that archive does not look like Market Lens");
@@ -156,7 +180,7 @@
     return { written, version };
   }
 
-  const API = { unzip, stripTopFolder, writeAll, looksLikeTheExtension,
+  const API = { unzip, stripTopFolder, writeAll, looksLikeTheExtension, isExtensionFolder,
     saveFolder, loadFolder, folderReady, install };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.LensInstaller = API;

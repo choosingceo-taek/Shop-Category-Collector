@@ -763,10 +763,23 @@
       if (!dir) {
         // the picker needs the click, so it runs first and nothing else does
         dir = await window.showDirectoryPicker({ mode: "readwrite", id: "mlens-ext" });
+        /* Check it before remembering it. The folder above the right one holds
+           a valid extension after a write, and the folder Chrome actually
+           loaded is then stale — which is what "File path cannot be resolved"
+           is, and it costs the catalog, since an unpacked extension's identity
+           is its path. */
+        const here = await I.isExtensionFolder(dir);
+        if (!here.ok) {
+          $("#uautonote").textContent = here.name
+            ? `That folder holds "${here.name}". Pick the Market Lens folder itself.`
+            : "That folder has no manifest.json in it. Pick the folder Chrome loaded — " +
+              "the one that CONTAINS manifest.json, not the folder above it.";
+          return;
+        }
         await I.saveFolder(dir);
         extDir = dir;
         await paintAuto();
-        toast("Folder remembered — press Update now");
+        toast(`Folder remembered (${dir.name}) — press Update now`);
         return;
       }
       /* Reading the zip's BYTES needs access to github.com — a plain download
