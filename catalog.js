@@ -361,9 +361,21 @@
     return out;
   }
 
-  function render() {
+  /* The grid draws a page at a time.
+
+     Measured on a year of one designer's scanning — 35 brands, ~55 products
+     each, weekly — the catalog reaches ~27,000 rows, and building a card for
+     every one of them was most of the time the LAB took to open (20 s at
+     100,000). Nobody scrolls 27,000 cards either; the filters and the analysis
+     tabs are how this data is actually read. Exports and reports still work on
+     the whole filtered set, not on what happens to be drawn. */
+  const GRID_PAGE = 300;
+  let gridShown = GRID_PAGE;
+
+  function render(keepShown) {
     const rows = visible();
     const grid = $("#grid");
+    if (!keepShown) gridShown = GRID_PAGE;
     if (!items.length) {
       grid.innerHTML = "";
       grid.insertAdjacentHTML("beforeend",
@@ -375,7 +387,8 @@
       grid.innerHTML = '<div class="empty" style="grid-column:1/-1">No products match these filters.</div>';
       return;
     }
-    grid.innerHTML = rows.map(i => {
+    const slice = rows.slice(0, gridShown);
+    grid.innerHTML = slice.map(i => {
       const onSale = i.price_was && i.price && priceNum(i.price_was) > priceNum(i.price);
       const img = i.image_url
         ? `<img class="thumb" src="${esc(i.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
@@ -390,7 +403,13 @@
           ${i.price ? `<div class="pr${onSale ? " sale" : ""}">${esc(i.price)}${onSale ? `<s>${esc(i.price_was)}</s>` : ""}</div>` : ""}
           ${i.fabric_composition ? `<div class="fb">${esc(i.fabric_composition)}</div>` : ""}
         </div></div>`;
-    }).join("");
+    }).join("") + (rows.length > slice.length
+      ? `<div class="gridmore"><button id="gridmore">Show ${Math.min(GRID_PAGE, rows.length - slice.length)} more</button>` +
+        `<span>${slice.length.toLocaleString()} of ${rows.length.toLocaleString()} shown · ` +
+        `exports and reports use all ${rows.length.toLocaleString()}</span></div>`
+      : "");
+    const more = $("#gridmore");
+    if (more) more.addEventListener("click", () => { gridShown += GRID_PAGE; render(true); });
     armImgFallback(grid);
     paintSel();
   }
