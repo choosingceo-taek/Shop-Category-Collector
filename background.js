@@ -237,11 +237,35 @@ async function reinjectOpenTabs() {
   } catch (e) {}
 }
 
-chrome.runtime.onStartup.addListener(() => { reinjectOpenTabs(); checkForReplacedFiles(); });
+/* Did the extension come back from its own reload?
+
+   chrome.runtime.reload() is the difference between "one click" and "one click
+   plus a visit to chrome://extensions". Measured here it never returns — but
+   this harness loads extensions from the command line, which is not how a
+   desktop Chrome registers one, so the measurement cannot settle it for a real
+   browser. So the extension finds out for itself: it leaves a note before
+   reloading, and if it comes back it clears the note and remembers that this
+   browser can do it. If the note is still there the next time the panel opens,
+   the reload did NOT come back — the person had to press ↻ — and it stops
+   offering to do that to them again. */
+const RELOAD_TRY = "wpb_reloadtry", RELOAD_OK = "wpb_reloadok";
+
+async function noteReloadReturn() {
+  try {
+    const o = await new Promise(r => chrome.storage.local.get([RELOAD_TRY], r));
+    if (!o || !o[RELOAD_TRY]) return;
+    await new Promise(r => chrome.storage.local.set({ [RELOAD_OK]: true }, r));
+    await new Promise(r => chrome.storage.local.remove(RELOAD_TRY, r));
+  } catch (e) {}
+}
+
+chrome.runtime.onStartup.addListener(() => { noteReloadReturn(); reinjectOpenTabs(); checkForReplacedFiles(); });
 chrome.runtime.onInstalled.addListener(() => {
+  noteReloadReturn();
   reinjectOpenTabs();
   try { chrome.alarms.create(DISK_CHECK, { periodInMinutes: 5 }); } catch (e) {}
 });
+noteReloadReturn();
 reinjectOpenTabs();
 try { chrome.alarms.create(DISK_CHECK, { periodInMinutes: 5 }); } catch (e) {}
 
@@ -397,6 +421,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   if (msg && msg.type === "downloadUrl" && msg.url) {
     chrome.downloads.download({ url: msg.url, filename: msg.filename || "download" },
       id => send({ ok: !chrome.runtime.lastError && id != null, id }));
+    return true;
+  }
+  /* Reload the extension from the panel. The note goes down FIRST, so whether
+     it comes back is answered by whether the note is still there. */
+  if (msg && msg.type === "reloadSelf") {
+    (async () => {
+      try {
+        await new Promise(r => chrome.storage.local.set({ [RELOAD_TRY]: { at: Date.now() } }, r));
+        send({ ok: true });
+        setTimeout(() => { try { chrome.runtime.reload(); } catch (e) {} }, 250);
+      } catch (e) { send({ ok: false }); }
+    })();
     return true;
   }
   if (msg && msg.type === "checkFiles") {

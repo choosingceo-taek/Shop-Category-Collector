@@ -687,7 +687,7 @@
   $("#verchip").addEventListener("click", () => {
     const box = $("#updbox");
     box.hidden = !box.hidden;
-    if (!box.hidden) { refreshUpdBox(); paintAuto(); }
+    if (!box.hidden) { refreshUpdBox(); paintAuto(); paintReload(false); }
   });
 
   function refreshUpdBox() {
@@ -796,9 +796,9 @@
       btn.textContent = "Installing…";
       const out = await I.install(dir, buf, (d, t) => setBar(d, t));
       $("#uautonote").textContent =
-        `v${out.version} written into ${dir.name} · ${out.written} files. ` +
-        "One step left: press ↻ on Market Lens.";
-      toast(`v${out.version} is in your folder — press ↻`);
+        `v${out.version} written into ${dir.name} · ${out.written} files.`;
+      toast(`v${out.version} is in your folder`);
+      await paintReload(true);
       refreshUpdBox();
     } catch (e) {
       const m = (e && e.message) || String(e);
@@ -810,6 +810,51 @@
       $("#ubar").hidden = true;
       paintAuto();
     }
+  });
+
+  /* ---- the last step, offered only while it is known to work --------------
+
+     chrome.runtime.reload() is what turns this into one click. Measured in a
+     test browser it never came back — but that browser loads extensions from
+     the command line, which is not how a desktop Chrome registers one, so the
+     measurement cannot decide it here. The extension settles it in the only
+     place that counts, this browser: it leaves a note before reloading, clears
+     the note if it comes back, and if the note is still sitting there the next
+     time the panel opens, it stops offering the button and says why. Nobody
+     loses their extension twice to find out. */
+  const RELOAD_TRY = "wpb_reloadtry", RELOAD_OK = "wpb_reloadok";
+
+  async function reloadVerdict() {
+    return await new Promise(r => chrome.storage.local.get([RELOAD_TRY, RELOAD_OK], o => r(o || {})));
+  }
+
+  async function paintReload(filesJustWritten) {
+    const v = await reloadVerdict();
+    const stale = v[RELOAD_TRY] && Date.now() - (v[RELOAD_TRY].at || 0) > 30000;
+    if (stale) {
+      // it went away and a person had to bring it back — never offer that again
+      await new Promise(r => chrome.storage.local.set({ [RELOAD_OK]: false }, r));
+      await new Promise(r => chrome.storage.local.remove(RELOAD_TRY, r));
+    }
+    const allowed = (stale ? false : v[RELOAD_OK]) !== false;
+    const btn = $("#ureload");
+    btn.hidden = !(allowed && filesJustWritten);
+    if (!allowed && filesJustWritten) {
+      $("#uautonote").textContent += " This browser does not come back from an " +
+        "automatic reload, so press ↻ on chrome://extensions.";
+    } else if (allowed && filesJustWritten) {
+      $("#uautonote").textContent += " One step left — and this can do it.";
+    }
+  }
+
+  $("#ureload").addEventListener("click", () => {
+    /* Open chrome://extensions FIRST. If the reload does come back, the tab is
+       harmless; if it does not, the person is already looking at the page where
+       one click brings it back, instead of at an extension that vanished. */
+    chrome.tabs.create({ url: "chrome://extensions" }, () => void chrome.runtime.lastError);
+    $("#uautonote").textContent = "Reloading… if Market Lens does not come back by itself, " +
+      "press ↻ on the page that just opened.";
+    chrome.runtime.sendMessage({ type: "reloadSelf" }, () => void chrome.runtime.lastError);
   });
 
   $("#uext").addEventListener("click", () => {
