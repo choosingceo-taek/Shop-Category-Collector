@@ -38,13 +38,28 @@
      research question, so its history has to be its own — filing a list's
      numbers under the catalog's week would rewrite a record that describes a
      different population. */
+  /* Frozen from the SAME population the analysis reads — New In pages only.
+
+     A snapshot exists so a week's figures survive its products, so it has to
+     describe the same thing the live weeks do. Freezing the whole catalog
+     while the charts read only new arrivals would make the archived half of
+     any window describe a back-catalogue and the recent half a season, which
+     is the exact comparison this whole change exists to prevent.
+
+     It is filed under its own id (`<list>|new`) rather than overwriting the
+     older whole-catalog record: those are a different population, and a
+     record must never be rewritten by one (v1.72). */
+  // "ymn|new|2026-W33" for a list, "new|2026-W33" for the whole catalog —
+  // no empty leading segment.
+  const NEW_SNAP = id => (id ? id + "|new" : "new");
   async function rollup() {
-    const scanned = items.filter(i => i && i.source !== "clip" && i.addedAt);
+    const scanned = items.filter(i => i && i.source !== "clip" && i.addedAt && isNewIn(i));
     if (!scanned.length) return;
     const oldest = Math.min(...scanned.map(i => i.addedAt));
     const months = Math.max(2, Math.ceil((Date.now() - oldest) / (30 * 864e5)) + 1);
     try {
-      await S.putSnapshots(window.TrendCalc.weeklySnapshots(scanned, { months, listId: scopeId }));
+      await S.putSnapshots(window.TrendCalc.weeklySnapshots(scanned,
+        { months, listId: NEW_SNAP(scopeId) }));
       snapshots = await S.allSnapshots();
       applyScope();
     } catch (e) { /* snapshots are an optimisation — never block the view */ }
@@ -62,7 +77,7 @@
     items = allItems.filter(inScope);
     // Only this list's frozen weeks — the catalog-wide ones describe a
     // different population and would inflate every archived figure.
-    labSnapshots = snapshots.filter(s => String((s && s.listId) || "") === scopeId);
+    labSnapshots = snapshots.filter(s => String((s && s.listId) || "") === NEW_SNAP(scopeId));
   }
   let labSnapshots = [];
 
@@ -750,13 +765,44 @@
   }
 
   // LAB — change over time, computed from what we collected (no external service)
+  /* ---- what the analysis is allowed to see --------------------------------
+
+     A trend answers "what changed between one week and the next", and that
+     only works if each week is the same KIND of sample. A shop's New In page
+     is the shop telling us what it just released; a Tops page is its whole
+     shelf, most of which has been there for months. Mixing them means the
+     first scan of a shelf lands as one enormous week of arrivals and the
+     fabric and fit figures underneath describe a back-catalogue, not a
+     season.
+
+     What counts as New is the designer's own label on the list entry — the
+     name they typed on the Grab card, which is what the category column
+     already carries. So it is their call, it needs no re-scan to apply, and
+     it changes the moment they rename an entry.
+
+     Only the analysis is narrowed. New In and By Brand keep showing
+     everything the lists collected — browsing wants the whole assortment. */
+  const NEW_LABEL = /(^|[^a-z])(new|just[ -]?(in|dropped|landed)|latest|arrivals?|release[ds]?|drop)([^a-z]|$)|신상|신제품|뉴인/i;
+  const isNewIn = i => NEW_LABEL.test(String((i && i.category) || ""));
+
   function renderLab() {
-    window.LabView.render($("#labbody"), items.filter(inTier), {
+    const pool = items.filter(inTier);
+    const fresh = pool.filter(isNewIn);
+    window.LabView.render($("#labbody"), fresh, {
       tierChips: tierChips(new Map(tierList().map(t => [t, items.filter(i => i.tier === t).length]))),
       months: parseInt($("#labmonths").value, 10) || 6,
       granularity: $("#labgran").value,
       dim: $("#labdim").value,
       snapshots: labSnapshots,
+      /* Said on screen, because a number computed from a quarter of what was
+         collected must never look like a number about all of it. */
+      sourceNote: `${fresh.length.toLocaleString()} of ${pool.length.toLocaleString()} collected products ` +
+        `come from a New In page — the analysis reads those only, so each week is the same kind of sample.`,
+      sourceEmpty: pool.length && !fresh.length
+        ? "None of the collected products came from a page named as new arrivals. " +
+          "The analysis compares like with like, so it needs those: name a list entry " +
+          "New in (or New arrivals) on the Grab card and scan it."
+        : "",
     });
     wireTierChips($("#labbody"), renderLab);
   }

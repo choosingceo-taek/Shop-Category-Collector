@@ -371,9 +371,15 @@
     const o = T.overview(items, base);
 
     if (!o.total && !o.archived) {
-      el.innerHTML = `<div class="labempty">${clipped
-        ? `Only ${clipped} hand-picked products here.<br>Trends are computed from scans only — build a list and press ▶ Scan all.`
-        : "Nothing collected yet.<br>Once scans start, change over time builds up here."}</div>`;
+      /* The analysis reads New In pages only, so "nothing here" has a third
+         cause now — plenty was collected, but none of it from a page the
+         designer named as new arrivals. Saying which one it is is the
+         difference between a fixable state and a broken-looking screen. */
+      el.innerHTML = `<div class="labempty">${opts.sourceEmpty
+        ? esc(opts.sourceEmpty).replace(/\. /g, ".<br>")
+        : clipped
+          ? `Only ${clipped} hand-picked products here.<br>Trends are computed from scans only — build a list and press ▶ Scan all.`
+          : "Nothing collected yet.<br>Once scans start, change over time builds up here."}</div>`;
       return;
     }
 
@@ -437,6 +443,7 @@
         </div>
       </div>
 
+      ${opts.sourceNote ? `<p class="srcnote">${esc(opts.sourceNote)}</p>` : ""}
       <div class="movers axespair">${axis("fabric")}${axis("keyword")}</div>
 
       <section class="sec"><h3>📊 ${esc(label)} pulse
