@@ -98,6 +98,7 @@
   #v-lab h3 { font-size:13.5px; margin:0 0 8px; padding:0; border:0;
     font-weight:650; letter-spacing:-.01em; }
   #v-lab h3 .sub { font-weight:400; color:var(--muted); font-size:11.5px; margin-left:7px; }
+  .labhead { margin:0 0 10px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:9px; }
   .tile { border:0; border-radius:var(--r); padding:9px 12px; background:var(--card);
     box-shadow:0 1px 2px rgba(0,0,0,.05); }
@@ -278,6 +279,11 @@
      a figure computed from a quarter of the catalog must never be mistaken
      for one about all of it. */
   .srcnote { margin:0 0 12px; color:var(--muted); font-size:11.5px; line-height:1.5; }
+  /* Who is being read, and what that amounts to — one line, not three bands. */
+  .labctx { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; margin:0 0 10px; }
+  .labctx .catchips { margin:0; }
+  .labctx .srcnote { margin:0; flex:1 1 240px; min-width:0; }
+  .labctx:empty { display:none; }
   .scoperail { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .scoperail .cap { color:var(--muted); }
   .scopechips { display:flex; gap:5px; flex-wrap:wrap; }

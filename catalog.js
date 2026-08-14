@@ -785,19 +785,101 @@
   const NEW_LABEL = /(^|[^a-z])(new|just[ -]?(in|dropped|landed)|latest|arrivals?|release[ds]?|drop)([^a-z]|$)|신상|신제품|뉴인/i;
   const isNewIn = i => NEW_LABEL.test(String((i && i.category) || ""));
 
+  /* ---- garment type, so the analysis can be split by what the clothes ARE ---
+
+     "Price, keywords and fabric, broken down by category" cannot use the
+     category column any more: since the analysis reads New In pages only,
+     that column says "New in" on every row — it is the name of the page, not
+     the name of the garment. The split has to be by garment type.
+
+     Two sources, in this order:
+       1. the shop's own product type (Shopify states it; kept on the row
+          alongside the category the designer named),
+       2. the product name, which every shop writes in the same closed
+          vocabulary — a tank is called a tank everywhere.
+
+     The shop's word goes through the same vocabulary rather than being used
+     raw, because "T-Shirts" here and "Tees" there and "Tops" somewhere else
+     are the same drawer, and a per-shop drawer would defeat the whole point
+     of comparing across brands.
+
+     Derived when the screen is drawn, never stored — so it applies to
+     everything already collected, with no re-scan, and improves whenever this
+     list does. */
+  const GARMENTS = [
+    ["Dresses",   /\b(dress|dresses|gown|gowns|frock|frocks)\b/i],
+    ["Jumpsuits", /\b(jumpsuits?|rompers?|playsuits?|unitards?|catsuits?|overalls?|dungarees)\b/i],
+    ["Skirts",    /\bskirts?\b/i],
+    ["Swim",      /\b(swim\w*|bikinis?|one[- ]?pieces?|boardshorts?)\b/i],
+    ["Outerwear", /\b(jackets?|coats?|blazers?|parkas?|puffers?|trench(es)?|anoraks?|windbreakers?|vests?|gilets?|shackets?)\b/i],
+    ["Knitwear",  /\b(sweaters?|jumpers?|cardigans?|knits?|knitwear|pullovers?|cashmeres?)\b/i],
+    ["Sweats",    /\b(hoodies?|hooded|sweatshirts?|crewnecks?|zip[- ]?ups?|quarter[- ]?zips?|half[- ]?zips?)\b/i],
+    ["Bras",      /\b(bras?|bralettes?|bandeaus?)\b/i],
+    ["Leggings",  /\b(leggings?|tights?)\b/i],
+    ["Shorts",    /\bshorts?\b/i],
+    ["Bottoms",   /\b(pants?|trousers?|jeans?|joggers?|sweatpants?|chinos?|cargos?|culottes?|flares?)\b/i],
+    ["Tops",      /\b(tops?|tees?|t[- ]?shirts?|shirts?|blouses?|tanks?|camis(oles?)?|bodysuits?|crops?|polos?|turtlenecks?|henleys?)\b/i],
+    ["Accessories", /\b(bags?|hats?|caps?|beanies?|socks?|belts?|scarves|scarfs?|gloves?|totes?)\b/i],
+  ];
+  const GARMENT_ORDER = GARMENTS.map(g => g[0]).concat(["Other"]);
+  const matchGarment = s => {
+    const t = String(s || "");
+    if (!t.trim()) return "";
+    for (const [name, re] of GARMENTS) if (re.test(t)) return name;
+    return "";
+  };
+  const garmentOf = i =>
+    matchGarment(i && i.product_type) || matchGarment(i && i.name) || "Other";
+
+  let curGarment = "";        // "" = every garment type
+  const inGarment = i => !curGarment || garmentOf(i) === curGarment;
+
+  /* Same row of chips as the tier filter, counts and all, so a chip can never
+     lead to an empty screen. Omitted when everything collected is one type —
+     a filter with a single option is furniture. */
+  function garmentChips(rows) {
+    const counts = new Map();
+    (rows || []).forEach(i => {
+      const g = garmentOf(i);
+      counts.set(g, (counts.get(g) || 0) + 1);
+    });
+    if (counts.size < 2 && !curGarment) return "";
+    const list = GARMENT_ORDER.filter(g => counts.has(g));
+    if (curGarment && !counts.has(curGarment)) list.push(curGarment);
+    const all = [...counts.values()].reduce((a, b) => a + b, 0);
+    return `<div class="catchips garmentchips">
+      <button data-g="" class="${curGarment ? "" : "on"}">All types · ${all}</button>` +
+      list.map(g => `<button data-g="${esc(g)}" class="${g === curGarment ? "on" : ""}">${
+        esc(g)} · ${counts.get(g) || 0}</button>`).join("") + `</div>`;
+  }
+  function wireGarmentChips(el, rerender) {
+    el.querySelectorAll(".garmentchips button").forEach(b =>
+      b.addEventListener("click", () => { curGarment = b.dataset.g; rerender(); }));
+  }
+
   function renderLab() {
     const pool = items.filter(inTier);
     const fresh = pool.filter(isNewIn);
-    window.LabView.render($("#labbody"), fresh, {
+    const shown = fresh.filter(inGarment);
+    window.LabView.render($("#labbody"), shown, {
       tierChips: tierChips(new Map(tierList().map(t => [t, items.filter(i => i.tier === t).length]))),
+      garmentChips: garmentChips(fresh),
       months: parseInt($("#labmonths").value, 10) || 6,
       granularity: $("#labgran").value,
       dim: $("#labdim").value,
-      snapshots: labSnapshots,
+      /* A frozen week is one number for the whole population — it cannot be
+         split by garment type. Reading it while the screen says "Dresses"
+         would put the whole assortment's figures under a garment's name, so
+         a narrowed view reads products only and says so. */
+      snapshots: curGarment ? [] : labSnapshots,
       /* Said on screen, because a number computed from a quarter of what was
          collected must never look like a number about all of it. */
       sourceNote: `${fresh.length.toLocaleString()} of ${pool.length.toLocaleString()} collected products ` +
-        `come from a New In page — the analysis reads those only, so each week is the same kind of sample.`,
+        `come from a New In page — the analysis reads those only, so each week is the same kind of sample.` +
+        (curGarment
+          ? ` Narrowed to ${curGarment}: ${shown.length.toLocaleString()} of them. ` +
+            `Weekly records of cleared weeks cover every type together, so they are left out here.`
+          : ""),
       sourceEmpty: pool.length && !fresh.length
         ? "None of the collected products came from a page named as new arrivals. " +
           "The analysis compares like with like, so it needs those: name a list entry " +
@@ -805,6 +887,7 @@
         : "",
     });
     wireTierChips($("#labbody"), renderLab);
+    wireGarmentChips($("#labbody"), renderLab);
   }
   ["labmonths", "labgran", "labdim"].forEach(id =>
     $("#" + id).addEventListener("change", renderLab));

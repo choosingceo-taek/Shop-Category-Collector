@@ -1767,6 +1767,11 @@
         brand: realVendor(p.vendor, p.handle),
         name: p.title || "", name_canonical: !!p.title,
         category: p.product_type || "",
+        /* Kept separately as well. The category column carries the name the
+           designer gave the page, which overwrites this — but the shop's own
+           product type is the best answer there is to "what garment is this",
+           and INSIGHTS splits by that. */
+        product_type: p.product_type || "",
         price_was,
         // The shop's own photo for this product. Only used where the tile gave
         // none (applyDetail never overwrites a picture the listing supplied),

@@ -375,7 +375,10 @@
          cause now — plenty was collected, but none of it from a page the
          designer named as new arrivals. Saying which one it is is the
          difference between a fixable state and a broken-looking screen. */
-      el.innerHTML = `<div class="labempty">${opts.sourceEmpty
+      /* The chips stay. A garment type with nothing inside the window would
+         otherwise take its own way back off the screen. */
+      el.innerHTML = `<div class="labctx">${opts.tierChips || ""}${opts.garmentChips || ""}</div>
+        <div class="labempty">${opts.sourceEmpty
         ? esc(opts.sourceEmpty).replace(/\. /g, ".<br>")
         : clipped
           ? `Only ${clipped} hand-picked products here.<br>Trends are computed from scans only — build a list and press ▶ Scan all.`
@@ -425,8 +428,21 @@
           : ""}</div></section>`;
     };
 
+    /* One context band: who is being read (tier · garment type) and what that
+       amounts to, on a single line. Three stacked bands — tier chips, type
+       chips, source note — say one thing between them, and each of them was
+       pushing the first answer further down the page.
+
+       The counts follow it rather than lead it. The question this tool exists
+       for is what fabric and what details are moving; how many products that
+       came from is the footing under the answer, not the answer. */
+    const ctxBand = `<div class="labctx">${opts.tierChips || ""}${opts.garmentChips || ""}${
+      opts.sourceNote ? `<p class="srcnote">${esc(opts.sourceNote)}</p>` : ""}</div>`;
+
     el.innerHTML = `
-      ${opts.tierChips || ""}
+      ${ctxBand}
+      <div class="movers axespair">${axis("fabric")}${axis("keyword")}</div>
+
       <div class="labhead">
         <div class="tiles">
           <div class="tile"><div class="tl">Products</div><div class="tv">${o.total.toLocaleString()}</div>
@@ -442,9 +458,6 @@
             <div class="ts">new or consecutively rising</div></div>
         </div>
       </div>
-
-      ${opts.sourceNote ? `<p class="srcnote">${esc(opts.sourceNote)}</p>` : ""}
-      <div class="movers axespair">${axis("fabric")}${axis("keyword")}</div>
 
       <section class="sec"><h3>📊 ${esc(label)} pulse
         <span class="sub">${unit} on ${unit}, like for like — same shops in both</span></h3>

@@ -195,6 +195,7 @@ async function catalogSave(j, a, kept, total, queue) {
       colorways: it.colorways || "", color_count: it.color_count || "",
       size_range: it.size_range || "", fabric_composition: it.fabric_composition || "",
       design: it.design || "", product_url: it.product_url || "", image_url: it.image_url || "",
+      product_type: it.product_type || "",
       // when the shop itself published the product, where the shop tells us
       launched_at: it.launched_at || "",
     })),
@@ -1118,6 +1119,9 @@ async function runStep(j) {
             // SFCC size lists)
             if (d.brand && !it.brand) it.brand = d.brand;
             if (d.category && !it.category) it.category = d.category;
+            // the shop's own garment type, kept even when the page's own name
+            // wins the category column
+            if (d.product_type && !it.product_type) it.product_type = d.product_type;
             // the shop's own publish date, where the shop states one (Shopify's
             // published_at). Never inferred — a missing date stays missing.
             if (d.launched_at && !it.launched_at) it.launched_at = d.launched_at;
