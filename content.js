@@ -305,7 +305,12 @@ function selfDiagnose() {
       for (const k of kids) {
         if (k.tagName !== tag) continue;
         alike++;
-        if (k.querySelector("a[href]") && k.querySelector("img, [style*=background-image]")) tiles++;
+        // a picture is a picture however the shop paints it — <img>, a CSS
+        // background, or a lazy loader's attribute waiting to become one
+        const g0 = self.SITES && SITES.get && SITES.get("generic");
+        const picSel = "img, picture, source, " +
+          ((g0 && g0._BG_SEL) || '[style*=background-image]');
+        if (k.querySelector("a[href]") && k.querySelector(picSel)) tiles++;
       }
       if (alike >= 4 && tiles >= 3) {
         grids.push({
@@ -332,7 +337,13 @@ function selfDiagnose() {
     out.imgAttrs = attrs;
   } catch (e) {}
   try {
-    const PRICE_RE = /(?:[$₩€£¥]\s?\d[\d,]*(?:\.\d{1,2})?|\d[\d,]*(?:\.\d{1,2})?\s?(?:원|USD|EUR|GBP))/;
+    /* The reader's own pattern, not a copy of it. A second copy went stale the
+       moment the first one learned that half of Europe writes the symbol after
+       the number — and a diagnosis that asks a different question than the
+       reader reports "no prices here" about a page covered in them. */
+    const g = self.SITES && SITES.get && SITES.get("generic");
+    const PRICE_RE = (g && g._PRICE_RE) ||
+      /(?:[$₩€£¥]\s?\d[\d,]*(?:\.\d{1,2})?|\d[\d,]*(?:\.\d{1,2})?\s?(?:원|USD|EUR|GBP))/;
     let leaves = 0, sample = "";
     document.querySelectorAll("span,div,p,b,strong,em,ins,del").forEach(el => {
       if (el.children.length > 1 || leaves >= 500) return;
@@ -487,6 +498,18 @@ function healthMark(rec) {
 function healthWhy(rec) {
   const who = rec.brand || rec.label || "This site";
   if (!rec.count) {
+    /* "Nothing was collected" used to offer three guesses and never the one
+       that was ours. When the page photograph shows repeated product blocks
+       and no price we could read, the shop is fine and the reader is not —
+       and that is the sentence a developer can act on immediately, instead of
+       the designer being told to try scrolling. */
+    const d = rec.diag || {};
+    const tiles = (d.grids || []).reduce((n, g) => Math.max(n, g.tilesWithLinkAndImg || 0), 0);
+    if (tiles >= 3 && d.priceLeaves && !d.priceLeaves.count) {
+      return `${who}: the page showed ${tiles} product blocks, but no price on it ` +
+        `could be read — so none of them was collected. This is ours to fix, ` +
+        `not something to retry.`;
+    }
     return `${who}: nothing was collected. The page may need scrolling, ` +
       `may have asked for a region or consent choice, or may block automated visits.`;
   }
@@ -610,7 +633,6 @@ async function recordHealth(j, a, ent) {
     // the page was read around its adapter — the spreadsheet is whole, the rule is not
     if (j.repair) rec.repair = j.repair;
     rec.mark = healthMark(rec);
-    rec.why = healthWhy(rec);
     // Photograph the page only when something is wrong AND we are still looking
     // at the scanned collection (single-page scans stay on it; a paginated run
     // may have walked off it, and diagnosing the wrong page would mislead).
@@ -651,6 +673,11 @@ async function recordHealth(j, a, ent) {
     if (rec.withSpec && rec.count && rec.fabric === 0 && j.items[0] && j.items[0].product_url) {
       rec.diagDetail = await diagnoseDetail(j.items[0]);
     }
+    /* Written last, because the sentence is allowed to use the photograph:
+       "the page showed 24 product blocks and no price we could read" is a
+       different instruction from "try scrolling", and only the diagnosis
+       knows which one is true. */
+    rec.why = healthWhy(rec);
     const all = (await kvGet(HEALTH)) || {};
     all[rec.sig] = rec;
     const keys = Object.keys(all);

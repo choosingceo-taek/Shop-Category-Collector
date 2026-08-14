@@ -1003,7 +1003,29 @@
   // new site with basic-field support = one manifest.json pattern, no code.
   // ---------------------------------------------------------------------------
   const generic = (function () {
-    const PRICE_RE = /(?:[$₩€£¥]\s?\d[\d,]*(?:\.\d{1,2})?|\d[\d,]*(?:\.\d{1,2})?\s?(?:원|USD|EUR|GBP))/;
+    /* Money, in the orders shops actually write it.
+
+       This is load-bearing beyond the price column: the reader finds a tile by
+       finding a price and climbing to it, so a storefront whose money we
+       cannot read does not come back with an empty price column — it comes
+       back as ZERO PRODUCTS. Measured (money-probe): five ordinary European
+       forms did exactly that — `89,00 €`, `890 kr`, `89,00 zł`, `CHF 89.00`
+       and the space-separated euro — because the pattern only knew a symbol
+       BEFORE the number. Half of Europe writes it after.
+
+       Three orders, therefore: symbol first ($89.00, €89,00, A$89.00), symbol
+       or code last (89,00 €, 890 kr, 89.00 GBP, 89,000원), and code first
+       (CHF 89.00, SEK 890). The letter codes are a closed list so that
+       ordinary words next to a number cannot become prices. */
+    const CUR_CODE = "USD|EUR|GBP|AUD|CAD|JPY|CNY|CHF|SEK|NOK|DKK|PLN|KRW|HKD|SGD|NZD";
+    const PRICE_RE = new RegExp(
+      "(?:(?:US|CA|AU|NZ|HK|SG|NT|A|C|R|S)?\\$|[₩€£¥₹])\\s?\\d[\\d.,]*" +
+      /* A currency mark with digits AFTER it belongs to those digits, not to
+         the ones in front — "Blouse Number 1 €89,00" is one price, not "1 €"
+         and then another. Without that, a product name ending in a number ate
+         the currency mark and the row was stored holding "1 €". */
+      "|\\d[\\d.,]*\\s?(?:[₩€£¥₹$]|원|zł|kr(?:onor?)?\\b|" + CUR_CODE + ")(?!\\s?\\d)" +
+      "|(?:" + CUR_CODE + "|Rp|RM)\\s?\\d[\\d.,]*");
     const MAX_TILES = 400;
 
     const textOf = el => ((el && el.textContent) || "").replace(/\s+/g, " ").trim();
@@ -1100,13 +1122,32 @@
     // Nearest ancestor (including self) of `el` that contains BOTH an <img>
     // and an <a href>, searched within a shallow depth so we land on the tile,
     // not the whole page body.
+    /* Where a tile keeps its photograph, in every form a shop uses.
+
+       Requiring an <img> is what made a whole shop read as ZERO products, not
+       merely as products without photos: a grid that paints its pictures as
+       CSS backgrounds (a div with `background-image`, or a lazy loader's
+       `data-bg` waiting to become one) has no <img> anywhere near the price,
+       so no tile was ever recognised and the export came back empty. A
+       picture is a picture whichever way the shop paints it. */
+    const BG_ATTRS = ["data-bg", "data-background", "data-background-image",
+      "data-bgset", "data-bg-src", "data-lazy-bg"];
+    const BG_SEL = '[style*="background-image" i],[style*="background:" i],' +
+      BG_ATTRS.map(a => `[${a}]`).join(",");
+    function hasPicture(node) {
+      if (!node || !node.querySelector) return false;
+      if (node.querySelector("img, picture, source")) return true;
+      if (node.querySelector(BG_SEL)) return true;
+      const st = node.getAttribute && node.getAttribute("style");
+      return !!(st && /background(-image)?\s*:[^;]*url\(/i.test(st));
+    }
+
     function tileAncestor(el, maxDepth) {
       let node = el, depth = 0;
       while (node && depth <= maxDepth) {
-        const hasImg = !!(node.querySelector && node.querySelector("img"));
         const hasLink = (node.tagName === "A" && node.getAttribute("href")) ||
           !!(node.querySelector && node.querySelector("a[href]"));
-        if (hasImg && hasLink) return node;
+        if (hasLink && hasPicture(node)) return node;
         node = node.parentElement;
         depth++;
       }
@@ -1230,31 +1271,90 @@
       return best;
     }
 
+    /* A colour swatch is not the garment.
+
+       Tiles that let you preview colourways put those chips inside the tile,
+       often BEFORE the photograph, and the first <img> was taken on sight — so
+       the row was stored holding a 40px chip. Like the broken address before
+       it, that counts as "has a photo" everywhere downstream, so every check
+       said the scan was healthy while the LAB showed sixty colour dots.
+
+       The only structural evidence is the shop's own declared size: a picture
+       the markup itself says is 100px square is not the product shot. Nothing
+       is guessed from class names, and an image with no declared size is never
+       skipped — it is far worse to drop a photograph than to keep a chip. */
+    function tinyPicture(img) {
+      const num = a => {
+        const v = parseInt(String(img.getAttribute(a) || "").replace(/px$/i, ""), 10);
+        return isFinite(v) ? v : 0;
+      };
+      const w = num("width"), h = num("height");
+      return !!(w && h && w <= 100 && h <= 100);
+    }
+
+    /* url() out of a background declaration, image-set() included: a shop may
+       list several densities there, and the densest is the one worth keeping. */
+    function bgUrl(style) {
+      const s = String(style || "");
+      if (!/background(-image)?\s*:/i.test(s) || !/url\(/i.test(s)) return "";
+      const re = /url\(\s*["']?([^"')]+?)["']?\s*\)(?:\s*(\d+(?:\.\d+)?)(x|w))?/gi;
+      let m, best = "", bestW = -1;
+      while ((m = re.exec(s))) {
+        const w = m[2] ? parseFloat(m[2]) * (m[3] === "x" ? 1000 : 1) : 0;
+        if (w > bestW) { bestW = w; best = m[1]; }
+      }
+      return best;
+    }
+
+    const IMG_ATTRS = ["src", "data-src", "data-lazy-src", "data-original", "data-image",
+      "data-echo", "data-hi-res-src", "data-image-src", "data-src-large",
+      "data-zoom", "data-zoom-src", "data-large", "data-default-src",
+      "data-flickity-lazyload", "data-bgset"];
+
     function bestImage(el) {
       if (!el || !el.querySelector) return "";
-      const img = el.querySelector("img");
       const cands = [];
-      if (img) {
+      /* Every <img> in the tile, in the order the shop wrote them, skipping
+         the ones it declares as chips — unless the tile has exactly one
+         picture, in which case a small declared size is a dense grid's layout
+         rather than a swatch, and dropping it would trade a real photograph
+         for a blank card. */
+      const all = [...(el.querySelectorAll("img") || [])];
+      const imgs = all.length > 1 ? all.filter(i => !tinyPicture(i)) : all;
+      imgs.forEach(img => {
         // widest first, then the plain attributes lazy loaders populate
         cands.push(widestFromSrcset(img.getAttribute("srcset")));
         cands.push(widestFromSrcset(img.getAttribute("data-srcset")));
-        ["src", "data-src", "data-lazy-src", "data-original", "data-image",
-         "data-echo", "data-hi-res-src", "data-image-src", "data-src-large",
-         "data-zoom", "data-zoom-src", "data-large", "data-default-src",
-         "data-flickity-lazyload", "data-bgset"].forEach(a => cands.push(img.getAttribute(a) || ""));
-      }
+        IMG_ATTRS.forEach(a => cands.push(img.getAttribute(a) || ""));
+      });
       // <picture><source srcset> — the <img> inside may never get a usable src
       (el.querySelectorAll("picture source, source") || []).forEach(s => {
         cands.push(widestFromSrcset(s.getAttribute("srcset") || s.getAttribute("data-srcset")));
       });
-      // last resort: an inline background-image on the tile itself
-      const styled = el.querySelector('[style*="background-image"]') ||
-        (el.getAttribute && /background-image/.test(el.getAttribute("style") || "") ? el : null);
-      if (styled) {
-        const m = (styled.getAttribute("style") || "").match(/background-image\s*:\s*url\(["']?([^"')]+)/i);
-        if (m) cands.push(m[1]);
+      // a background image, inline or waiting in a lazy loader's attribute
+      if (el.getAttribute) cands.push(bgUrl(el.getAttribute("style")));
+      (el.querySelectorAll(BG_SEL) || []).forEach(n => {
+        cands.push(bgUrl(n.getAttribute("style")));
+        BG_ATTRS.forEach(a => {
+          const v = n.getAttribute(a) || "";
+          // data-bgset holds a srcset; the rest hold one address
+          cands.push(/\s\d+[wx],|\s\d+[wx]$/.test(v) ? widestFromSrcset(v) : v);
+        });
+      });
+      /* Last: the copy inside <noscript>. Older lazy loaders leave the real
+         photograph only there, and the visible <img> is a blur placeholder —
+         with scripting on, the browser keeps that markup as TEXT, so it has to
+         be read as text. It is the shop's own address either way. */
+      let hit = cands.find(c => c && !PLACEHOLDER.test(c));
+      if (!hit) {
+        for (const ns of (el.querySelectorAll("noscript") || [])) {
+          const txt = ns.textContent || "";
+          const ss = txt.match(/srcset\s*=\s*["']([^"']+)["']/i);
+          const one = txt.match(/<img[^>]*\ssrc\s*=\s*["']([^"']+)["']/i);
+          const pick = (ss && widestFromSrcset(ss[1])) || (one && one[1]) || "";
+          if (pick && !PLACEHOLDER.test(pick)) { hit = pick; break; }
+        }
       }
-      const hit = cands.find(c => c && !PLACEHOLDER.test(c));
       return hit || "";
     }
 
@@ -1536,6 +1636,9 @@
       templateUrl: null,
       _tileAncestor: tileAncestor, _signature: signature, _bestName: bestName,
       _bestImage: bestImage, _widestFromSrcset: widestFromSrcset, _parseSrcset: parseSrcset,
+      /* The diagnosis has to ask the same question the reader asked, or it
+         reports "no prices on this page" about a page full of them. */
+      _PRICE_RE: PRICE_RE, _BG_SEL: BG_SEL,
       _jsonLdProducts: jsonLdProducts, _inRecommendation: inRecommendation,
     };
   })();
