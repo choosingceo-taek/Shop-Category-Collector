@@ -193,14 +193,51 @@
     return `${rec.brand || rec.label || "This site"}: ${rec.note || "needs a look"}.`;
   }
 
+  /* One shop, one line \u2014 a brand is the unit a designer trusts or does not,
+     and its categories are pages of the same answer. The worst page decides
+     the mark, because a brand whose New In came back empty is not "mostly
+     fine". */
+  const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
+  const WORST = { "\u274c": 0, "\u26a0\ufe0f": 1, "\u2705": 2 };
+  function byShop(health) {
+    const shops = new Map();
+    Object.values(health).forEach(h => {
+      if (!h || !h.mark) return;
+      const key = (h.brand || "").trim() || hostOf(h.url) || h.label || "This site";
+      const s = shops.get(key) || { name: key, pages: 0, count: 0, imaged: 0, fabric: 0,
+        withSpec: false, mark: "\u2705", ts: 0, url: "", whys: [] };
+      s.pages++;
+      s.count += h.count || 0;
+      s.imaged += h.imaged || 0;
+      s.fabric += h.fabric || 0;
+      s.withSpec = s.withSpec || !!h.withSpec;
+      if (WORST[h.mark] < WORST[s.mark]) { s.mark = h.mark; s.url = h.url || s.url; }
+      if (!s.url) s.url = h.url || "";
+      if ((h.ts || 0) > s.ts) s.ts = h.ts || 0;
+      const w = h.mark !== "\u2705" ? healthWord(h) : "";
+      if (w && !s.whys.includes(w)) s.whys.push(w);
+      shops.set(key, s);
+    });
+    return [...shops.values()].sort((a, b) =>
+      (WORST[a.mark] - WORST[b.mark]) || (b.ts - a.ts) || a.name.localeCompare(b.name));
+  }
+
+  const shopLine = s => {
+    const bits = [`${s.pages} page${s.pages === 1 ? "" : "s"}`, `${s.count} products`];
+    if (s.count) bits.push(`${s.imaged} with a photo`);
+    if (s.withSpec && s.count) bits.push(`${s.fabric} with fabric`);
+    return bits.join(" \u00b7 ");
+  };
+
   async function paintCheck() {
-    const bar = $("#checkbar");
-    if (!bar) return;
+    const bar = $("#checkbar"), chip = $("#checkchip");
+    if (!bar || !chip) return;
     let health = {};
     try {
       health = await new Promise(r =>
         chrome.storage.local.get("wpb_sitehealth", o => r((o || {}).wpb_sitehealth || {})));
     } catch (e) { return; }
+    const shops = byShop(health);
     const bad = Object.values(health)
       .filter(h => h && h.mark && h.mark !== "\u2705")
       .sort((a, b) => (b.ts || 0) - (a.ts || 0))
@@ -223,20 +260,45 @@
           `${h} (${failWhy.get(h) || "refused"})`).join(" \u00b7 ") +
         `. The addresses were collected correctly; the shop will not serve them here.` });
     }
-    bar.hidden = !bad.length;
-    if (!bad.length) return;
-    $("#checkn").textContent = bad.length === 1
-      ? "1 site needs a look" : `${bad.length} sites need a look`;
-    const when = bad[0] && bad[0].ts ? new Date(bad[0].ts).toLocaleString() : "";
+    /* The chip is present whenever anything has been scanned, and says which
+       way the answer went. Nothing scanned yet means nothing to report, and
+       then it stays out of the way entirely. */
+    const rough = shops.filter(s => s.mark !== "\u2705").length;
+    chip.hidden = !shops.length;
+    chip.classList.toggle("warn", !!(rough || bad.length));
+    $("#checkn").textContent = !shops.length ? "" :
+      rough ? `${shops.length} sites \u00b7 ${rough} need a look`
+            : `${shops.length} sites \u00b7 all clean`;
+    // the list is a band of its own, so it exists only while it is open
+    if (!shops.length) { bar.hidden = true; return; }
+    bar.hidden = $("#checkbox").hidden;
+
+    const when = shops[0] && shops[0].ts ? new Date(shops[0].ts).toLocaleString() : "";
+    /* Both halves of the question, because "which brands give good
+       information" is asked before a week's numbers are trusted, and a band
+       that only listed failures could answer half of it. */
+    const special = bad.filter(h => h.grant || h.copy);
+    const groups = [
+      ["Nothing came through", shops.filter(s => s.mark === "\u274c")],
+      ["Partly", shops.filter(s => s.mark === "\u26a0\ufe0f")],
+      ["Complete", shops.filter(s => s.mark === "\u2705")],
+    ];
     $("#checkbox").innerHTML =
-      `<span class="cwhen">From the last scans${when ? " \u00b7 " + esc(when) : ""}. ` +
-      `The spreadsheet and the catalog still hold everything that WAS collected \u2014 ` +
-      `this is what did not come through.</span>` +
-      bad.map(h => `<span class="cw"><b>${esc(h.mark)}</b> ${esc(healthWord(h))}` +
+      `<span class="cwhen">What each site produced the last time it was scanned` +
+      `${when ? " \u00b7 " + esc(when) : ""}. Everything that WAS collected is in the ` +
+      `catalog and the spreadsheet \u2014 a site listed here did not cost you the rest. ` +
+      `Sites you have not scanned yet are not here.</span>` +
+      special.map(h => `<span class="cw"><b>${esc(h.mark)}</b> ${esc(healthWord(h))}` +
         (h.grant ? ` <button class="cgrant">Show these photos</button>` : "") +
         (h.copy ? ` <button class="ccopy">Copy this line</button>` : "") +
-        (h.url ? ` <a href="${esc(h.url)}" target="_blank" rel="noreferrer">open \u2197</a>` : "") +
-        `</span>`).join("");
+        `</span>`).join("") +
+      groups.filter(([, list]) => list.length).map(([title, list]) =>
+        `<span class="grp">${esc(title)} \u00b7 ${list.length}</span>` +
+        list.map(s => `<span class="cw"><b>${esc(s.mark)}</b> ${esc(s.name)} ` +
+          `<span class="num">${esc(shopLine(s))}</span>` +
+          (s.whys.length ? ` \u2014 ${esc(s.whys.slice(0, 2).join(" "))}` : "") +
+          (s.url ? ` <a href="${esc(s.url)}" target="_blank" rel="noreferrer">open \u2197</a>` : "") +
+          `</span>`).join("")).join("");
     const gb = $("#checkbox").querySelector(".cgrant");
     if (gb) gb.addEventListener("click", () => grantImageHosts(need));
     /* One button, so the exact reason can be sent on without anyone
@@ -265,9 +327,12 @@
   }
 
   function wireCheckBar() {
-    const chip = $("#checkchip"), box = $("#checkbox");
+    const chip = $("#checkchip"), box = $("#checkbox"), bar = $("#checkbar");
     if (!chip) return;
-    chip.addEventListener("click", () => { box.hidden = !box.hidden; });
+    chip.addEventListener("click", () => {
+      box.hidden = !box.hidden;
+      bar.hidden = box.hidden;        // the band exists only while the list does
+    });
   }
 
   function wireDataBox() {
