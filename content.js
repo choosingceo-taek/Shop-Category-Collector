@@ -485,6 +485,9 @@ function healthMark(rec) {
      around its own adapter, and calling that ✅ would hide the stale rule
      forever, since a clean run downloads no site check file at all. */
   if (rec.repair) return "⚠️";
+  /* Half a grid that calls itself finished is worse than a grid that fails —
+     the spreadsheet looks whole. */
+  if (rec.more || rec.shortOf) return "⚠️";
   return "✅";
 }
 /* The same verdict, said to the person who has to act on it.
@@ -523,7 +526,27 @@ function healthWhy(rec) {
   else if (rec.imaged / rec.count < THIN_PHOTO) {
     parts.push(`photos on only ${rec.imaged} of ${rec.count}`);
   }
-  if (rec.withSpec && rec.fabric === 0) parts.push(`no fabric on any of the ${rec.count}`);
+  if (rec.more) {
+    parts.push(`the grid was still loading more when the scan stopped — ` +
+      `${rec.count} were taken, and this page has more`);
+  }
+  if (rec.shortOf) {
+    parts.push(`the page says it is showing ${rec.shortOf.said} items and ` +
+      `${rec.shortOf.got} came through — the grid did not hand over the rest`);
+  }
+  if (rec.withSpec && rec.fabric === 0) {
+    /* Why the column is empty decides who fixes it: a shop that throttled us
+       is a scan to run again, a page that simply does not state the blend is
+       nobody's fault, and anything else is ours. The detail probe already
+       fetched one product page and kept its status. */
+    const st = (rec.diagDetail && (rec.diagDetail.pdpStatus ||
+      (rec.diagDetail.js && rec.diagDetail.js.status))) || 0;
+    const because = st === 429 || st === 503
+      ? ` — the shop's product pages answered ${st} (too busy), so scan it again later`
+      : st === 403 || st === 401 ? ` — the shop's product pages refused us (${st})`
+      : st && st >= 400 ? ` — the shop's product pages answered ${st}` : "";
+    parts.push(`no fabric on any of the ${rec.count}${because}`);
+  }
   else if (rec.withSpec && rec.fabric / rec.count < THIN_FABRIC) {
     parts.push(`fabric on only ${rec.fabric} of ${rec.count}`);
   }
@@ -632,6 +655,10 @@ async function recordHealth(j, a, ent) {
     };
     // the page was read around its adapter — the spreadsheet is whole, the rule is not
     if (j.repair) rec.repair = j.repair;
+    // the grid was still growing when the scan ran out of scroll rounds
+    if (j.moreWaiting) rec.more = true;
+    // the page said it was showing more than we could get out of it
+    if (j.shortOf) rec.shortOf = j.shortOf;
     rec.mark = healthMark(rec);
     // Photograph the page only when something is wrong AND we are still looking
     // at the scanned collection (single-page scans stay on it; a paginated run
@@ -1007,8 +1034,26 @@ async function runStep(j) {
          (count and height both steady twice); only the wait between looks is
          shorter, which costs a lazy grid nothing because it is bounded by the
          same stability test rather than by the clock. */
-      for (let i = 0; i < rounds && stable < 2; i++) {
-        window.scrollTo(0, document.body.scrollHeight);
+      let grew = false, capped = false, sweeps = 0;
+      /* What the shop says it is showing. Most listing pages print it ("48
+         items"), and it is the only honest way to know that a lazy grid
+         stopped early — nothing else on the page distinguishes "that is all of
+         them" from "the trigger went past us". */
+      let said = 0;
+      try { said = (a.resultCount && a.resultCount(document)) || 0; } catch (e) {}
+      let i = 0;
+      for (; i < rounds && stable < 2; i++) {
+        /* Step down a screen at a time rather than jumping to the bottom.
+           A grid loads more when its sentinel enters the viewport, and jumping
+           straight to the end of the document skips past that sentinel
+           whenever anything tall sits below the grid — a long footer is
+           enough. Measured (harden-probe): a 48-tile grid gave up 16 and the
+           scan called itself complete. Stepping walks the sentinel through the
+           viewport; the last step still lands on the bottom, for the grids
+           that listen there. */
+        const y = window.scrollY, bottom = document.body.scrollHeight;
+        const next = Math.min(y + Math.round(window.innerHeight * 0.9), bottom);
+        window.scrollTo(0, next <= y ? bottom : next);
         await sleep(450);
         const live = await g();
         if (!live || !live.active || live.paused) return;   // honor pause/stop mid-scroll
@@ -1018,18 +1063,47 @@ async function runStep(j) {
         // never open, leaving the rescue below one viewport of tiles to work with.
         if (!n && a.id !== "generic") n = genericRead(document, location.href).length;
         const h = document.body.scrollHeight;
-        if (n === lastN && h === lastH) stable++; else stable = 0;
+        if (n === lastN && h === lastH) stable++; else { stable = 0; if (lastN >= 0 && n > lastN) grew = true; }
         lastN = n; lastH = h;
+        /* Scrolling only downward can pass a trigger for good: a grid that
+           hands out more when a marker enters the viewport gets one chance at
+           it, and if anything tall sits below the grid — a long footer is
+           enough — the marker ends up behind us for the rest of the scan.
+           Measured: 16 tiles of 48, graded complete. So a grid that HAS grown
+           and then stalls gets one more sweep from the top. A grid that never
+           grew is fully rendered and pays nothing for this. */
+        const short = said && n < said && (!j.maxItems || n < j.maxItems);
+        /* Sweep again while the page still says it is holding more. Bounded
+           by the round budget and by our own 60 cap, so a shop that claims
+           thousands cannot turn this into an endless crawl. */
+        if (stable >= 2 && (grew || short) && sweeps < 4) {
+          sweeps++; stable = 0;
+          window.scrollTo(0, 0);
+          await sleep(250);
+        }
         // Enough for one research pass — stop unrolling. On an infinite-scroll
         // grid there is no page 2 to stop at, so the cap IS "the first page":
         // without it a single Zara category unrolls into several hundred rows
         // and buries the list the user actually assembled.
         if (j.maxItems && n >= j.maxItems) {
+          capped = true;
           await report(`Loaded ${n} (cap ${j.maxItems})`);
           break;
         }
         await report(`Loading all items… ${n} rendered`);
       }
+      /* We ran out of rounds while the grid was still handing out tiles. That
+         is a HALF scan, and half a scan that calls itself finished is the
+         worst thing this tool can do: the spreadsheet looks whole. The cap is
+         a deliberate stop (60 is one research pass); running out of rounds is
+         not. */
+      if (!capped && stable < 2 && grew && i >= rounds) j.moreWaiting = true;
+      /* Still fewer than the shop said it was showing, and not because of our
+         own cap: the grid kept the rest. Said on the page, with both numbers,
+         because a half grid that grades itself complete is the one failure
+         that looks exactly like success. */
+      if (said && lastN < said && (!j.maxItems || lastN < j.maxItems))
+        j.shortOf = { said, got: lastN };
       window.scrollTo(0, 0);
     }
     let scraped = [];

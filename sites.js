@@ -430,21 +430,39 @@
   /* Fetch a product page and read it. Bounded, credentialed (so a shop that
      shows prices only to a session still answers), and it never throws — a
      product that can't be read reports WHY, which is what the red cell says. */
+  const nap = ms => new Promise(r => setTimeout(r, ms));
+
   async function fetchProductPage(url, fallbackBrand) {
     const empty = r => ({ composition: "", colorways: "", design: "",
       brand: fallbackBrand || "", reason: r });
     let html;
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 12000);
+    /* "Too many requests" is the one refusal that answers differently if you
+       simply wait. On a plain shop the composition costs one page fetch per
+       product, sixty in a row, and a shop that starts throttling halfway
+       through empties the fabric column for the rest of the scan — measured
+       (harden-probe). One patient retry recovers those; a shop that means no
+       still says no, and we do not push past it. */
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
-        if (!res.ok) return empty(res.status === 404 ? "not_found" : "blocked");
-        html = await res.text();
-      } finally { clearTimeout(timer); }
-    } catch (e) {
-      return empty((e && e.name === "AbortError") ? "timeout" : "error");
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 12000);
+        try {
+          const res = await fetch(url, { credentials: "include", signal: ctrl.signal });
+          if (!res.ok) {
+            const busy = res.status === 429 || res.status === 503;
+            if (busy && attempt === 0) { await nap(1500); continue; }
+            return empty(res.status === 404 ? "not_found" : busy ? "busy" : "blocked");
+          }
+          html = await res.text();
+          break;
+        } finally { clearTimeout(timer); }
+      } catch (e) {
+        if (e && e.name === "AbortError") return empty("timeout");
+        if (attempt === 0) { await nap(600); continue; }
+        return empty("error");
+      }
     }
+    if (html == null) return empty("error");
     try {
       return readProductPage(new DOMParser().parseFromString(html, "text/html"), html, fallbackBrand, url);
     } catch (e) { return empty("error"); }
@@ -1618,10 +1636,26 @@
         : [])].map(a => parseInt((a.textContent || "").trim())).filter(n => !isNaN(n) && n < 10000);
       return nums.length ? Math.max(...nums) : null;
     }
+    /* How many the shop says it is showing.
+       Read from the ELEMENT that says it, not from the page's flattened text:
+       neighbouring elements run together there, so a heading next to the count
+       reads as "New In48 items" and neither end of the number has a word
+       boundary. Measured — the count came back 0 on exactly the page that
+       needed it. The same failure as the price fusing with the name; the
+       answer is the same, read the smallest thing that says it. */
+    const COUNT_RE = /(?:^|[^\d])(\d[\d,]{0,6})\s*(?:results?|items?|products?|styles?)(?![a-z])/i;
     function resultCount(doc) {
       doc = doc || document;
-      const body = (doc.body && doc.body.textContent) || "";
-      const m = body.match(/\b(\d[\d,]{1,6})\s*(?:results?|items?|products?)\b/i);
+      const els = doc.querySelectorAll
+        ? doc.querySelectorAll("span,div,p,h1,h2,h3,strong,b,li,small") : [];
+      for (const el of els) {
+        if (el.children && el.children.length > 2) continue;
+        const t = ((el.textContent || "").replace(/\s+/g, " ").trim());
+        if (!t || t.length > 40) continue;
+        const m = t.match(COUNT_RE);
+        if (m) return parseInt(m[1].replace(/,/g, ""));
+      }
+      const m = ((doc.body && doc.body.textContent) || "").match(COUNT_RE);
       return m ? parseInt(m[1].replace(/,/g, "")) : 0;
     }
     function nextPageUrl(url, page) {
@@ -1677,7 +1711,7 @@
          under-collects. The scroll loop stops as soon as the tile count and
          page height hold steady, so a site that renders everything up front
          pays about a second and nothing more. */
-      lazyScroll: 12,
+      lazyScroll: 18,
       context, scrapeList, totalPages, resultCount, nextPageUrl, buildWorkbook, isResultsPage,
       fetchDetail,
       templateUrl: null,
