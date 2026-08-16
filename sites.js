@@ -1103,14 +1103,43 @@
        /shop/wd/a-and-f-forme-wide-leg-pant-62626819 is the product's real
        name written by the shop — a far better answer than a11y text, and
        still not invented by us. */
+    /* Not every last segment is a name. Measured against generated shapes
+       (matrix-probe): `/p/style-number-1/PROD1.html` gave "Prod1" and
+       `/product.do?pid=901` gave "Product.Do" — a code and a routing word,
+       both stored as product names, both then counted as words by the LAB.
+       So the segments are read from the end backwards and the ones that are
+       plainly not names are stepped over: routing words, file names, and
+       opaque codes. A segment the shop wrote for people usually carries a
+       separator, so that one wins when there is one; if nothing readable is
+       left the answer is nothing, because an invented name is worse than an
+       empty cell (the row is dropped, and the check reports it). */
+    const ROUTE_SEG = /^(products?|p|pd|pdp|dp|item|items|sku|style|styles|shop|shopping|browse|collections?|category|categories|cat|c|detail|details|default|index|home|main|us|uk|eu|intl|global|[a-z]{2}([-_][a-z]{2})?)$/i;
+    /* A code has no separator: it is one run of letters and digits. Keeping
+       that requirement matters — Edikted's `s24161_black` IS the nearest thing
+       to a name its grid offers until the shop's own JSON answers, and calling
+       it a code left the row named after the collection instead. */
+    const CODE_SEG = s =>
+      /^\d+$/.test(s) ||                       // 62626819
+      !/[aeiou]/i.test(s) ||                   // NWTKJ
+      /^(?=.*\d)[a-z0-9]{1,10}$/i.test(s) ||   // PROD1, HR1234, N1JUX6
+      /^[0-9a-f]{8,}$/i.test(s);               // a hash
     function nameFromSlug(url) {
-      let seg = "";
+      let segs = [];
       try {
         const p = new URL(url).pathname.replace(/\/$/, "");
-        seg = decodeURIComponent(p.slice(p.lastIndexOf("/") + 1));
+        segs = p.split("/").filter(Boolean).map(s => {
+          try { return decodeURIComponent(s); } catch (e) { return s; }
+        });
       } catch (e) { return ""; }
-      seg = seg.replace(/\.(html?|aspx|php)$/i, "")
+      const clean = s => s.replace(/\.(html?|aspx?|php|jsp|do|action)$/i, "")
         .replace(/[-_](?:p)?\d{5,}$/i, "")          // trailing product id
+        .trim();
+      const usable = segs.map(clean)
+        .filter(s => s && s.length >= 3 && !ROUTE_SEG.test(s) && !CODE_SEG(s));
+      if (!usable.length) return "";
+      // the shop's own words: a segment with a separator reads as a sentence
+      const worded = usable.filter(s => /[-_]/.test(s));
+      const seg = (worded.length ? worded[worded.length - 1] : usable[usable.length - 1])
         .replace(/[-_]+/g, " ").trim();
       if (!seg || seg.length < 3 || /^\d+$/.test(seg)) return "";
       return seg.replace(/\b\w/g, c => c.toUpperCase()).slice(0, 200);
@@ -1463,11 +1492,29 @@
         if (t.length <= 40 && PRICE_RE.test(t)) priceLeaves.push(el);
       });
 
-      // 2) climb to the tile (has image + link), dedupe by node
+      /* 2) climb to the tile (has a picture + a link), dedupe by node.
+
+         When several elements in one tile carry the price, the SMALLEST one is
+         the price — a wrapper matches too, and its text is the name and the
+         price run together. Markup rarely puts whitespace between those two
+         nodes, so "Style Number 1" beside "89,00 €" reads as one string and
+         the row was stored holding "189,00 €": the trailing 1 of the name
+         became part of the money. Shop names ending in a number are ordinary
+         (501, Air Max 90, Tee 2.0), so this was quietly wrong wherever they
+         appear. The shortest match cannot contain the name. */
+      const leafSet = new Set(priceLeaves);
+      const wrapper = new Set();
+      priceLeaves.forEach(l => {
+        for (const k of (l.querySelectorAll ? l.querySelectorAll("*") : []))
+          if (leafSet.has(k)) { wrapper.add(l); break; }
+      });
       const tiles = new Map();   // node -> price leaf
       for (const leaf of priceLeaves) {
+        if (wrapper.has(leaf)) continue;         // something smaller says it better
         const tile = tileAncestor(leaf, 6);
-        if (tile && !tiles.has(tile)) tiles.set(tile, leaf);
+        if (!tile) continue;
+        const prev = tiles.get(tile);
+        if (!prev || textOf(leaf).length < textOf(prev).length) tiles.set(tile, leaf);
       }
 
       // Sale pairs: listings render "was $69.99  now $30.00" side by side. Read
