@@ -137,10 +137,17 @@
      Grabbing a page is done on the page. This button exists only for the
      pages the grab button cannot reach, so it states its own condition
      instead of a separate status line narrating the tab. */
+  /* Scanning, said with a rule rather than an icon. It exists only while a run
+     does, so a quiet panel has nothing extra on it at all. */
+  function paintRunLine(on) {
+    const el = $("#runline");
+    if (el) el.hidden = !on;
+  }
+
   function paintNow() {
-    const add = $("#addbtn"), dot = $("#dot");
-    // the lens IS the status light — toggle, never rewrite the class list
-    dot.classList.toggle("busy", !!(job && job.active && !job.paused));
+    const add = $("#addbtn");
+    // a hairline across the top of the panel, where a lens used to sit
+    paintRunLine(!!(job && job.active && !job.paused));
     const set = (label, on, why) => {
       add.textContent = label; add.disabled = !on;
       add.title = why || "Add the page you are on (the round button on the page does this too)";
@@ -445,13 +452,78 @@
       `${l.schedule && l.schedule.on ? "⏱ " : ""}${esc(l.name)}` +
       `<span class="n">${(l.entries || []).length}</span></button>`).join("") +
       `<button type="button" class="add" id="newlist" title="Start another list">＋ New</button>`;
-    chips.querySelectorAll("button[data-id]").forEach(b => b.addEventListener("click", () => {
-      if (curList && b.dataset.id === curList.id) return;
-      sel.value = b.dataset.id;
-      sel.dispatchEvent(new Event("change"));
-    }));
+    chips.querySelectorAll("button[data-id]").forEach(b => {
+      b.addEventListener("click", () => {
+        if (curList && b.dataset.id === curList.id) return;
+        sel.value = b.dataset.id;
+        sel.dispatchEvent(new Event("change"));
+      });
+      // the list's own tools, on the list
+      b.addEventListener("contextmenu", e => { e.preventDefault(); openListMenu(b); });
+      /* A long press is the same gesture where there is no right button —
+         a trackpad without a second click, a touch screen. */
+      let hold;
+      b.addEventListener("pointerdown", e => {
+        if (e.pointerType === "mouse") return;
+        hold = setTimeout(() => openListMenu(b), 500);
+      });
+      ["pointerup", "pointerleave", "pointercancel"].forEach(ev =>
+        b.addEventListener(ev, () => clearTimeout(hold)));
+    });
     chips.querySelector("#newlist").addEventListener("click", newList);
   }
+
+  /* ---- what you can do to a list -------------------------------------------
+
+     A row of six glyphs above the lists had to be decoded every time, and it
+     spent a line of a narrow panel on things used about once a month. The same
+     five actions live on the list itself now, named in words.
+
+     Each item presses the button that already existed rather than repeating
+     its work — rename, delete, schedule and the two exports all have handlers
+     bound by id elsewhere in this file, and a second copy of any of them would
+     be the one that goes stale. */
+  const LIST_MENU = [
+    ["Rename", "#renlist"],
+    ["Scan automatically…", "#schedtoggle"],
+    ["Export as .txt", "#explisttxt"],
+    ["Export as .xlsx", "#explistxlsx"],
+    ["Delete", "#dellist", "danger"],
+  ];
+
+  function closeListMenu() { const m = $("#lmenu"); if (m) m.hidden = true; }
+
+  function openListMenu(chip) {
+    const m = $("#lmenu");
+    if (!m) return;
+    /* The menu acts on the list it was opened on, so open that list first —
+       otherwise "Delete" reads as being about the one under the pointer and
+       does something to the one that happens to be selected. */
+    if (!curList || chip.dataset.id !== curList.id) {
+      const sel = $("#listsel");
+      sel.value = chip.dataset.id;
+      sel.dispatchEvent(new Event("change"));
+    }
+    m.innerHTML = `<div class="lmname">${esc((curList && curList.name) || "")}</div>` +
+      LIST_MENU.map(([label, target, kind]) =>
+        `<button type="button" role="menuitem" data-t="${esc(target)}"${
+          kind ? ` class="${kind}"` : ""}>${esc(label)}</button>`).join("");
+    m.hidden = false;
+    // placed under the chip, and kept inside the panel — it is 350px wide
+    const r = chip.getBoundingClientRect();
+    m.style.top = Math.round(r.bottom + 4) + "px";
+    m.style.left = Math.round(Math.max(6,
+      Math.min(r.left, document.documentElement.clientWidth - m.offsetWidth - 6))) + "px";
+    m.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      closeListMenu();
+      const t = document.querySelector(b.dataset.t);
+      if (t) t.click();
+    }));
+  }
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#lmenu")) closeListMenu();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeListMenu(); });
 
   // Products this list collected. Rows carry the list ids that produced them,
   // so a list is a real unit of work end to end: curate it, scan it, export it.
@@ -532,7 +604,7 @@
     // clear it when the run ends — a leftover "저장됨…" line with a progress bar
     // reads as "still working" long after the scan is done
     $("#livetext").textContent = on ? (job.status || "Working…") : "";
-    $("#dot").classList.toggle("busy", on && !job.paused);
+    paintRunLine(on && !job.paused);
     /* Run · hold · stop. The controls never move or vanish — a control that
        disappears makes the user hunt for it mid-run — so state shows as
        enabled/disabled, and pause names what pressing it will do. */
@@ -638,16 +710,47 @@
       raw.forEach(i => { if (i) i.image_url = window.CatalogStore.cleanImage(i.image_url); });
       products = window.CatalogStore.dedupe(raw).rows;
     } catch (e) { products = []; }
-    const fill = (sel, values) => {
-      const cur = sel.value;
-      sel.innerHTML = '<option value="">All</option>' +
-        [...values].sort((a, b) => a.localeCompare(b)).map(v => `<option>${esc(v)}</option>`).join("");
-      sel.value = cur;
-    };
-    fill($("#pbrand"), new Set(products.map(p => p.brand).filter(Boolean)));
-    fill($("#pcat"), new Set(products.map(p => p.category).filter(Boolean)));
+    paintProductFilters();
     renderProducts();
     paintListResult();
+  }
+
+  /* Brand and category are one question asked twice, so each is counted
+     against the other.
+
+     Filled independently they offered combinations that do not exist: picking
+     ADANOLA left every category in the catalogue on the list, including pages
+     only other shops have, and choosing one produced "No products match these
+     filters" — a dead end the screen had invited. The rule is the same one the
+     LAB rail follows: the values a filter offers are the values that survive
+     the OTHER filters, with their counts, so a choice can never empty the
+     screen. A value already chosen always stays listed, or turning a filter
+     off would mean hunting for it. */
+  function paintProductFilters() {
+    const q = $("#psearch").value.trim().toLowerCase();
+    const b = $("#pbrand").value, c = $("#pcat").value;
+    const passes = (p, skip) => {
+      if (listFilter && ![].concat(p.listIds || []).includes(listFilter)) return false;
+      if (skip !== "brand" && b && p.brand !== b) return false;
+      if (skip !== "cat" && c && p.category !== c) return false;
+      if (q && ![p.name, p.brand, p.fabric_composition, p.colorways].join(" ").toLowerCase().includes(q)) return false;
+      return true;
+    };
+    const fill = (sel, skip, key, keep) => {
+      const counts = new Map();
+      products.forEach(p => {
+        const v = String(p[key] || "").trim();
+        if (v && passes(p, skip)) counts.set(v, (counts.get(v) || 0) + 1);
+      });
+      if (keep && !counts.has(keep)) counts.set(keep, 0);
+      const all = [...counts.values()].reduce((x, y) => x + y, 0);
+      sel.innerHTML = `<option value="">All${all ? ` · ${all}` : ""}</option>` +
+        [...counts.keys()].sort((x, y) => x.localeCompare(y))
+          .map(v => `<option value="${esc(v)}">${esc(v)} · ${counts.get(v)}</option>`).join("");
+      sel.value = keep || "";
+    };
+    fill($("#pbrand"), "brand", "brand", b);
+    fill($("#pcat"), "cat", "category", c);
   }
   const priceN = v => { const m = String(v || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
   function visibleProducts() {
@@ -1340,6 +1443,7 @@
   // jump to PRODUCTS showing only this list's results
   $("#listview").addEventListener("click", () => {
     listFilter = curList && curList.id;
+    paintProductFilters();
     document.querySelector('.tab[data-view="products"]').click();
   });
 
@@ -1350,7 +1454,10 @@
     card.classList.toggle("sel", ck.checked);
     $("#selcount").textContent = "Selected " + picked.size;
   });
-  ["psearch", "pbrand", "pcat"].forEach(id => $("#" + id).addEventListener("input", renderProducts));
+  // Repaint the two selects on every change: what one of them offers depends
+  // on where the other one stands.
+  ["psearch", "pbrand", "pcat"].forEach(id =>
+    $("#" + id).addEventListener("input", () => { paintProductFilters(); renderProducts(); }));
   $("#selall").addEventListener("click", () => {
     const rows = visibleProducts();
     const allOn = rows.length && rows.every(p => picked.has(p.key));
@@ -1358,7 +1465,7 @@
     renderProducts();
   });
   $("#selreset").addEventListener("click", () => { picked.clear(); renderProducts(); });
-  $("#scopeclear").addEventListener("click", () => { listFilter = ""; renderProducts(); });
+  $("#scopeclear").addEventListener("click", () => { listFilter = ""; paintProductFilters(); renderProducts(); });
   $("#selexport").addEventListener("click", async () => {
     const rows = products.filter(p => picked.has(p.key));
     if (!rows.length) return toast("Nothing selected");

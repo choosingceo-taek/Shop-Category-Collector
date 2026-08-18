@@ -24,16 +24,21 @@
        photographs should put no colour of its own next to them. So: white
        card on a neutral ground, hairline rules, near-square corners. The
        structure is untouched; only temperature and radius. */
-    --bg:#f2f2f2; --card:#fff; --ink:#111; --ink2:#444; --muted:#8a8a8a;
-    --line:#e6e6e6; --line2:#d6d6d6; --hard:#111; --wash:#fafafa;
+    /* The exact values the Market lens sheet is set in, which are a magazine's:
+       stark black on white, one grey for body copy, one hairline, one soft
+       canvas, and a single rust flag for state. The panel, the LAB and the
+       sheet a designer sends on are one product, so they are one palette —
+       and a magazine's radius is nothing at all. */
+    --bg:#f5f5f5; --card:#fff; --ink:#000; --ink2:#1a1a1a; --muted:#757575;
+    --line:#e0e0e0; --line2:#d0d0d0; --hard:#000; --wash:#f5f5f5;
     --overlay:rgba(0,0,0,.45);
     /* The only colour left, and it is spent on state alone: a run in
        progress, the row being scanned. */
-    --accent:#b4551a; --accent2:#8a8a8a;
-    --cta:#111; --cta-ink:#fff; --cta-hi:#000;
+    --accent:#8a3c17; --accent2:#757575;
+    --cta:#000; --cta-ink:#fff; --cta-hi:#000;
     --serif: ui-serif, Georgia, "Times New Roman", "Apple SD Gothic Neo", serif;
-    --r:3px;                        /* boxes, not pills */
-    --r-s:2px;                      /* controls */
+    --r:0;                          /* squared, like a printed page */
+    --r-s:0;
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
@@ -77,27 +82,48 @@
   .row { display:flex; gap:6px; align-items:center; }
   .grow { flex:1; min-width:0; }
 
-  /* One row, not two: the lens sits beside the segmented control rather than
-     on a line of its own. The top of a narrow panel is the most expensive
-     space there is, and it was being spent on an icon. */
+  /* One row: the two views, the grab-button switch, the version. No mark —
+     Chrome already prints the extension's name above this panel and its icon
+     in the toolbar, and the top of a 350px panel is the most expensive space
+     in the product. */
   header { padding:9px 12px; background:var(--bg); display:flex;
-    align-items:center; gap:9px; }
-  .brandline { display:flex; align-items:center; flex:none; }
-  .lens { width:20px; height:20px; flex:none; color:var(--ink); display:block; }
-  .lens svg { width:100%; height:100%; display:block; }
-  .lens.busy { color:var(--accent); animation:pulse 1.1s ease-in-out infinite; }
+    align-items:center; gap:9px; position:relative; }
+  /* Scanning, drawn as a rule across the top rather than a pulsing icon. It
+     exists only while a run does. */
+  .runline { position:absolute; left:0; right:0; top:0; height:2px;
+    background:var(--line); overflow:hidden; }
+  .runline i { display:block; height:100%; width:38%; background:var(--accent);
+    animation:runsweep 1.15s ease-in-out infinite; }
+  @keyframes runsweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(363%)} }
   /* readable by screen readers, invisible on screen */
   .sronly { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
   h1 { font-size:13px; margin:0; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
-  /* Segmented control, the iOS way of choosing between two views: one track,
-     the chosen one lifted onto a white pill. */
-  .tabs { display:flex; gap:2px; flex:1; min-width:0; background:var(--wash);
-    border:1px solid var(--line); border-radius:var(--r); padding:2px; }
-  .tab { flex:1; border:0; background:none; padding:5px 0 6px; font-size:12px;
-    font-weight:600; color:var(--muted); border-radius:2px; letter-spacing:-.01em; }
+  /* Two views, named the way a masthead names its sections: small caps, wide
+     tracking, and the current one carrying the ink. No track, no pill — the
+     rule under the header is the only line the pair needs. */
+  .tabs { display:flex; gap:0; flex:1; min-width:0; border:1px solid var(--line2); }
+  .tab { flex:1; border:0; border-right:1px solid var(--line2); background:var(--card);
+    padding:6px 0 7px; font:700 10.5px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+  .tab:last-child { border-right:0; }
+  .tab:hover:not(.on) { color:var(--ink); }
   .tab.on { background:var(--hard); color:#fff; }
+
+  /* What you can do to a list, on the list. Right-click or long-press a chip:
+     five actions in words instead of six glyphs on a line of their own. */
+  .lmenu { position:fixed; z-index:60; min-width:168px; background:var(--card);
+    border:1px solid var(--ink); box-shadow:0 6px 18px rgba(0,0,0,.14); padding:3px 0; }
+  .lmenu .lmname { font:700 9px/1 Helvetica,Arial,sans-serif; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--muted); padding:7px 11px 6px;
+    border-bottom:1px solid var(--line); margin-bottom:3px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lmenu button { display:block; width:100%; text-align:left; border:0; background:none;
+    padding:7px 11px; font-size:12.5px; color:var(--ink); }
+  .lmenu button:hover { background:var(--wash); }
+  .lmenu button.danger { color:#b3261e; }
+  .lmenu button.danger:hover { background:#fdf2f1; }
 
   main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
   .view { flex:1; overflow-y:auto; display:none; flex-direction:column; }
@@ -374,26 +400,21 @@
     font-weight:700; padding:8px; }
 
   .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:16px;
-    background:var(--hard); color:var(--bg); padding:8px 16px; border-radius:999px; font-size:11.5px;
+    background:var(--hard); color:var(--bg); padding:8px 16px; border-radius:0; font-size:11.5px;
     opacity:0; transition:opacity .18s; pointer-events:none; z-index:9; }
   .toast.on { opacity:.97; }
 </style>
 </head>
 <body>
   <header>
-    <div class="brandline">
-      <!-- The wordmark is gone: Chrome already prints the extension name in the
-           side panel's own title bar, so repeating it spent the top of a narrow
-           panel saying what the user just read. The lens doubles as the status
-           light — it fills and pulses while a scan runs. -->
-      <span class="lens" id="dot" title="Market Lens">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2"/>
-          <path d="M15.4 15.4 L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </span>
-      <h1 class="sronly">Market Lens</h1>
-    </div>
+    <!-- No mark at the top. Chrome prints the extension's name in the side
+         panel's own title bar and its icon in the toolbar, so a lens here was
+         the third time in 40 pixels — and it was the widest thing on the row
+         after the tabs. The state it carried has its own place now: a hairline
+         that fills across the top of the panel while a scan runs, which is
+         nearer to what it says and costs no width at all. -->
+    <h1 class="sronly">Market Lens</h1>
+    <div class="runline" id="runline" hidden><i></i></div>
     <div class="tabs">
       <button class="tab on" data-view="collector">Collector</button>
       <button class="tab" data-view="products">Products</button>
@@ -403,6 +424,12 @@
          updates a folder you loaded yourself, so "download it again" IS the
          update path and it should be one obvious place rather than a link in a
          chat message. -->
+    <!-- The grab button on shopping pages can be tucked away, and this is the
+         only way it comes back. It is a setting about the whole extension, not
+         about one list, so it belongs on this row with the other one — it was
+         sitting in the list's own tool row, where it read as something that
+         happened to that list. Rides an existing line: no height. -->
+    <button class="iconbtn" id="fabtoggle" title="Grab button on pages" aria-label="Grab button on pages">◉</button>
     <button class="verchip" id="verchip" title="Version — click to update">v…</button>
   </header>
 
@@ -483,24 +510,23 @@
                it is; a word repeated on every open is furniture. Losing it
                gives the whole line to the tools, which were too small to aim
                at when they were sharing it. -->
-          <div class="fhead">
-            <!-- the list's OWN tools: rename it, delete it, take it out.
-                 Putting sites IN is a different job and lives with Add. -->
-            <span class="ftools" id="ltools">
-              <!-- The grab button on the page can be tucked away; this is how
-                   it comes back. It rides in the existing tool row, so a
-                   setting nobody needs daily costs no height. -->
-              <button class="iconbtn" id="fabtoggle" title="Grab button on pages" aria-label="Grab button on pages">◉</button>
-              <!-- A list is one research question, and the LAB compares it
-                   week to week — so it can keep its own appointment. Rides
-                   the same tool row: no new height until it is opened. -->
-              <button class="iconbtn" id="schedtoggle" aria-expanded="false" title="Scan this list automatically" aria-label="Scan this list automatically">⏱</button>
-              <button class="iconbtn" id="renlist" title="Rename this list" aria-label="Rename this list">✎</button>
-              <button class="iconbtn" id="dellist" title="Delete this list" aria-label="Delete this list">🗑</button>
-              <button class="xbtn" id="explisttxt" title="Export as .txt — edit it and import again">.txt</button>
-              <button class="xbtn" id="explistxlsx" title="Export as .xlsx — edit it and import again">.xlsx</button>
-            </span>
-          </div>
+          <!-- The list's own tools are on the list.
+
+               They used to be a row of six glyphs above it, which had to be
+               decoded every time and took a line of a narrow panel to offer
+               things that are used once a month. Right-click (or long-press) a
+               list and they are there, named in words, next to the thing they
+               act on. The buttons still exist — every handler in this file is
+               bound to them — they are simply not drawn any more, and the menu
+               presses them. -->
+          <span class="ftools" id="ltools" hidden>
+            <button class="iconbtn" id="schedtoggle" aria-expanded="false" title="Scan this list automatically" aria-label="Scan this list automatically">⏱</button>
+            <button class="iconbtn" id="renlist" title="Rename this list" aria-label="Rename this list">✎</button>
+            <button class="iconbtn" id="dellist" title="Delete this list" aria-label="Delete this list">🗑</button>
+            <button class="xbtn" id="explisttxt" title="Export as .txt — edit it and import again">.txt</button>
+            <button class="xbtn" id="explistxlsx" title="Export as .xlsx — edit it and import again">.xlsx</button>
+          </span>
+          <div class="lmenu" id="lmenu" hidden role="menu"></div>
           <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
 
           <!-- The appointment, opened from the clock above. One row: the time,

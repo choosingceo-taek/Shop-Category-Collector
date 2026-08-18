@@ -13,13 +13,15 @@
      corners, uppercase micro-labels, colour reserved for state. */
   :root {
     color-scheme: light;
-    /* Same grouped-list palette as the panel: grey ground, white cards, so a
-       long analysis page reads as a stack of separate answers. */
-    --bg:#f2f2f7; --card:#fff; --ink:#000; --ink2:#3c3c43; --muted:#8e8e93;
-    --line:#e3e3e8; --line2:#d1d1d6; --wash:#f2f2f7;
-    --accent:#111; --accent-ink:#fff;
-    --sale:#c0392b;
-    --r:10px; --r-s:8px;
+    /* The same values the panel and the Market lens sheet are set in — a
+       magazine's: stark black on white, one grey for body copy, one hairline,
+       one soft canvas. Three surfaces of one product cannot be three
+       palettes, and a magazine's radius is nothing at all. */
+    --bg:#f5f5f5; --card:#fff; --ink:#000; --ink2:#1a1a1a; --muted:#757575;
+    --line:#e0e0e0; --line2:#d0d0d0; --wash:#f5f5f5;
+    --accent:#000; --accent-ink:#fff;
+    --sale:#8a3c17;
+    --r:0; --r-s:0;
   }
   * { box-sizing:border-box; }
   /* the hidden attribute must always win — .filters is display:flex, which
@@ -61,9 +63,9 @@
 
   main { padding:11px 20px 50px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:13px; }
-  .c { border:0; border-radius:var(--r); background:var(--card); overflow:hidden;
+  .c { border-radius:var(--r); background:var(--card); overflow:hidden;
     display:flex; flex-direction:column; position:relative;
-    box-shadow:0 1px 2px rgba(0,0,0,.06); }
+    border:1px solid var(--line); }
   .c.sel { border-color:var(--accent); box-shadow:0 0 0 2px var(--wash); }
   .c .thumb { aspect-ratio:3/4; background:var(--line); display:block; width:100%; object-fit:cover; }
   .c .body { padding:9px 10px 11px; display:flex; flex-direction:column; gap:3px; }
@@ -86,7 +88,7 @@
      same way every analysis below them does */
   .labbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;
     background:var(--card); border-radius:var(--r); padding:7px 12px;
-    box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    border:1px solid var(--line); }
   .labbar .selwrap { display:flex; align-items:center; gap:6px; }
   .labbar .cap { font-size:9px; text-transform:uppercase; letter-spacing:.1em;
     color:var(--muted); }
@@ -94,7 +96,7 @@
   /* Each analysis is its own card on the grey ground — the heading belongs to
      the card, so nothing needs a rule under it to say where a section ends. */
   .sec { background:var(--card); border-radius:var(--r); padding:11px 14px 12px;
-    margin-bottom:10px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    margin-bottom:10px; border:1px solid var(--line); }
   #v-lab h3 { font-size:13.5px; margin:0 0 8px; padding:0; border:0;
     font-weight:650; letter-spacing:-.01em; }
   #v-lab h3 .sub { font-weight:400; color:var(--muted); font-size:11.5px; margin-left:7px; }
@@ -142,7 +144,7 @@
   .labhead { margin:0 0 10px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:9px; }
   .tile { border:0; border-radius:var(--r); padding:9px 12px; background:var(--card);
-    box-shadow:0 1px 2px rgba(0,0,0,.05); }
+    border:1px solid var(--line); }
   .tile .tl { font-size:10.5px; color:var(--muted); }
   .tile .tv { font-size:19px; font-weight:650; letter-spacing:-.02em; margin-top:1px; }
   .tile .ts { font-size:10.5px; color:var(--muted); margin-top:0; }
@@ -250,7 +252,7 @@
   .weekchips { display:flex; gap:6px; flex-wrap:wrap; margin:14px 0 20px;
     border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:10px 0; }
   .weekchips button { border:0; background:none; padding:5px 10px; font-size:11.5px;
-    color:var(--muted); border-radius:999px; }
+    color:var(--muted); border-radius:0; }
   .weekchips button b { font-weight:650; }
   .weekchips button.on { background:var(--ink); color:var(--bg); }
   .dayhead { display:flex; align-items:baseline; gap:10px; border-bottom:2px solid var(--ink);
@@ -330,7 +332,7 @@
   .railnote { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 12px;
     font-size:11.5px; color:var(--muted); }
   .railnote b { color:var(--ink); font-weight:600; }
-  .railnote button { background:none; border:1px solid var(--line); border-radius:999px;
+  .railnote button { background:none; border:1px solid var(--line); border-radius:0;
     padding:2px 9px; font-size:11px; color:var(--ink2); }
   @media (max-width:900px) {
     .withrail { grid-template-columns:minmax(0,1fr); }
@@ -338,7 +340,7 @@
     .rail .rvals { max-height:200px; overflow-y:auto; }
   }
   .catchips { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 16px; }
-  .catchips button { border:1px solid var(--line); background:none; border-radius:999px;
+  .catchips button { border:1px solid var(--line); background:none; border-radius:0;
     padding:4px 11px; font-size:11.5px; color:var(--ink2); }
   .catchips button.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
   .tierchips { margin:2px 0 12px; }
@@ -347,7 +349,7 @@
     background:var(--wash); }
   .bhero h2 .tierbadge { font-style:normal; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; vertical-align:middle; margin-left:9px; padding:3px 8px;
-    border:1px solid var(--line); border-radius:999px; color:var(--muted); }
+    border:1px solid var(--line); border-radius:0; color:var(--muted); }
 
   /* tabs */
   /* The list scope: chips, so how many lists there are and how big each one
@@ -387,7 +389,7 @@
   .scopechips { display:flex; gap:5px; flex-wrap:wrap; }
   .scopechips button { display:inline-flex; align-items:center; gap:6px;
     border:1px solid var(--line2); background:var(--card); color:var(--ink2);
-    border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; }
+    border-radius:0; padding:3px 10px; font-size:12px; font-weight:600; }
   .scopechips button:hover { border-color:var(--ink); color:var(--ink); }
   .scopechips button .n { font-size:11px; font-weight:700; color:var(--muted); }
   .scopechips button.on { background:var(--ink); border-color:var(--ink); color:#fff; }
