@@ -977,6 +977,10 @@
      the folder, reload. Step 3 can be opened from here — an extension may open
      chrome://extensions itself (checked, not assumed). */
   const ZIP_URL = "https://github.com/choosingceo-taek/Shop-Category-Collector/releases/latest/download/market-lens.zip";
+  /* A side panel is narrow by definition; a tab is not. When this page IS a
+     tab — the fallback on a browser with no side-panel API — it keeps panel
+     width rather than spreading a 350px layout across a monitor. */
+  if (window.innerWidth > 520) document.body.classList.add("astab");
   const running = chrome.runtime.getManifest().version;
   $("#verchip").textContent = "v" + running;
 

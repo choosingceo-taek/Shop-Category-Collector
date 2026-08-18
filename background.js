@@ -39,6 +39,33 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); } catch (e) {}
 
+/* ---- the way in, on a browser without a side panel -----------------------
+
+   Edge is Chromium and runs essentially all of this unchanged — measured, by
+   deleting chrome.sidePanel before the worker starts: the worker still runs,
+   the panel page renders, the LAB works, scans work. One thing does not
+   survive, and it is the only one that matters: openPanelOnActionClick IS the
+   toolbar button, so where that API is missing the button does nothing at all
+   and the extension is installed but unreachable.
+
+   So the button gets a listener of its own. On Chrome it never fires — the
+   panel opens instead, which is exactly what that behaviour flag means — and
+   where there is no panel it opens the same page as an ordinary tab. Same
+   document, same scripts; only the frame around it differs. */
+function openPanel(windowId) {
+  const asTab = () => chrome.tabs.create({ url: chrome.runtime.getURL("sidepanel.html") });
+  try {
+    if (chrome.sidePanel && chrome.sidePanel.open) {
+      const p = chrome.sidePanel.open(windowId != null ? { windowId } : {});
+      return p && p.catch ? p.catch(asTab) : p;
+    }
+  } catch (e) {}
+  return asTab();
+}
+try {
+  chrome.action.onClicked.addListener(tab => openPanel(tab && tab.windowId));
+} catch (e) {}
+
 // The catalog lives in IndexedDB in the extension origin. The content script
 // can't reach it (it runs in the page's origin), so it posts finished scans
 // here and the worker upserts them — which is also what lets the catalog tab
@@ -136,8 +163,8 @@ try {
     try { chrome.notifications.clear(NOTE_ID); } catch (e) {}
     try {
       const w = await chrome.windows.getLastFocused();
-      await chrome.sidePanel.open({ windowId: w.id });
-    } catch (e) {}
+      await openPanel(w && w.id);
+    } catch (e) { openPanel(); }
   });
 } catch (e) {}
 

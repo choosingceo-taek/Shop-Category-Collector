@@ -41,6 +41,11 @@
     --r-s:0;
   }
   * { box-sizing:border-box; }
+  /* Opened as a tab — the fallback on a browser with no side panel — the same
+     document would otherwise stretch a 350px design across a monitor. It keeps
+     its own width and sits where a panel would. */
+  body.astab { max-width:430px; margin:0 auto; border-left:1px solid var(--line);
+    border-right:1px solid var(--line); }
   /* Set a step larger than it was. The panel had been squeezed a size at a
      time — a micro-label here, a 10.5px note there — until the whole thing
      read as fine print, which is a poor trade in a tool opened on a laptop
