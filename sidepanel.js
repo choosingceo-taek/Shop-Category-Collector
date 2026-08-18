@@ -148,12 +148,20 @@
     const add = $("#addbtn");
     // a hairline across the top of the panel, where a lens used to sit
     paintRunLine(!!(job && job.active && !job.paused));
+    /* Shown only where it is the only door.
+
+       Collecting is done on the page, at the round Grab button — but a shop
+       Chrome has not granted access to gets no content script, so it has no
+       Grab button either, and Chrome only grants access inside a click. That
+       click has to live somewhere, and this is it. On every shop that HAS
+       been allowed, the round button is the way in and this button would be a
+       second one, which is how the panel filled up with ways to do one thing. */
     const set = (label, on, why) => {
+      add.hidden = false;
       add.textContent = label; add.disabled = !on;
-      add.title = why || "Add the page you are on (the round button on the page does this too)";
+      add.title = why || "";
     };
-    if (!read) return set("＋ Page", false, "Reading the page…");
-    if (read.kind === "internal") return set("＋ Page", false, "A browser page can't be collected");
+    if (!read || read.kind === "internal" || read.access) { add.hidden = true; return; }
     if (urlInList(read.url)) {
       const brand = brandOfRead(read);
       return set("✓ Added", false,
@@ -162,7 +170,8 @@
     const brand = brandOfRead(read);
     const cat = cleanLabel((read.ctx && read.ctx.category) || (tab && tab.title || ""), brand, read.host)
       || L.labelFromUrl(read.url) || read.host;
-    set("＋ Page", true, `Add as ${brand} · ${cat}`);
+    set(`＋ Add ${brand}`, true,
+      `${brand} · ${cat} — this shop has not been allowed yet, so adding it here asks Chrome for access`);
   }
 
   // ---- the list -------------------------------------------------------------
@@ -404,20 +413,29 @@
         "The analysis reads the name to tell a New In page from a shelf, so " +
         "they are collected but left out of the LAB until one is given."
       : "";
-    // nothing to fold when every site is one brand
-    $("#lfold").hidden = groups.size < 2;
+    /* Nothing to fold unless some brand has more than one page under it — a
+       list of one-line brands has no headings to collapse into, so offering
+       the control would be offering something that does nothing. */
+    $("#lfold").hidden = ![...groups.values()].some(r => r.length > 1);
 
     body.innerHTML =
       [...groups.entries()].map(([brand, rows]) => {
         // searching temporarily opens every group — a hidden match is a bug
         const fold = !q && folded.has(brand);
-        return `<div class="grp${fold ? " fold" : ""}" data-b="${esc(brand)}">
-      <button class="gname" type="button">
+        /* A brand watched at one page is one line, not a heading with a single
+           row under it. Most watchlists are exactly that — eight brands, eight
+           pages — and the doubled line was spending half the panel repeating
+           the brand it had just named. There is also nothing to fold in a
+           group of one, so the heading was offering a control that did
+           nothing. */
+        const solo = rows.length === 1;
+        return `<div class="grp${solo ? " solo" : ""}${fold && !solo ? " fold" : ""}" data-b="${esc(brand)}">
+      ${solo ? "" : `<button class="gname" type="button">
         <span class="gdot" style="background:${brandColor(brand)}"></span>
         <span class="gnm">${esc(brand)}</span>
         <span class="gn">${rows.length}</span>
         <span class="gcar">▾</span>
-      </button>
+      </button>`}
       <div class="gbody">${rows.map(({ e, i }) => {
         const qi = qIdx(e);
         const cls = running ? (qi > -1 && qi < queue.idx ? " done" : qi === queue.idx ? " cur" : "") : "";
@@ -431,7 +449,9 @@
            is instead, and the ✎ beside it is the fix. */
         const named = String(e.label || "").trim();
         return `<div class="ent${cls}${named ? "" : " noname"}" data-i="${i}" title="${esc(e.url)}">
+          ${solo ? `<span class="gdot" style="background:${brandColor(brand)}"></span>` : ""}
           <div class="txt">
+            ${solo ? `<div class="bn">${esc(brand)}</div>` : ""}
             <div class="lb">${named ? esc(named) : "Name this page"}</div>
           </div>
           ${e.scannable === false ? '<span class="tag">Ref</span>'
@@ -479,8 +499,17 @@
     // The chips are the visible control; the select stays as the value holder
     // so everything that reads #listsel keeps working.
     const chips = $("#lchips");
+    /* A list gets a mark of its own, coloured from its name the way brands
+       are. Without it the lists were the same shape as the two view tabs
+       directly above them, so a row of boxes read as one control with five
+       options instead of "here are the research questions you keep". The
+       colour is derived, never stored, so a list looks the same in every
+       browser the team opens it in. */
     chips.innerHTML = lists.map(l =>
-      `<button type="button" data-id="${esc(l.id)}"${curList && l.id === curList.id ? ' class="on"' : ""}>` +
+      `<button type="button" data-id="${esc(l.id)}"${curList && l.id === curList.id ? ' class="on"' : ""}` +
+      ` title="${esc(l.name)} — ${(l.entries || []).length} sites${
+        l.schedule && l.schedule.on ? " · scans itself" : ""}. Right-click for its tools.">` +
+      `<span class="ldot" style="background:${brandColor(l.name)}"></span>` +
       `${l.schedule && l.schedule.on ? "⏱ " : ""}${esc(l.name)}` +
       `<span class="n">${(l.entries || []).length}</span></button>`).join("") +
       `<button type="button" class="add" id="newlist" title="Start another list">＋ New</button>`;
@@ -564,6 +593,16 @@
 
   function paintListResult() {
     const box = $("#listresult");
+    /* What is behind the LAB door, said on the door. A solid band with a
+       chevron and nothing else read as a divider rather than a destination,
+       and this is the one figure worth knowing before opening it. */
+    const sub = $("#labsub");
+    if (sub) {
+      const all = products.length;
+      const brands = new Set(products.map(p => p.brand).filter(Boolean)).size;
+      sub.textContent = all
+        ? `${all.toLocaleString()} products · ${brands} brand${brands === 1 ? "" : "s"}` : "";
+    }
     const rows = productsOfList(curList && curList.id);
     box.hidden = !rows.length;
     if (!rows.length) return;
@@ -1275,19 +1314,6 @@
     if (!allFolded) brands.forEach(b => folded.add(b));
     renderList();
   });
-  $("#addbulk").addEventListener("click", async () => {
-    const parsed = L.parseList($("#bulk").value);
-    if (!parsed.length) return toast("No URLs found");
-    // the same judgement the repair makes, so a pasted shop we already hold
-    // reads Scan straight away instead of Scan? until the panel is reopened
-    await stampScannable(parsed);
-    const m = L.mergeEntries(curList.entries || [], parsed);
-    curList.entries = m.list;
-    await L.save(lists); $("#bulk").value = "";
-    fillListSelect(); renderList(); paintNow();
-    toast(`${m.added} added` + (m.updated ? ` · ${m.updated} updated` : "") +
-      (m.skipped ? ` · ${m.skipped} unchanged` : ""));
-  });
 
   /* ---- export the list to a file -------------------------------------------
 
@@ -1376,15 +1402,6 @@
   }
 
   $("#importbtn").addEventListener("click", () => $("#importfile").click());
-  // Pasting sits beside Import and Add, but its box only opens when asked —
-  // a four-line textarea permanently between the button and the list would
-  // push the sites themselves off the screen.
-  $("#pastetoggle").addEventListener("click", () => {
-    const box = $("#bulkbox"), open = box.hidden;
-    box.hidden = !open;
-    $("#pastetoggle").setAttribute("aria-expanded", String(open));
-    if (open) $("#bulk").focus();
-  });
   $("#importfile").addEventListener("change", async e => {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";                       // allow re-importing the same file

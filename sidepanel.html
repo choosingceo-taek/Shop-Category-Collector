@@ -104,9 +104,12 @@
      tracking, and the current one carrying the ink. No track, no pill — the
      rule under the header is the only line the pair needs. */
   .tabs { display:flex; gap:0; flex:1; min-width:0; border:1px solid var(--line2); }
+  /* Tracking wide enough for a masthead detaches the last letter of a short
+     word: PRODUCTS was reading as "PRODUCT 8". Editorial tracking is for
+     labels of two or three characters, not for words being scanned. */
   .tab { flex:1; border:0; border-right:1px solid var(--line2); background:var(--card);
-    padding:6px 0 7px; font:700 10.5px/1 Helvetica,Arial,sans-serif;
-    letter-spacing:.13em; text-transform:uppercase; color:var(--muted); }
+    padding:6px 0 7px; font:700 11px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
   .tab:last-child { border-right:0; }
   .tab:hover:not(.on) { color:var(--ink); }
   .tab.on { background:var(--hard); color:#fff; }
@@ -199,12 +202,18 @@
   .lchips { display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0; }
   /* Boxes, like the rest. A pill among rules reads as a different family of
      control, and these are the same thing as everything else on the card. */
-  .lchips button { font-size:11.5px; letter-spacing:-.01em; padding:5px 10px;
+  .lchips button { display:inline-flex; align-items:center; gap:6px;
+    font-size:11.5px; letter-spacing:-.01em; padding:5px 10px;
     border-radius:var(--r-s); font-weight:600; background:var(--card);
     border:1px solid var(--line2); }
-  .lchips button .n { font-weight:400; opacity:.6; margin-left:5px; }
+  /* Its own mark, coloured from its name. Without it these were the same
+     shape as the two view tabs above, so the eye read one control with five
+     options instead of "the research questions you keep". */
+  .lchips button .ldot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .lchips button .n { font-weight:400; opacity:.6; }
   .lchips button.on { background:var(--hard); color:#fff; border-color:var(--hard); }
   .lchips button.add { font-weight:400; color:var(--muted); }
+  .lchips button.add .ldot { display:none; }
   /* Big enough to aim at. Boxes, like everything else here. */
   .iconbtn { background:var(--card); border:1px solid var(--line2); }
   .iconbtn { width:26px; height:26px; padding:0; display:inline-flex; align-items:center;
@@ -255,9 +264,13 @@
     background:var(--hard); color:#fff; }
   .labbtn:hover { background:#000; }
   .labbtn .lbmain { display:flex; align-items:center; justify-content:space-between;
-    font-size:15px; font-weight:700; letter-spacing:-.01em; }
-  .labbtn .lbgo { font-size:15px; opacity:.55; font-weight:400; }
-  .labbtn .lbsub { display:none; }
+    font:700 13px/1 Helvetica,Arial,sans-serif; letter-spacing:.12em; }
+  .labbtn .lbgo { font-size:15px; opacity:.55; font-weight:400; letter-spacing:0; }
+  /* What is behind the door. Empty until there is something to say, so a new
+     install shows the name alone rather than a zero. */
+  .labbtn .lbsub { display:block; font-size:10.5px; color:rgba(255,255,255,.62);
+    margin-top:4px; letter-spacing:0; font-weight:400; }
+  .labbtn .lbsub:empty { display:none; }
   .capline { display:flex; align-items:center; justify-content:space-between; gap:8px;
     font-size:11px; color:var(--muted); margin-bottom:12px; }
   .capline select { width:auto; flex:0 0 auto; font-size:11px; padding:3px 6px; }
@@ -308,6 +321,21 @@
      address is identity, not reading matter — it lives in the row's tooltip
      (user request: the list shows brand and category, nothing else). */
   .ent .lb { font-size:11.5px; line-height:1.45; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* One brand, one page: the brand rides the row instead of a heading above
+     it, so the commonest watchlist is one line per site. */
+  .grp.solo { margin-bottom:3px; background:none; }
+  .grp.solo .ent { padding:5px 8px; margin-top:0; }
+  .ent .bn { font:700 9.5px/1.2 Helvetica,Arial,sans-serif; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--ink); overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; }
+  .ent .bn + .lb { color:var(--ink2); }
+  .ent .gdot { width:7px; height:7px; border-radius:50%; flex:none; }
+  /* The row's own tools appear when the pointer is on the row. Three coloured
+     glyphs on every line of a list of forty is a texture, not a set of
+     controls — and the same actions are on the right-click menu. */
+  .ent .act { opacity:0; transition:opacity .12s; }
+  .ent:hover .act, .ent:focus-within .act { opacity:1; }
+  @media (hover:none) { .ent .act { opacity:1; } }
   /* No name yet — said as a prompt rather than dressed up as one. The host
      used to stand in here, which reads like a category and is not one. */
   .ent.noname .lb { color:var(--muted); font-style:italic; }
@@ -333,13 +361,6 @@
     border:1px solid var(--line); border-radius:var(--r); background:#fff; color:var(--muted); }
   .days button.on { background:var(--ink); border-color:var(--ink); color:#fff; }
   .sched .hint { font-size:10.5px; color:var(--muted); margin-top:6px; }
-  .bulkbox { margin-top:8px; }
-  .bulkbox textarea { width:100%; margin-top:8px; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
-    border:1px solid var(--line2); border-radius:var(--r-s); padding:8px 9px;
-    background:var(--card); color:var(--ink); resize:vertical; }
-  .bulkbox button { margin-top:6px; width:100%; font-size:12.5px; font-weight:600;
-    border-radius:var(--r-s); padding:8px; }
-  .bulkbox .hint { font-size:10.5px; color:var(--muted); line-height:1.55; margin-top:7px; }
 
   .live { padding:9px 14px; font-size:11.5px;
     color:var(--ink2); display:none; }
@@ -488,9 +509,13 @@
         <button id="uprestart" class="solid">↻ Restart on the new version</button>
       </div>
 
+      <!-- The destination. A black band with a lone chevron read as a divider
+           rather than a place to go, so it says what is behind it: how much
+           has been collected. That is also the one number a designer wants
+           before deciding whether it is worth opening. -->
       <button id="catalog" class="labbtn">
         <span class="lbmain">LAB<span class="lbgo">›</span></span>
-        <span class="lbsub">Weekly new-in · By brand · Trends</span>
+        <span class="lbsub" id="labsub"></span>
       </button>
 
       <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
@@ -563,20 +588,22 @@
                decision is actually made; repeating it here was a line that
                spent its life saying "Browser page — can't be added". -->
           <div class="adder">
+            <!-- Collecting happens on the page, at the round Grab button.
+
+                 Paste is gone: Import reads the same text with the same parser
+                 and does not need a textarea sitting open in the one place the
+                 list itself should be.
+
+                 ＋ Page is not a second way to do what Grab does — it is the
+                 ONLY way into a shop Chrome has not granted access to yet,
+                 because a page with no access gets no content script and so no
+                 Grab button, and Chrome will only grant on a click. So it is
+                 shown exactly when it is the only door: on a shop this
+                 extension cannot reach. Everywhere else the round button on
+                 the page is the way in, and this row is one button wide. -->
             <div class="addrow">
-              <!-- One word each. They are three ways to do the same thing —
-                   put sites in the list — so the sentence around them was
-                   repeating "list" three times for no one. -->
-              <button id="addbtn" title="Add the page you are on (the round button on the page does this too)">＋ Page</button>
+              <button id="addbtn" hidden title="This shop has not been allowed yet — adding it here asks Chrome for access">＋ Add this shop</button>
               <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)">⬆ Import</button>
-              <button id="pastetoggle" aria-expanded="false" title="Paste a block of URLs">⌨ Paste</button>
-            </div>
-            <div class="bulkbox" id="bulkbox" hidden>
-              <textarea id="bulk" rows="4" placeholder="Zara
-- Dresses : https://www.zara.com/us/en/woman-dresses-l1066.html"></textarea>
-              <button id="addbulk">Add to list</button>
-              <div class="hint">Import reads Brand · Category · URL columns automatically;
-                without headers every line containing a URL is still read.</div>
             </div>
           </div>
 
