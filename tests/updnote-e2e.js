@@ -176,6 +176,17 @@ const SAY_NEWER = `(() => {
     !/the latest/i.test(unsure.title) && /could not reach/i.test(unsure.title),
     JSON.stringify(unsure));
 
+  /* Fear of losing a year of scans is a reason to put an update off, and
+     putting it off is what this box exists to cure. Measured before it was
+     written (update-keeps-probe): an older build collected, the folder was
+     overwritten with a newer one across a database version bump, and the
+     catalog came back whole. */
+  await panel.click("#verchip");
+  await panel.waitForTimeout(600);
+  const keep = await panel.locator(".ukeep").innerText();
+  ok("the update box says what an update does to the data",
+    /keeps everything/i.test(keep) && /same folder/i.test(keep), keep);
+
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();

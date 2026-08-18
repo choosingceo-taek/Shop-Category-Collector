@@ -308,6 +308,9 @@
     background:var(--wash); border:1px solid var(--line); border-radius:var(--r-s); }
   .unotify:hover { border-color:var(--line2); color:var(--ink); }
   .unotify.on { color:var(--muted); }
+  /* Not a warning and not a call to action — a fact, set quietly. */
+  .ukeep { font-size:11.5px; line-height:1.5; color:var(--muted); margin:0 0 8px;
+    padding-left:9px; border-left:2px solid var(--line); }
   .umanual { margin:2px 0 6px; }
   .umanual summary { cursor:pointer; color:var(--muted); font-size:10.5px; margin-bottom:6px; }
   .explist { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
@@ -553,6 +556,15 @@
       <div class="unote" id="uautonote"></div>
     </div>
     <div class="ubar" id="ubar" hidden><i id="ubarfill"></i></div>
+    <!-- Said plainly, and measured rather than hoped: an older build was used
+         to collect, the folder was overwritten with a newer one, and the
+         catalog came back whole — three products, one list, across a database
+         version bump. Fear of losing a year of scans is a reason people put
+         updating off, and putting it off is the problem this box exists to
+         solve, so the reassurance belongs where the button is. -->
+    <div class="ukeep">Updating keeps everything: your lists, your settings and
+      every product already collected. The new files go into the same folder,
+      and that folder is what the catalog belongs to.</div>
     <!-- The browser can say it out loud. A badge on the toolbar is only seen
          by someone already looking there, and this panel is closed nearly all
          the time — so the one thing that actually reaches a designer working
