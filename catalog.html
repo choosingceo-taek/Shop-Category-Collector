@@ -285,6 +285,58 @@
   .bhero h2 { font-size:34px; font-weight:700; letter-spacing:-.03em; margin:0 0 4px; line-height:1; }
   .bhero .bmeta { color:var(--muted); font-size:12px; }
   .bhero .bnew { color:var(--ink); font-weight:650; }
+  /* ---- the filter rail ---------------------------------------------------
+     A column of collapsible questions beside the feed. It stays put while the
+     results scroll, because the point of a rail is that the current selection
+     is readable at the same time as what it produced. Under 900px it folds
+     back above the results — the same groups, no horizontal scrolling. */
+  .withrail { display:grid; grid-template-columns:216px minmax(0,1fr); gap:18px; align-items:start; }
+  .railmain { min-width:0; }
+  .rail { position:sticky; top:8px; max-height:calc(100vh - 24px); overflow-y:auto;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:4px 0; }
+  .rail .rgrp { border-bottom:1px solid var(--line); }
+  .rail .rgrp:last-child { border-bottom:0; }
+  .rail summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:6px;
+    padding:9px 11px; font:700 10px/1 Helvetica,Arial,sans-serif; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--muted); }
+  .rail summary::-webkit-details-marker { display:none; }
+  .rail summary:hover { color:var(--ink); }
+  .rail summary .rn { margin-left:auto; font-weight:400; letter-spacing:0; font-size:10.5px; }
+  .rail summary .rcar { font-size:9px; color:var(--line2); }
+  .rail details[open] summary .rcar { transform:rotate(90deg); }
+  .rail .rcar { display:inline-block; transition:transform .12s ease; }
+  .rail .rvals { padding:0 11px 9px; display:flex; flex-direction:column; gap:1px; }
+  .rail label { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink2);
+    padding:3px 0; cursor:pointer; min-width:0; }
+  .rail label:hover { color:var(--ink); }
+  .rail label input { margin:0; width:12px; height:12px; padding:0; flex:none; accent-color:var(--ink); }
+  .rail label .rv { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rail label .rc { flex:none; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .rail label.picked { color:var(--ink); font-weight:600; }
+  /* Brands are read by tier, the way the team talks about them, and there are
+     too many to scan by eye — so this one group carries a search box. */
+  .rail .rsearch { width:100%; font-size:12px; padding:5px 8px; margin:0 0 6px; }
+  .rail .rtier { font:700 9px/1 Helvetica,Arial,sans-serif; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--muted); margin:7px 0 3px; }
+  .rail .rmore { background:none; border:0; padding:3px 0; font-size:11px; color:var(--muted);
+    text-align:left; }
+  .rail .rmore:hover { color:var(--ink); text-decoration:underline; }
+  .rail .rclear { background:none; border:0; padding:0; font:inherit; font-size:10.5px;
+    color:var(--muted); letter-spacing:0; text-transform:none; }
+  .rail .rclear:hover { color:var(--sale); }
+  /* What is currently narrowing the screen, said once above the results —
+     the rail can be scrolled away, and a filtered screen must never look
+     like the whole thing. */
+  .railnote { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 12px;
+    font-size:11.5px; color:var(--muted); }
+  .railnote b { color:var(--ink); font-weight:600; }
+  .railnote button { background:none; border:1px solid var(--line); border-radius:999px;
+    padding:2px 9px; font-size:11px; color:var(--ink2); }
+  @media (max-width:900px) {
+    .withrail { grid-template-columns:minmax(0,1fr); }
+    .rail { position:static; max-height:none; }
+    .rail .rvals { max-height:200px; overflow-y:auto; }
+  }
   .catchips { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 16px; }
   .catchips button { border:1px solid var(--line); background:none; border-radius:999px;
     padding:4px 11px; font-size:11.5px; color:var(--ink2); }
@@ -522,8 +574,22 @@
       <div id="labbody"></div>
     </div>
 
-    <div id="v-new" hidden></div>
-    <div id="v-brands" hidden></div>
+    <!-- One rail, seven questions, both browsing tabs.
+
+         Chips above a feed can only narrow by one thing at a time, and the
+         designer's question is compound: midi dresses, in satin, at the
+         contemporary brands. Each group is one question, several answers
+         inside a group are an "or", and the groups are an "and" — the shape
+         every filter rail in the trade already has. The counts beside each
+         value are computed against the OTHER groups, so nothing on the rail
+         can lead to an empty screen. -->
+    <div class="withrail" id="railwrap" hidden>
+      <aside class="rail" id="rail"></aside>
+      <div class="railmain">
+        <div id="v-new" hidden></div>
+        <div id="v-brands" hidden></div>
+      </div>
+    </div>
     <div id="v-products" hidden><div class="grid" id="grid"></div></div>
 
     <div id="v-lists" hidden>

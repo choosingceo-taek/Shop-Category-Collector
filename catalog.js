@@ -850,6 +850,8 @@
     $("#v-lab").hidden = view !== "lab";
     $("#v-new").hidden = view !== "new";
     $("#v-brands").hidden = view !== "brands";
+    // the rail belongs to the two browsing tabs, and goes with them
+    $("#railwrap").hidden = !(view === "new" || view === "brands");
     $("#v-products").hidden = view !== "products";
     $("#v-lists").hidden = view !== "lists";
     /* The header follows the tab. 상품 = full filter row; 신상 피드/브랜드 =
@@ -1012,6 +1014,157 @@
   const tierList = () => [...new Set(items.map(i => i.tier).filter(Boolean))].sort();
   const inTier = i => !curTier || i.tier === curTier;
   const scanned = () => items.filter(i => i && i.source !== "clip" && i.addedAt && inTier(i));
+
+  /* ---- the filter rail ----------------------------------------------------
+
+     Seven questions, in the order a designer asks them: what kind of garment,
+     what cloth, what shape, how it sits, what was done to it, what colour,
+     whose. Each is read off the rows themselves — nothing is stored, so it
+     applies to everything already collected and improves whenever the
+     vocabularies do.
+
+     Several values inside a group are an OR; the groups are an AND. Counts
+     beside each value are computed against the OTHER groups, so a value that
+     is offered can never produce an empty screen.
+
+     Nothing here touches what is collected — the charter allows attribute
+     filters only after the scan, on the display side, because narrowing what
+     goes INTO the catalogue is what destroys a distribution. */
+  const FACETS = [
+    ["category", "Category", i => [garmentOf(i)]],
+    ["fabric", "Fabric", i => T().DIMS.fabricfam.keysOf(i)],
+    ["silhouette", "Silhouette", i => T().DIMS.silhouette.keysOf(i)],
+    ["fit", "Fit", i => T().DIMS.fit.keysOf(i)],
+    ["detail", "Detail", i => T().DIMS.keyword.keysOf(i)],
+    ["color", "Colour", i => window.ReportCalc.parseColors(i && i.colorways)],
+    ["brand", "Brand", i => [(i && i.brand) || ""].filter(Boolean)],
+  ];
+  const T = () => window.TrendCalc;
+  const facetPick = {};                       // key -> Set of chosen values
+  FACETS.forEach(f => { facetPick[f[0]] = new Set(); });
+  let brandQuery = "";                        // the Brand group's own search
+  const railOpen = { category: true, fabric: true, brand: true };
+  const RAIL_CUT = 8;                         // values shown before "show all"
+  const railAll = {};                         // groups the user expanded
+
+  const facetValues = (f, i) => (f[2](i) || []).filter(Boolean);
+  const chosenIn = k => facetPick[k];
+  const anyPicked = () => FACETS.some(f => chosenIn(f[0]).size);
+
+  // does a row pass every group EXCEPT the one named (for that group's counts)
+  function railMatch(i, except) {
+    return FACETS.every(f => {
+      const set = chosenIn(f[0]);
+      if (!set.size || f[0] === except) return true;
+      return facetValues(f, i).some(v => set.has(v));
+    });
+  }
+
+  function renderRail(rows, skip) {
+    const el = $("#rail");
+    const groups = FACETS.filter(f => !(skip || []).includes(f[0])).map(f => {
+      const [key, label] = f;
+      const base = rows.filter(i => railMatch(i, key));
+      const counts = new Map();
+      base.forEach(i => facetValues(f, i).forEach(v =>
+        counts.set(v, (counts.get(v) || 0) + 1)));
+      // a value the user picked stays listed even when nothing carries it now,
+      // otherwise the filter is on and invisible
+      chosenIn(key).forEach(v => { if (!counts.has(v)) counts.set(v, 0); });
+      return { key, label, counts };
+    });
+
+    el.innerHTML = groups.map(g => {
+      const chosen = chosenIn(g.key);
+      if (!g.counts.size && !chosen.size) return "";
+      let list = [...g.counts.entries()].sort((a, b) =>
+        b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+      if (g.key === "category") {
+        // garment types read in their own order, not by how many came in
+        const rank = n => { const x = GARMENT_ORDER.indexOf(n); return x < 0 ? 99 : x; };
+        list.sort((a, b) => rank(a[0]) - rank(b[0]));
+      }
+      if (g.key === "brand" && brandQuery) {
+        const q = brandQuery.toLowerCase();
+        list = list.filter(([v]) => String(v).toLowerCase().includes(q) || chosen.has(v));
+      }
+      const open = railOpen[g.key] || chosen.size > 0;
+      const showAll = railAll[g.key] || list.length <= RAIL_CUT;
+      const head = list.slice(0, showAll ? list.length : RAIL_CUT);
+      const row = ([v, n]) => `<label class="${chosen.has(v) ? "picked" : ""}">
+        <input type="checkbox" data-k="${esc(g.key)}" data-v="${esc(v)}"${chosen.has(v) ? " checked" : ""}>
+        <span class="rv" title="${esc(v)}">${esc(v)}</span><span class="rc">${n}</span></label>`;
+      /* Brands sit under their tier — that is how the team names them, and a
+         flat alphabetical list of thirty-two is not readable. */
+      let body;
+      if (g.key === "brand") {
+        const tiers = new Map();
+        head.forEach(([v, n]) => {
+          const t = (rows.find(i => i.brand === v) || {}).tier || "";
+          if (!tiers.has(t)) tiers.set(t, []);
+          tiers.get(t).push([v, n]);
+        });
+        const order = [...tiers.keys()].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b));
+        body = `<input type="search" class="rsearch" id="rbq" placeholder="Search brand" value="${esc(brandQuery)}">` +
+          order.map(t => (order.length > 1 || t
+            ? `<div class="rtier">${esc(t || "Untiered")}</div>` : "") +
+            tiers.get(t).map(row).join("")).join("");
+      } else body = head.map(row).join("");
+      const more = list.length > head.length
+        ? `<button class="rmore" data-more="${esc(g.key)}">Show all ${list.length}</button>` : "";
+      return `<details class="rgrp"${open ? " open" : ""} data-g="${esc(g.key)}">
+        <summary><span class="rcar">▶</span>${esc(g.label)}${
+          chosen.size ? `<span class="rn"><button class="rclear" data-clear="${esc(g.key)}">clear ${chosen.size}</button></span>`
+            : `<span class="rn">${list.length}</span>`}</summary>
+        <div class="rvals">${body}${more}</div></details>`;
+    }).join("");
+  }
+
+  function wireRail(rerender) {
+    const el = $("#rail");
+    el.querySelectorAll("input[type=checkbox]").forEach(b =>
+      b.addEventListener("change", () => {
+        const set = chosenIn(b.dataset.k);
+        if (b.checked) set.add(b.dataset.v); else set.delete(b.dataset.v);
+        rerender();
+      }));
+    el.querySelectorAll("[data-clear]").forEach(b =>
+      b.addEventListener("click", e => {
+        e.preventDefault(); e.stopPropagation();
+        chosenIn(b.dataset.clear).clear(); rerender();
+      }));
+    el.querySelectorAll("[data-more]").forEach(b =>
+      b.addEventListener("click", () => { railAll[b.dataset.more] = true; rerender(); }));
+    el.querySelectorAll("details").forEach(d =>
+      d.addEventListener("toggle", () => { railOpen[d.dataset.g] = d.open; }));
+    const q = el.querySelector("#rbq");
+    if (q) {
+      q.addEventListener("input", () => {
+        brandQuery = q.value;
+        railAll.brand = true;
+        rerender();
+        const again = $("#rail").querySelector("#rbq");
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      });
+    }
+  }
+
+  /* What is narrowing the screen, said above the results. The rail scrolls
+     and can be collapsed; a filtered screen that does not say so is a screen
+     reporting a part as if it were the whole. */
+  function railNote(shown, total) {
+    if (!anyPicked()) return "";
+    const bits = FACETS.filter(f => chosenIn(f[0]).size)
+      .map(f => `<b>${esc([...chosenIn(f[0])].join(", "))}</b>`);
+    return `<div class="railnote">Showing ${shown.toLocaleString()} of ${total.toLocaleString()} ·
+      ${bits.join(" · ")} <button id="railclear">Clear all</button></div>`;
+  }
+  function wireRailNote(el, rerender) {
+    const b = el.querySelector("#railclear");
+    if (b) b.addEventListener("click", () => {
+      FACETS.forEach(f => chosenIn(f[0]).clear()); brandQuery = ""; rerender();
+    });
+  }
 
   /* One chip row, reused by every view that can be narrowed to a tier. Counts
      are shown so a chip can never lead to an empty screen, and the row is
@@ -1176,7 +1329,12 @@
 
     // search first, so the brand chips' counts describe what is on screen
     const q = currentQ();
-    const wkItems = wk.items.filter(i => matchesQ(i, q));
+    const searched = wk.items.filter(i => matchesQ(i, q));
+    // the rail is built from the searched week, so its counts describe what
+    // is actually on offer here rather than the whole catalogue
+    renderRail(searched);
+    wireRail(renderNew);
+    const wkItems = searched.filter(i => railMatch(i));
 
     // Brand filter for the week — counts shown per brand so an empty pick
     // can't happen. The filter narrows THIS view only; it never touches what
@@ -1235,9 +1393,13 @@
       </div>
       <div class="weekchips">${chips}</div>
       ${tierChips(new Map(tierList().map(t => [t, wk.items.filter(i => i.tier === t).length])))}
+      ${railNote(wkItems.length, searched.length)}
       ${brandChips}
-      ${sections || `<div class="none">${q ? `Nothing matches "${esc(q)}" in this week.` : "No products in this week."}</div>`}`;
+      ${sections || `<div class="none">${q ? `Nothing matches "${esc(q)}" in this week.`
+        : anyPicked() ? "Nothing in this week matches the filters on the left."
+        : "No products in this week."}</div>`}`;
     armImgFallback(el);
+    wireRailNote(el, renderNew);
     wireTierChips(el, () => { curFeedBrand = ""; renderNew(); });
     el.querySelectorAll(".weekchips button").forEach(b =>
       b.addEventListener("click", () => { curWeekStart = +b.dataset.w; curFeedBrand = ""; renderNew(); }));
@@ -1247,8 +1409,23 @@
 
   function renderBrands() {
     const el = $("#v-brands");
-    const rows = scanned();
-    if (!rows.length) { el.innerHTML = EMPTY_FEED; return; }
+    const all = scanned();
+    if (!all.length) { el.innerHTML = EMPTY_FEED; return; }
+
+    /* The Brand group is left off this tab's rail: the brand column beside the
+       results IS the brand picker, and two of them would disagree. Everything
+       else narrows the assortment, which is what makes "who is doing satin"
+       answerable here — the brand column's counts follow the filter. */
+    renderRail(all, ["brand"]);
+    wireRail(renderBrands);
+    const rows = all.filter(i => railMatch(i));
+    if (!rows.length) {
+      el.innerHTML = `<div class="edhead"><div><h2>By Brand</h2></div></div>
+        ${railNote(0, all.length)}
+        <div class="none">No products match the filters on the left.</div>`;
+      wireRailNote(el, renderBrands);
+      return;
+    }
 
     const byBrand = new Map();
     rows.forEach(i => {
@@ -1299,6 +1476,7 @@
         ${latest ? `<span class="weektag">WEEK ${esc(window.TrendCalc.weekId(latest.start))}</span>` : ""}
       </div>
       ${tierChips(new Map(tierList().map(t => [t, rows.filter(i => i.tier === t).length])))}
+      ${railNote(rows.length, all.length)}
       <div class="brandwrap">
         <div class="brail">${rail}</div>
         <div>
@@ -1314,6 +1492,7 @@
       </div>`;
     armImgFallback(el);
     wireTierChips(el, () => { curBrand = ""; curCat = ""; renderBrands(); });
+    wireRailNote(el, renderBrands);
     el.querySelectorAll(".brail button").forEach(b =>
       b.addEventListener("click", () => { curBrand = b.dataset.b; curCat = ""; renderBrands(); }));
     el.querySelectorAll(".catchips button").forEach(b =>

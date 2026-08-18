@@ -178,6 +178,37 @@
     "a-line,empire,column,shift,swing,trapeze,cocoon,peg"
   ).split(","));
 
+  /* The shape of the item itself — "midi dress", "slip dress", "wrap skirt".
+
+     Not the same question as the category (Dresses) and not the same as the
+     fit (how it sits on the body): a designer browsing a week asks for midi
+     dresses, and neither of the other two axes can answer that. Deliberately
+     kept apart from FIT so no word is counted twice — the proportion words
+     (wide-leg, oversized, cropped) stay there, and this holds lengths and
+     named forms only.
+
+     A line word on its own is not a silhouette either: "shirt" is the
+     category, and only "shirt dress" is a shape. */
+  const SIL_LINE = (
+    "mini,midi,maxi,knee,ankle,floor,tea," +
+    "slip,wrap,shirt,sheath,pencil,tiered,tunic,pinafore,kaftan,caftan,sarong," +
+    "babydoll,palazzo,culotte,culottes,capri,bermuda"
+  ).split(",");
+  const SIL_NOUN = (
+    "dress,gown,skirt,trouser,trousers,pant,pants,jean,jeans,short,shorts," +
+    "top,shirt,blouse,tee,tank,cami,camisole,jacket,coat,blazer,cardigan," +
+    "sweater,jumper,jumpsuit,romper,playsuit"
+  ).split(",");
+  const singular = w => /(?:ss|us)$/i.test(w) ? w : w.replace(/s$/i, "");
+
+  function silhouetteOf(text) {
+    const words = String(text || "").toLowerCase().replace(/[^a-z\s-]/g, " ").split(/\s+/).filter(Boolean);
+    const line = words.find(w => SIL_LINE.indexOf(w) >= 0);
+    if (!line) return "";
+    const noun = words.find(w => SIL_NOUN.indexOf(w) >= 0 && singular(w) !== singular(line));
+    return noun ? `${singular(line)} ${singular(noun)}` : "";
+  }
+
   // Which bucket a name word belongs to, or "" when it is none of them.
   function kindOf(word) {
     const w = String(word || "").toLowerCase();
@@ -458,7 +489,7 @@
 
   const API = {
     parsePrice, parseFibers, parseColors, parseDesign, nameKeywords, classifyKeywords,
-    kindOf, MATERIAL, WEAVE, FIT, normItem, normScan,
+    kindOf, MATERIAL, WEAVE, FIT, silhouetteOf, normItem, normScan,
     aggregate, compare, priceHistogram, mean, median, tally,
     isoWeek, weekly, weeklyTrend, inspoImages,
   };

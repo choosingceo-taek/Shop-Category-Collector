@@ -100,6 +100,16 @@
       label: "Design detail",
       keysOf: it => Calc.normItem(it).nameKinds.detail.map(titleCase),
     },
+    /* The shape of the item — "midi dress" — which is neither the category
+       (Dresses) nor the fit (how it sits). Read from the name and the shop's
+       own product type, so it applies to everything already collected. */
+    silhouette: {
+      label: "Silhouette",
+      keysOf: it => {
+        const s = Calc.silhouetteOf([it && it.name, it && it.product_type].filter(Boolean).join(" "));
+        return s ? [titleCase(s)] : [];
+      },
+    },
     /* The cloth, named the way a designer names it: the weave when the shop
        states one (satin, poplin, jersey), otherwise the fibre that the
        composition says the garment is mostly made of. Kept separate from the
