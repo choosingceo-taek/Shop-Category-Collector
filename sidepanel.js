@@ -525,8 +525,7 @@
       ` title="${esc(l.name)} — ${(l.entries || []).length} sites${
         l.schedule && l.schedule.on ? " · scans itself" : ""}. Right-click for its tools.">` +
       `<span class="ldot" style="background:${brandColor(l.name)}"></span>` +
-      `${l.schedule && l.schedule.on ? "⏱ " : ""}${esc(l.name)}</button>`).join("") +
-      `<button type="button" class="add" id="newlist" title="Start another list">＋ New</button>`;
+      `${l.schedule && l.schedule.on ? "⏱ " : ""}${esc(l.name)}</button>`).join("");
     chips.querySelectorAll("button[data-id]").forEach(b => {
       b.addEventListener("click", () => {
         if (curList && b.dataset.id === curList.id) return;
@@ -545,7 +544,8 @@
       ["pointerup", "pointerleave", "pointercancel"].forEach(ev =>
         b.addEventListener(ev, () => clearTimeout(hold)));
     });
-    chips.querySelector("#newlist").addEventListener("click", newList);
+    /* The new-tab button lives outside the strip that scrolls, so it is bound
+       once at startup rather than re-created with the tabs. */
   }
 
   /* ---- what you can do to a list -------------------------------------------
@@ -1353,6 +1353,7 @@
     curList = { id: "l" + Date.now(), name: name.trim(), entries: [], createdAt: Date.now() };
     lists.push(curList); await L.save(lists); fillListSelect(); renderList(); paintNow();
   }
+  $("#newlist").addEventListener("click", newList);
   $("#renlist").addEventListener("click", async () => {
     if (!curList) return;
     const name = await promptIn("List name", curList.name);

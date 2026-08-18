@@ -53,7 +53,7 @@
   .fs { position:relative; display:flex; gap:5px; align-items:center; flex-wrap:wrap;
     background:var(--wash); border:0; border-radius:var(--r-s); padding:5px 9px; }
   .fs.grow { flex:1; min-width:230px; }
-  .fs > .lg { position:static; font-size:9px; letter-spacing:.1em;
+  .fs > .lg { position:static; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; color:var(--muted); margin-right:2px; }
   .fs select, .fs button { font-size:12px; padding:4px 8px; }
   .fs input[type=search] { padding:4px 9px; font-size:12px; }
@@ -90,7 +90,7 @@
     background:var(--card); border-radius:var(--r); padding:7px 12px;
     border:1px solid var(--line); }
   .labbar .selwrap { display:flex; align-items:center; gap:6px; }
-  .labbar .cap { font-size:9px; text-transform:uppercase; letter-spacing:.1em;
+  .labbar .cap { font-size:10px; text-transform:uppercase; letter-spacing:.1em;
     color:var(--muted); }
   .labbar select { font-size:12px; padding:4px 8px; }
   /* Each analysis is its own card on the grey ground — the heading belongs to
@@ -106,15 +106,15 @@
      keyword has traced, and for the search lane under it. Editorial language
      from the Market lens sheet: a rule under an uppercase micro label, figures
      in the corner, no boxes inside boxes. */
-  .ax h3 { font:700 10px/1 Helvetica,Arial,sans-serif; letter-spacing:.14em;
+  .ax h3 { font:700 11px/1 Helvetica,Arial,sans-serif; letter-spacing:.14em;
     text-transform:uppercase; color:var(--muted); padding-bottom:8px;
     border-bottom:1px solid var(--ink); margin:0 0 12px; }
-  .ax h3 .sub { font-weight:400; letter-spacing:.02em; text-transform:none; font-size:10.5px; }
+  .ax h3 .sub { font-weight:400; letter-spacing:.02em; text-transform:none; font-size:11.5px; }
   .axcards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
   .axc { border:1px solid var(--line); border-radius:var(--r-s); padding:10px 11px 8px;
     display:flex; flex-direction:column; gap:2px; min-width:0; }
   .axch { display:flex; align-items:baseline; gap:8px; }
-  .axk { font:700 10px/1.2 Helvetica,Arial,sans-serif; letter-spacing:.11em;
+  .axk { font:700 11px/1.2 Helvetica,Arial,sans-serif; letter-spacing:.11em;
     text-transform:uppercase; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
     white-space:nowrap; }
   .axd { font:650 10.5px/1 Helvetica,Arial,sans-serif; color:var(--muted);
@@ -123,31 +123,31 @@
   .axnum { display:flex; align-items:baseline; gap:5px; margin-top:3px; }
   .axnum b { font:650 26px/1 Helvetica,Arial,sans-serif; letter-spacing:-.03em;
     font-variant-numeric:tabular-nums; }
-  .axnum i { font-style:normal; font-size:10.5px; color:var(--muted); }
-  .axmeta { font-size:10.5px; color:var(--muted); line-height:1.45; min-height:15px;
+  .axnum i { font-style:normal; font-size:11.5px; color:var(--muted); }
+  .axmeta { font-size:11.5px; color:var(--muted); line-height:1.45; min-height:15px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .axc svg.area { display:block; width:100%; height:46px; margin-top:6px; }
-  .axc .noarea { font-size:10px; color:var(--muted); margin-top:10px; height:46px; }
+  .axc .noarea { font-size:11px; color:var(--muted); margin-top:10px; height:46px; }
   /* the search lane — only drawn when a Trends CSV has actually been imported */
   /* the lane sits at the foot of the card, so cards with and without one line
      up rather than staggering the grid */
   .axgt { border-top:1px solid var(--line); margin-top:auto; padding-top:6px; }
   .axgt .gtlab { font:700 8.5px/1 Helvetica,Arial,sans-serif; letter-spacing:.14em;
     color:#8a3c17; }
-  .axgt .gtq { font-size:10px; color:var(--muted); margin-left:6px; }
+  .axgt .gtq { font-size:11px; color:var(--muted); margin-left:6px; }
   .axgt .gtv { font:650 11px/1 Helvetica,Arial,sans-serif; float:right;
     font-variant-numeric:tabular-nums; color:#8a3c17; }
   .axgt svg.area { height:26px; margin-top:2px; }
   /* what moved under the numbers — said once, under the cards it qualifies */
-  .axcov { font-size:10.5px; color:var(--muted); line-height:1.5; margin-top:10px;
+  .axcov { font-size:11.5px; color:var(--muted); line-height:1.5; margin-top:10px;
     padding-top:8px; border-top:1px solid var(--line); }
   .labhead { margin:0 0 10px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:9px; }
   .tile { border:0; border-radius:var(--r); padding:9px 12px; background:var(--card);
     border:1px solid var(--line); }
-  .tile .tl { font-size:10.5px; color:var(--muted); }
+  .tile .tl { font-size:11.5px; color:var(--muted); }
   .tile .tv { font-size:19px; font-weight:650; letter-spacing:-.02em; margin-top:1px; }
-  .tile .ts { font-size:10.5px; color:var(--muted); margin-top:0; }
+  .tile .ts { font-size:11.5px; color:var(--muted); margin-top:0; }
   .legend { display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; }
   .legend .lg { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--ink2); }
   .legend .lg i { width:10px; height:10px; border-radius:2px; display:inline-block; }
@@ -160,7 +160,7 @@
   .mv { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:baseline;
     padding:7px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
   .mv .mk { font-weight:600; }
-  .mv .mk .new { font-style:normal; font-size:9px; letter-spacing:.08em; margin-left:6px;
+  .mv .mk .new { font-style:normal; font-size:10px; letter-spacing:.08em; margin-left:6px;
     padding:1px 4px; border:1px solid var(--line); color:var(--muted); }
   .mv .mb { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
   .mv .md { font-weight:650; font-variant-numeric:tabular-nums; }
@@ -181,7 +181,7 @@
   /* The pulse table: one line per measure. Dense on purpose — the eye runs
      down the change column and stops wherever it is not STABLE. */
   .pulse { width:100%; border-collapse:collapse; font-size:12.5px; }
-  .pulse th { text-align:left; font-size:9px; letter-spacing:.11em; text-transform:uppercase;
+  .pulse th { text-align:left; font-size:10px; letter-spacing:.11em; text-transform:uppercase;
     color:var(--muted); font-weight:600; padding:0 8px 5px 0; border-bottom:1px solid var(--line); }
   .pulse th:nth-child(2), .pulse td.pc { width:78px; }
   .pulse th:nth-child(3), .pulse td.ps { width:70px; }
@@ -193,7 +193,7 @@
   .pulse .pc { font-weight:700; font-variant-numeric:tabular-nums; }
   .pulse .pc .up { color:#0ca30c; }
   .pulse .pc .down { color:#d03b3b; }
-  .pulse .pc .flat { color:var(--muted); font-size:10px; letter-spacing:.08em; font-weight:600; }
+  .pulse .pc .flat { color:var(--muted); font-size:11px; letter-spacing:.08em; font-weight:600; }
   .pulse .ps { line-height:0; }
   .pulse .ps .nospark { color:var(--line2); line-height:1; font-size:12px; }
   .pulse .pn { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums;
@@ -209,7 +209,7 @@
   .sugs { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:10px; }
   .sug { border:0; border-radius:var(--r-s); padding:10px 12px; background:var(--wash); }
   .sug .sk { font-weight:650; font-size:13px; display:flex; align-items:center; gap:6px; }
-  .sug .sk .tag { font-style:normal; font-size:9px; letter-spacing:.08em; padding:1px 5px;
+  .sug .sk .tag { font-style:normal; font-size:10px; letter-spacing:.08em; padding:1px 5px;
     border-radius:3px; border:1px solid var(--line); color:var(--muted); }
   .sug .sk .tag.new { border-color:#1baf7a; color:#0f7f57; }
   .sug .sr { font-size:11.5px; color:var(--muted); margin-top:3px; }
@@ -221,7 +221,7 @@
   .lg2 td { padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
   .lg2 .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .lg2 .pd { font-weight:600; white-space:nowrap; }
-  .lg2 .pd .arch { font-style:normal; font-size:9px; margin-left:5px; padding:1px 4px;
+  .lg2 .pd .arch { font-style:normal; font-size:10px; margin-left:5px; padding:1px 4px;
     border:1px dashed var(--line); color:var(--muted); }
   .lg2 .tp { color:var(--ink2); }
   /* frequency ranking */
@@ -244,10 +244,10 @@
   /* NEW ARRIVALS feed + BY BRAND — editorial framing over the same catalog data */
   .edhead { display:flex; align-items:flex-end; justify-content:space-between; gap:14px;
     margin:6px 0 4px; flex-wrap:wrap; }
-  .edhead .kicker { display:block; font-size:10px; text-transform:uppercase;
+  .edhead .kicker { display:block; font-size:11px; text-transform:uppercase;
     letter-spacing:.16em; color:var(--muted); margin-bottom:6px; }
   .edhead h2 { font-size:30px; font-weight:700; letter-spacing:-.03em; margin:0; line-height:1.05; }
-  .weektag { font-size:10px; letter-spacing:.12em; border:1px solid var(--ink);
+  .weektag { font-size:11px; letter-spacing:.12em; border:1px solid var(--ink);
     padding:4px 9px; white-space:nowrap; align-self:center; }
   .weekchips { display:flex; gap:6px; flex-wrap:wrap; margin:14px 0 20px;
     border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:10px 0; }
@@ -267,7 +267,7 @@
      the same report back three times with nothing anyone could act on. */
   .c .thumb.ph { display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:3px; padding:8px; text-align:center;
-    color:var(--muted); font-size:9.5px; letter-spacing:.04em; line-height:1.35; }
+    color:var(--muted); font-size:10.5px; letter-spacing:.04em; line-height:1.35; }
   .c .thumb.ph b { font-weight:600; color:var(--ink2); word-break:break-all; }
   .c .thumb.ph span { opacity:.8; }
   .checkbox .ccopy, .checkbox .cgrant { font-size:11px; padding:1px 8px; margin-left:6px; }
@@ -299,12 +299,12 @@
   .rail .rgrp { border-bottom:1px solid var(--line); }
   .rail .rgrp:last-child { border-bottom:0; }
   .rail summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:6px;
-    padding:9px 11px; font:700 10px/1 Helvetica,Arial,sans-serif; letter-spacing:.13em;
+    padding:9px 11px; font:700 11px/1 Helvetica,Arial,sans-serif; letter-spacing:.13em;
     text-transform:uppercase; color:var(--muted); }
   .rail summary::-webkit-details-marker { display:none; }
   .rail summary:hover { color:var(--ink); }
-  .rail summary .rn { margin-left:auto; font-weight:400; letter-spacing:0; font-size:10.5px; }
-  .rail summary .rcar { font-size:9px; color:var(--line2); }
+  .rail summary .rn { margin-left:auto; font-weight:400; letter-spacing:0; font-size:11.5px; }
+  .rail summary .rcar { font-size:10px; color:var(--line2); }
   .rail details[open] summary .rcar { transform:rotate(90deg); }
   .rail .rcar { display:inline-block; transition:transform .12s ease; }
   .rail .rvals { padding:0 11px 9px; display:flex; flex-direction:column; gap:1px; }
@@ -313,17 +313,17 @@
   .rail label:hover { color:var(--ink); }
   .rail label input { margin:0; width:12px; height:12px; padding:0; flex:none; accent-color:var(--ink); }
   .rail label .rv { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .rail label .rc { flex:none; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .rail label .rc { flex:none; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .rail label.picked { color:var(--ink); font-weight:600; }
   /* Brands are read by tier, the way the team talks about them, and there are
      too many to scan by eye — so this one group carries a search box. */
   .rail .rsearch { width:100%; font-size:12px; padding:5px 8px; margin:0 0 6px; }
-  .rail .rtier { font:700 9px/1 Helvetica,Arial,sans-serif; letter-spacing:.12em;
+  .rail .rtier { font:700 10px/1 Helvetica,Arial,sans-serif; letter-spacing:.12em;
     text-transform:uppercase; color:var(--muted); margin:7px 0 3px; }
   .rail .rmore { background:none; border:0; padding:3px 0; font-size:11px; color:var(--muted);
     text-align:left; }
   .rail .rmore:hover { color:var(--ink); text-decoration:underline; }
-  .rail .rclear { background:none; border:0; padding:0; font:inherit; font-size:10.5px;
+  .rail .rclear { background:none; border:0; padding:0; font:inherit; font-size:11.5px;
     color:var(--muted); letter-spacing:0; text-transform:none; }
   .rail .rclear:hover { color:var(--sale); }
   /* What is currently narrowing the screen, said once above the results —
@@ -344,10 +344,10 @@
     padding:4px 11px; font-size:11.5px; color:var(--ink2); }
   .catchips button.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
   .tierchips { margin:2px 0 12px; }
-  .brail .railgrp { font-size:9.5px; letter-spacing:.12em; text-transform:uppercase;
+  .brail .railgrp { font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
     color:var(--muted); padding:9px 12px 5px; border-bottom:1px solid var(--line);
     background:var(--wash); }
-  .bhero h2 .tierbadge { font-style:normal; font-size:10px; letter-spacing:.1em;
+  .bhero h2 .tierbadge { font-style:normal; font-size:11px; letter-spacing:.1em;
     text-transform:uppercase; vertical-align:middle; margin-left:9px; padding:3px 8px;
     border:1px solid var(--line); border-radius:0; color:var(--muted); }
 
@@ -364,7 +364,7 @@
   /* Warm only when something needs attention — colour stays a state signal, so
      a clean run's chip is as quiet as the rest of the header. */
   button#checkchip.warn { border-color:#c9873f; background:#fdf6ec; color:#8a5a1e; }
-  .checkbox .grp { display:block; margin:7px 0 3px; font-size:9.5px; letter-spacing:.12em;
+  .checkbox .grp { display:block; margin:7px 0 3px; font-size:10.5px; letter-spacing:.12em;
     text-transform:uppercase; color:var(--muted); }
   .checkbox .grp:first-child { margin-top:0; }
   .checkbox .cw .num { color:var(--muted); font-variant-numeric:tabular-nums; }
