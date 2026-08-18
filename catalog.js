@@ -169,10 +169,25 @@
     const span = u.oldest ? `${ymd(u.oldest)} → ${ymd(u.newest)}` : "nothing collected yet";
     chip.title = "Back up this catalog, merge in a teammate's, or free up space" +
       ` — ${u.products.toLocaleString()} products, ${MB(u.bytes || 0)}`;
+    /* "Lives in this browser only" was true and still left the obvious worry
+       unanswered — people assume clearing their history takes it. Measured in
+       a real Chrome: Chrome's Delete browsing data, all time and every box,
+       leaves this untouched (it only ever clears web origins; an extension's
+       storage is a different origin type its dialog does not offer). What DOES
+       take it is removing Market Lens, or loading its folder from a new path —
+       an unpacked extension's identity IS its path, so a moved folder is a
+       different extension with an empty catalog. Say both, and say when this
+       was last backed up, because "never" is the state that costs a year. */
+    const backedUp = await new Promise(r =>
+      chrome.storage.local.get("wpb_lastbackup", o => r((o || {}).wpb_lastbackup || 0)));
+    const backup = backedUp
+      ? `Last backup ${ymd(backedUp)}.`
+      : "Never backed up.";
     $("#datafacts").textContent =
       `${u.products.toLocaleString()} products · ${u.snapshots} frozen weeks · ${span} · ` +
       `${MB(u.bytes || 0)} of ${u.quota ? MB(u.quota) : "the browser's"} space. ` +
-      "This catalog lives in THIS browser only.";
+      "This catalog lives in THIS browser only — clearing your browsing data does " +
+      "not touch it, but removing Market Lens or moving its folder does. " + backup;
   }
 
   /* ---- what the last scan thought of its own results ----------------------
@@ -380,6 +395,9 @@
         a.download = `marketlens_catalog_${ymd(Date.now())}_${data.products.length}items.json`;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+        // so the box can say how long it has been, rather than only offering
+        await new Promise(r => chrome.storage.local.set({ wpb_lastbackup: Date.now() }, r));
+        paintDataChip();
       } finally { btn.disabled = false; btn.textContent = was; }
     });
 
