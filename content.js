@@ -465,9 +465,18 @@ async function readDetail(a, url, repaired, have) {
 /* One storefront is one brand. A shop that hands back several different
    makers is either a genuine multi-brand retailer — which says so — or a shop
    whose brand field we are misreading, and every figure grouped by brand
-   downstream is then wrong. */
+   downstream is then wrong.
+
+   It is only worth telling anyone when it SURVIVED. Set Active writes its drop
+   into the vendor field ("JUL 2026 - GONE BANANAS"), and since v1.94 the name
+   on the list entry is written over it for any shop that is not a multi-brand
+   retailer — so the rows are already filed under one brand and there is
+   nothing to do. Flagging it anyway put a warning on a shop that was fine,
+   and a band that cries wolf is a band nobody reads. The warning belongs to
+   the case where no list name was there to save it. */
 function brandsDisagree(rec) {
-  return !rec.multiBrand && (rec.saidBrands || []).length > 1;
+  return !rec.multiBrand && (rec.saidBrands || []).length > 1 &&
+    !String(rec.brand || "").trim();
 }
 /* Fabric was judged all-or-nothing, so a site that answered for three of
    sixty passed as healthy. Individual products legitimately state no blend;
@@ -490,6 +499,44 @@ function healthMark(rec) {
   if (rec.more || rec.shortOf) return "⚠️";
   return "✅";
 }
+/* An empty fabric column has three quite different causes and they are fixed
+   by three different people. The probe already opened one product page and
+   wrote down what was on it; this turns that into the sentence.
+
+     · the page refused us or was too busy   → scan it again later
+     · the page states a composition         → OURS: we were looking in the
+                                               wrong place, and here is the
+                                               line we should have read
+     · the page states none anywhere         → nobody's: there was nothing
+                                               there to read
+
+   The middle one is the whole point. "no fabric on any of the 30" could mean
+   any of the three, so it sent the last three rounds of photo bugs looking in
+   the wrong place; quoting the shop's own sentence back ends that. */
+function fabricBecause(d) {
+  d = d || {};
+  const st = d.pdpStatus || (d.js && d.js.status) || 0;
+  if (st === 429 || st === 503) {
+    return ` — the shop's product pages answered ${st} (too busy), so scan it again later`;
+  }
+  if (st === 403 || st === 401) return ` — the shop's product pages refused us (${st})`;
+  if (st && st >= 400) return ` — the shop's product pages answered ${st}`;
+  if (!st) return "";                       // the probe never ran; say no more than we know
+  /* Percentages on a shop page are not all compositions — "20% off" is the
+     commonest number on a product page. The composition parser drops those
+     lines and so does this, or the sentence would blame us for a sale badge. */
+  const runs = (d.pctRuns || []).filter(s => !/\b(off|sale|save|discount|extra|up to)\b/i.test(s));
+  const said = runs[0] || (d.ld && d.ld.material) || "";
+  if (said) {
+    return ` — but its product page does state one ("${String(said).trim().slice(0, 48)}"), ` +
+      `so this is ours to fix, not something to retry`;
+  }
+  if (d.js && d.js.descPct) {
+    return ` — but the shop's own product data states one, so this is ours to fix`;
+  }
+  return ` — its product page does not state one anywhere either, so there was nothing to read`;
+}
+
 /* The same verdict, said to the person who has to act on it.
 
    healthNote() is the developer's line — "image×60, fabric×all". It is what
@@ -507,14 +554,33 @@ function healthWhy(rec) {
        and that is the sentence a developer can act on immediately, instead of
        the designer being told to try scrolling. */
     const d = rec.diag || {};
+    const by = rec.adapter ? ` (read by the ${rec.adapter} reader)` : "";
     const tiles = (d.grids || []).reduce((n, g) => Math.max(n, g.tilesWithLinkAndImg || 0), 0);
     if (tiles >= 3 && d.priceLeaves && !d.priceLeaves.count) {
       return `${who}: the page showed ${tiles} product blocks, but no price on it ` +
         `could be read — so none of them was collected. This is ours to fix, ` +
-        `not something to retry.`;
+        `not something to retry${by}.`;
     }
+    /* The adapter kept nothing out of a page that plainly had products on it:
+       our own filter emptied the scan, not the shop. The funnel is the fact
+       that separates "we cannot read this shop" from "our rule for this shop
+       has gone stale", and it was sitting in the record unsaid. */
+    if (rec.funnel && rec.funnel.tilesOnPage) {
+      return `${who}: the page offered ${rec.funnel.tilesOnPage} products and the ` +
+        `${rec.funnel.adapter} reader kept none of them — our filter emptied this ` +
+        `scan, not the shop. It was expecting a different address shape` +
+        ((rec.funnel.rejectedUrls || [])[0]
+          ? ` (it saw "${String(rec.funnel.rejectedUrls[0]).slice(0, 60)}")` : "") + `.`;
+    }
+    /* Nothing came back AND the photograph saw no repeating product block —
+       so the page we were served genuinely had no grid on it. Saying that is
+       what makes the three suggestions worth trying rather than a shrug. */
+    const sawNothing = d.grids && !tiles
+      ? ` The page we were served had no product grid on it at all, so this is ` +
+        `about what the shop sent rather than how it was read.` : "";
     return `${who}: nothing was collected. The page may need scrolling, ` +
-      `may have asked for a region or consent choice, or may block automated visits.`;
+      `may have asked for a region or consent choice, or may block automated ` +
+      `visits${by}.${sawNothing}`;
   }
   const parts = [];
   if (brandsDisagree(rec)) {
@@ -522,8 +588,13 @@ function healthWhy(rec) {
       `(${rec.saidBrands.slice(0, 3).join(", ")}…) — one shop should be one brand, ` +
       `so it is filed under the name in your list`);
   }
+  /* Any missing photo is said, not just a page that is mostly missing them.
+     The mark is raised by `imaged < count` but the sentence only spoke below
+     half, so a shop with 50 of 60 was flagged with nothing to read — which is
+     precisely the "needs a look" the designer was shown for VUORI, and
+     exactly the failure v1.95 was written to stop. */
   if (rec.imaged === 0) parts.push(`no photos at all (${rec.count} products)`);
-  else if (rec.imaged / rec.count < THIN_PHOTO) {
+  else if (rec.imaged < rec.count) {
     parts.push(`photos on only ${rec.imaged} of ${rec.count}`);
   }
   if (rec.more) {
@@ -538,14 +609,10 @@ function healthWhy(rec) {
     /* Why the column is empty decides who fixes it: a shop that throttled us
        is a scan to run again, a page that simply does not state the blend is
        nobody's fault, and anything else is ours. The detail probe already
-       fetched one product page and kept its status. */
-    const st = (rec.diagDetail && (rec.diagDetail.pdpStatus ||
-      (rec.diagDetail.js && rec.diagDetail.js.status))) || 0;
-    const because = st === 429 || st === 503
-      ? ` — the shop's product pages answered ${st} (too busy), so scan it again later`
-      : st === 403 || st === 401 ? ` — the shop's product pages refused us (${st})`
-      : st && st >= 400 ? ` — the shop's product pages answered ${st}` : "";
-    parts.push(`no fabric on any of the ${rec.count}${because}`);
+       fetched one product page and kept its status — and, until now, kept
+       what it found there to itself. "no fabric on any of the 30" with no
+       cause is the ALO YOGA line, and it starts the next round with a guess. */
+    parts.push(`no fabric on any of the ${rec.count}${fabricBecause(rec.diagDetail)}`);
   }
   else if (rec.withSpec && rec.fabric / rec.count < THIN_FABRIC) {
     parts.push(`fabric on only ${rec.fabric} of ${rec.count}`);
@@ -556,8 +623,25 @@ function healthWhy(rec) {
     parts.push("the page had to be read around its usual rule — the rows are " +
       "right, but this shop's reader is out of date");
   }
-  if (!parts.length) return "";
-  return `${who}: ${parts.join(" · ")}.`;
+  /* A mark with nothing behind it is the bug, not the shop.
+
+     Every branch above is reachable only from a branch of healthMark, but the
+     two lists drifted apart once already and the cost lands on the designer as
+     "needs a look" — five words that send them back to guessing. So the last
+     word is a backstop: if the page was graded and no sentence was produced,
+     say the counts rather than say nothing. `health-test` holds the two in
+     step from now on. */
+  if (!parts.length) {
+    if (healthMark(rec) === "✅") return "";
+    parts.push(`${rec.count} products came through — ${rec.named} named, ` +
+      `${rec.imaged} with a photo, ${rec.priced} priced` +
+      (rec.withSpec ? `, ${rec.fabric} with fabric` : ""));
+  }
+  /* Which reader produced this decides where a fix goes: a dedicated adapter
+     with a stale rule and a generic read of an unknown shop are different
+     jobs, and the line never said which one it was. */
+  const by = rec.adapter ? ` (read by the ${rec.adapter} reader)` : "";
+  return `${who}: ${parts.join(" · ")}${by}.`;
 }
 
 function healthNote(rec) {
