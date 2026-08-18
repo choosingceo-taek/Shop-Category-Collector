@@ -100,19 +100,18 @@
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
   h1 { font-size:13px; margin:0; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
-  /* Two views, named the way a masthead names its sections: small caps, wide
-     tracking, and the current one carrying the ink. No track, no pill — the
-     rule under the header is the only line the pair needs. */
-  .tabs { display:flex; gap:0; flex:1; min-width:0; border:1px solid var(--line2); }
-  /* Tracking wide enough for a masthead detaches the last letter of a short
-     word: PRODUCTS was reading as "PRODUCT 8". Editorial tracking is for
-     labels of two or three characters, not for words being scanned. */
-  .tab { flex:1; border:0; border-right:1px solid var(--line2); background:var(--card);
-    padding:6px 0 7px; font:700 11px/1 Helvetica,Arial,sans-serif;
-    letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
-  .tab:last-child { border-right:0; }
-  .tab:hover:not(.on) { color:var(--ink); }
-  .tab.on { background:var(--hard); color:#fff; }
+  /* Named the way a masthead names its sections: set in caps, marked by a rule
+     under the current one rather than by a filled box. A solid black tab is a
+     heavy mark to spend on "which of two screens am I on", and it competed
+     with the LAB band directly below it — the one thing on the panel that
+     should be solid. */
+  .tabs { display:flex; gap:0; flex:1; min-width:0; border:0;
+    border-bottom:1px solid var(--line); }
+  .tab { flex:1; border:0; border-bottom:2px solid transparent; background:none;
+    padding:7px 0 6px; font:700 11px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+  .tab:hover:not(.on) { color:var(--ink2); }
+  .tab.on { color:var(--ink); border-bottom-color:var(--ink); }
 
   /* What you can do to a list, on the list. Right-click or long-press a chip:
      five actions in words instead of six glyphs on a line of their own. */
@@ -143,21 +142,21 @@
     margin:0 -4px; padding:0 4px; }
   .runbar { flex:none; background:var(--card); border-top:1px solid var(--line);
     padding:8px 12px calc(9px + env(safe-area-inset-bottom)); }
-  /* The transport: run · hold · stop, as three round controls. Run carries
-     the label because it is the one you press on purpose; the other two only
-     matter once something is running, and they say so by waking up. */
+  /* The transport: run · hold · stop · take the file. Run carries the weight
+     because it is the one pressed on purpose; the other three wake up only
+     once there is a run to act on. */
   .runbar .runrow { display:flex; align-items:center; gap:9px; margin-bottom:0; }
-  /* All three carry their word now, so the bar is three labelled controls
-     rather than one label and two unexplained glyphs. Run keeps the weight
-     because it is the one pressed on purpose. */
-  .rbtn { display:inline-flex; align-items:center; justify-content:center; gap:0;
-    height:38px; flex:1; min-width:0; padding:0; border-radius:var(--r-s);
+  /* Each control is a box carrying its mark over its name. A glyph alone had
+     to be decoded every time — which is what "▶ ⏸ ■ ⬇" in a row asks of
+     someone who opens this once a week — and a box with a word under the mark
+     is read, not deciphered. */
+  .rbtn { display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:5px; height:56px; flex:1; min-width:0; padding:0; border-radius:var(--r-s);
     background:var(--card); border:1px solid var(--line2); color:var(--ink);
     transition:background .15s ease, color .15s ease, transform .12s ease, opacity .15s ease; }
-  .rbtn svg { width:18px; height:18px; fill:currentColor; flex:none; }
-  /* The names live in title and aria-label. On screen the marks are enough:
-     a triangle, two bars, a square. */
-  .rbtn em { display:none; }
+  .rbtn svg { width:17px; height:17px; fill:currentColor; flex:none; }
+  .rbtn em { display:block; font:700 8.5px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.11em; text-transform:uppercase; font-style:normal; }
   .rbtn.go { background:var(--cta); color:var(--cta-ink); border-color:var(--cta); }
   .rbtn.go:hover:not(:disabled) { background:var(--cta-hi); }
   .rbtn:hover:not(:disabled) { border-color:var(--hard); transform:translateY(-1px); }
@@ -184,14 +183,31 @@
     letter-spacing:.09em; text-transform:uppercase; border:1px solid var(--line2);
     border-radius:var(--r); color:var(--muted); flex:none; }
   .now .badge.ok { border-color:var(--hard); color:var(--ink); }
-  /* Three equal ways to put sites in: this page, a sheet, a pasted block.
-     Grabbing one page is normally done on the page itself, at the round
-     button in its corner — so none of these is the loud one here. */
-  .addrow { display:flex; gap:5px; margin-top:0; }
-  .addrow button { flex:1; font-size:11.5px; font-weight:600; padding:6px 4px;
-    border-radius:var(--r-s); background:var(--wash); border-color:transparent; }
+  /* The ways to put sites in, drawn as the run bar draws its controls: a box
+     with the mark over the word. One vocabulary for "a thing you press" across
+     the whole panel — the alternative was a flat grey word here and a marked
+     box at the bottom, which reads as two different kinds of control doing the
+     same kind of job. Shorter than the transport (44 vs 56) because these are
+     pressed once when a list is built, not while watching a run. */
+  .addrow { display:flex; gap:6px; margin-top:0; }
+  /* Capped so one button is a button and not a banner: on most shops Import is
+     the only one here, and a box stretched across the whole panel reads as a
+     drop zone rather than something to press. Two of them fill the row. */
+  .addrow button { display:inline-flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:4px; flex:1 1 0; min-width:0; max-width:148px;
+    height:44px; padding:0;
+    border-radius:var(--r-s); background:var(--card); border:1px solid var(--line2);
+    color:var(--ink); transition:transform .12s ease, border-color .15s ease; }
+  .addrow button svg { width:15px; height:15px; fill:currentColor; flex:none; }
+  .addrow button em { display:block; max-width:100%; padding:0 5px;
+    font:700 8.5px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.11em; text-transform:uppercase; font-style:normal;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .addrow button:hover:not(:disabled) { border-color:var(--hard); transform:translateY(-1px); }
+  .addrow button:active:not(:disabled) { transform:scale(.97); }
   .addrow button:disabled { background:var(--wash); color:var(--muted); }
-  .addrow button[aria-expanded="true"] { background:var(--ink); color:var(--cta-ink); }
+  .addrow button[aria-expanded="true"] { background:var(--ink); color:var(--cta-ink);
+    border-color:var(--ink); }
 
   .listwrap { padding:0 12px 10px; }
   .panelcard { background:none; border:0; padding:0; margin:0; }
@@ -288,12 +304,25 @@
      brand a foldable block carrying its own colour and count. The colour is
      derived from the brand name, so the same brand keeps the same mark
      everywhere without anything being stored. */
+  /* A search field says what it is with a lens, not with a sentence: the glyph
+     sits inside the box and the placeholder is a micro-label like every other
+     label on the panel. Used by both fields — the list filter here and the
+     product search in PRODUCTS — so a box you type into looks the same in both
+     places. */
+  .srch { position:relative; display:flex; align-items:center; flex:1; min-width:0; }
+  .srch svg { position:absolute; left:8px; width:12px; height:12px;
+    fill:var(--muted); pointer-events:none; }
+  .srch input { width:100%; min-width:0; padding-left:25px; }
+  .srch input::placeholder { color:var(--muted); }
   .lsearch { display:flex; gap:6px; align-items:center; margin:0 0 6px; }
   .lsearch .lsum { flex:none; margin:0; white-space:nowrap; }
-  .lsearch input { flex:1; min-width:0; font-size:12px; padding:5px 10px;
+  .lsearch input { flex:1; min-width:0; font-size:10.5px; letter-spacing:.06em;
+    text-transform:uppercase; padding:5px 10px 5px 25px;
     border-radius:var(--r-s); background:var(--card); border:1px solid var(--line2); }
-  .lsearch button { font-size:11px; padding:4px 9px; border-radius:var(--r-s);
-    background:var(--wash); border-color:transparent; }
+  .lsearch button { font:700 9.5px/1 Helvetica,Arial,sans-serif; letter-spacing:.09em;
+    text-transform:uppercase; padding:7px 9px; border-radius:var(--r-s);
+    background:var(--card); border:1px solid var(--line2); color:var(--ink2); }
+  .lsearch button:hover { color:var(--ink); }
   .lsum { font-size:10.5px; color:var(--muted); margin:0 2px 5px; }
   .grp { margin-bottom:10px; border:0; border-radius:var(--r-s);
     background:var(--wash); overflow:hidden; }
@@ -374,6 +403,8 @@
   .filters { padding:11px 14px; border-bottom:1px solid var(--line);
     display:flex; flex-direction:column; gap:8px; }
   .filters input[type=search] { width:100%; text-transform:uppercase; font-size:10.5px; letter-spacing:.06em; }
+  /* the column stacks, so the field takes its own height, not the leftover */
+  .filters .srch { flex:none; }
   .scopebar { display:flex; align-items:center; gap:8px; padding:6px 9px; background:var(--wash);
     border-left:2px solid var(--hard); font-size:10.5px; letter-spacing:.06em;
     text-transform:uppercase; font-weight:700; }
@@ -602,8 +633,14 @@
                  extension cannot reach. Everywhere else the round button on
                  the page is the way in, and this row is one button wide. -->
             <div class="addrow">
-              <button id="addbtn" hidden title="This shop has not been allowed yet — adding it here asks Chrome for access">＋ Add this shop</button>
-              <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)">⬆ Import</button>
+              <button id="addbtn" hidden title="This shop has not been allowed yet — adding it here asks Chrome for access" aria-label="Add this shop">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+                <em>Add this shop</em>
+              </button>
+              <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)" aria-label="Import">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l5 5-1.4 1.4L13 6.8V16h-2V6.8L8.4 9.4 7 8zM5 18h14v2H5z"/></svg>
+                <em>Import</em>
+              </button>
             </div>
           </div>
 
@@ -620,7 +657,10 @@
                the two controls act on, so it sits between them. -->
           <div class="lsearch" id="lsearch" hidden>
             <span class="lsum" id="lsum"></span>
-            <input id="lq" type="search" placeholder="Filter sites">
+            <span class="srch">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a7 7 0 1 1-4.2 12.6l-2.1 2.1-1.4-1.4 2.1-2.1A7 7 0 0 1 10 3m0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10"/></svg>
+              <input id="lq" type="search" placeholder="Filter sites">
+            </span>
             <button id="lfold" title="Fold every brand into its heading">Collapse</button>
           </div>
           <div id="listbody"></div>
@@ -646,12 +686,12 @@
              because the bar is a transport, not a form — and because at this
              size a glyph is read faster than a word. Every scan reads the
              first page only, so there is nothing to configure here. -->
-        <!-- Icons alone. The words were added when the glyphs were two grey
-             squares nobody could tell apart; they are now a triangle, two
-             bars and a square, which are the transport marks every player
-             uses, and pause still swaps to a triangle so the state it will
-             move to is visible without reading. Each keeps its title and
-             aria-label, so the name is one hover or one screen reader away. -->
+        <!-- Each is a box with its mark over its name. The marks are the
+             transport ones every player uses — a triangle, two bars, a square
+             — and pause still swaps to a triangle so the state it will move to
+             is visible without reading. The word under the mark is there
+             because this panel is opened once a week, not once an hour, and a
+             row of bare glyphs is deciphered rather than read. -->
         <div class="runrow" role="group" aria-label="Scan controls">
           <button id="runlist" class="rbtn go" title="Scan all — every site in this list" aria-label="Scan all">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
@@ -685,7 +725,10 @@
           <span id="scopetext"></span>
           <button id="scopeclear" title="Show all">✕</button>
         </div>
-        <input id="psearch" type="search" placeholder="Search products">
+        <span class="srch">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a7 7 0 1 1-4.2 12.6l-2.1 2.1-1.4-1.4 2.1-2.1A7 7 0 0 1 10 3m0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10"/></svg>
+          <input id="psearch" type="search" placeholder="Search products">
+        </span>
         <div class="row">
           <div class="selwrap"><span class="cap">Brand</span>
             <select id="pbrand"><option value="">All</option></select></div>

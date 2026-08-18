@@ -156,21 +156,30 @@
        click has to live somewhere, and this is it. On every shop that HAS
        been allowed, the round button is the way in and this button would be a
        second one, which is how the panel filled up with ways to do one thing. */
-    const set = (label, on, why) => {
+    /* The button is a box with a mark over its word, like every other control
+       on the panel, so the label goes INTO the word and the mark is swapped
+       rather than typed — writing over the button itself would delete the
+       drawing and leave a bare line of text among boxes. */
+    const PLUS = "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z";
+    const TICK = "M9.6 16.2 5.4 12 4 13.4l5.6 5.6 12-12L20.2 5.2z";
+    const set = (label, on, why, done) => {
       add.hidden = false;
-      add.textContent = label; add.disabled = !on;
+      const word = add.querySelector("em"), mark = add.querySelector("svg path");
+      if (word) word.textContent = label; else add.textContent = label;
+      if (mark) mark.setAttribute("d", done ? TICK : PLUS);
+      add.disabled = !on;
       add.title = why || "";
     };
     if (!read || read.kind === "internal" || read.access) { add.hidden = true; return; }
     if (urlInList(read.url)) {
       const brand = brandOfRead(read);
-      return set("✓ Added", false,
-        `${brand} — already in ${curList ? curList.name : "this list"}`);
+      return set("Added", false,
+        `${brand} — already in ${curList ? curList.name : "this list"}`, true);
     }
     const brand = brandOfRead(read);
     const cat = cleanLabel((read.ctx && read.ctx.category) || (tab && tab.title || ""), brand, read.host)
       || L.labelFromUrl(read.url) || read.host;
-    set(`＋ Add ${brand}`, true,
+    set(`Add ${brand}`, true,
       `${brand} · ${cat} — this shop has not been allowed yet, so adding it here asks Chrome for access`);
   }
 
