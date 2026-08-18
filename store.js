@@ -24,7 +24,7 @@
    so both stay independently testable. */
 (function (root) {
   "use strict";
-  const DB = "shopcat", VER = 3;
+  const DB = "shopcat", VER = 4;
   let _db = null;
 
   /* Opening has to survive an older connection still being alive.
@@ -73,6 +73,18 @@
         if (!db.objectStoreNames.contains("runrows")) {
           const r = db.createObjectStore("runrows", { keyPath: "id", autoIncrement: true });
           r.createIndex("runId", "runId", { unique: false });
+        }
+        /* Search interest, imported by hand from Google Trends.
+
+           There is no public Trends API, the internal endpoints refuse a
+           machine that asks for thirty words a week, and — the part that
+           decides it — a rank cannot be collected retroactively: switching it
+           on tomorrow tells you nothing about last month. A CSV export is
+           accurate, allowed, and dated, so that is the road. One row per term
+           per week; a term with no row simply has no line, and never a zero.  */
+        if (!db.objectStoreNames.contains("trends")) {
+          const t = db.createObjectStore("trends", { keyPath: "key" });   // "satin dress|2026-W32"
+          t.createIndex("term", "term", { unique: false });
         }
       };
       req.onsuccess = () => {
@@ -333,6 +345,33 @@
   const allProjects = () => all("projects");
   const allSnapshots = () => all("snapshots").then(r => r.sort((a, b) => a.start - b.start));
 
+  /* ---- search interest ----------------------------------------------------
+     Rows imported from a Google Trends CSV: one term, one week, one number,
+     plus the file it came from so a re-import replaces rather than doubles. */
+  const allTrends = () => all("trends").then(r => r.sort((a, b) => (a.week < b.week ? -1 : 1)));
+  async function putTrends(rows) {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const t = db.transaction("trends", "readwrite"), st = t.objectStore("trends");
+      (rows || []).forEach(r => {
+        if (!r || !r.term || !r.week) return;
+        st.put({ key: `${String(r.term).toLowerCase()}|${r.week}`,
+          term: String(r.term), week: String(r.week),
+          value: Number(r.value) || 0, at: Date.now() });
+      });
+      t.oncomplete = () => res((rows || []).length);
+      t.onerror = () => rej(t.error);
+    });
+  }
+  async function clearTrends() {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const t = db.transaction("trends", "readwrite");
+      t.objectStore("trends").clear();
+      t.oncomplete = res; t.onerror = () => rej(t.error);
+    });
+  }
+
   /* Write this week's (and any earlier week's) frozen numbers.
 
      Overwrite by id on purpose: a week is rebuilt from the products still in
@@ -551,6 +590,7 @@
   }
 
   const API = { open, putScan, allProducts, allScans, allProjects, allSnapshots,
+    allTrends, putTrends, clearTrends,
     appendRunRows, getRunRows, clearRunRows,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
     pruneOlderThan, usage, exportAll, importAll,

@@ -187,15 +187,33 @@
     return "";
   }
 
+  /* The shop's own name for itself is not a design detail.
+
+     Multi-brand retailers write the label into the title ("Time and Tru Women's
+     Ribbed Tank") and so do plenty of house brands ("VUORI Performance Jogger"),
+     so without this the DETAIL axis fills up with brand names — and it is an
+     axis a designer reads for what was DONE to the garment.
+
+     It only ever removes from the open bucket. The material / weave / fit
+     vocabularies are closed trade lists, and a brand can be named after cloth:
+     dropping "cotton" from a Cotton On product would throw away a fact the shop
+     actually stated. */
+  function brandWords(brand) {
+    return new Set(nameKeywords(brand).filter(w => !kindOf(w)));
+  }
+
   /* Split a name's keywords into the four kinds. Every word appears in
      exactly one bucket, so counting them never double-counts a product. */
-  function classifyKeywords(text) {
+  function classifyKeywords(text, brand) {
     const out = { material: [], weave: [], fit: [], detail: [] };
     const seen = new Set();
+    const own = brandWords(brand);
     nameKeywords(text).forEach(w => {
       if (seen.has(w)) return;
       seen.add(w);
-      out[kindOf(w) || "detail"].push(w);
+      const kind = kindOf(w);
+      if (!kind && own.has(w)) return;
+      out[kind || "detail"].push(w);
     });
     return out;
   }
@@ -225,7 +243,7 @@
       keywords: [...new Set(nameKeywords(name + " " + design.text))],
       /* The same words, sorted into what they actually are. `keywords` is
          kept whole so anything reading it is unaffected. */
-      nameKinds: classifyKeywords(name + " " + design.text),
+      nameKinds: classifyKeywords(name + " " + design.text, it.brand),
       product_url: it.product_url || "",
       image_url: it.image_url || "",
     };

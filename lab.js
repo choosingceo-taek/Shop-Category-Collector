@@ -97,6 +97,31 @@
      beside it. Each line is scaled to its own range so a 2%-to-4% climb is
      as legible as a 40%-to-80% one; that is the point of a sparkline, and the
      reason it never stands in for the axis-bearing chart further down. */
+  /* A card-sized area chart. Same numbers as the sparkline, drawn with a fill
+     because a card has room for a shape and a shape reads faster than a line
+     at this size. Scaled to its own range, like every other small multiple
+     here, so a keyword at 4% and one at 40% are both legible; the exact value
+     is on the card in figures. */
+  function areaChart(values, opts) {
+    opts = opts || {};
+    const vals = (values || []).filter(v => v != null);
+    if (vals.length < 2) return '<div class="noarea">one week only — no shape yet</div>';
+    const W = 220, H = 46, pad = 3;
+    const max = Math.max(...vals), min = Math.min(...vals);
+    const span = max - min || 1;
+    const x = i => pad + (W - pad * 2) * (i / (vals.length - 1));
+    const y = v => pad + (H - pad * 2) * (1 - (v - min) / span);
+    const line = vals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    const area = `${line} L${x(vals.length - 1).toFixed(1)},${H} L${x(0).toFixed(1)},${H} Z`;
+    const col = opts.color || "#111";
+    return `<svg class="area" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${area}" fill="${col}" fill-opacity=".07"></path>
+      <path d="${line}" fill="none" stroke="${col}" stroke-width="1.4"
+        stroke-linejoin="round" stroke-linecap="round"></path>
+      <circle cx="${x(vals.length - 1).toFixed(1)}" cy="${y(vals[vals.length - 1]).toFixed(1)}"
+        r="2.4" fill="${col}"></circle></svg>`;
+  }
+
   function sparkline(values, dir) {
     const vals = (values || []).filter(v => v != null);
     if (vals.length < 2) return '<span class="nospark">—</span>';
@@ -417,20 +442,55 @@
     ];
     const blendMap = T.blends ? T.blends(items, { dim: "fabricfam" }) : {};
 
+    /* One card per keyword: what it is, how many shops carry it, what it is
+       made of, and the shape it has traced. The card is the unit because a
+       designer compares keywords side by side rather than reading down a
+       column — and because it leaves room for the search lane below, which a
+       row never had. */
+    const trendRows = opts.trends || [];
+    const searchLane = (key) => {
+      /* Google Trends, imported by hand from a CSV — there is no public API and
+         a rank cannot be collected retroactively. No import, no lane: an empty
+         chart here would be a claim that nobody searched for it. */
+      const mine = T.trendsForKey ? T.trendsForKey(key, trendRows) : [];
+      if (!mine.length) return "";
+      const byTerm = new Map();
+      mine.forEach(r => {
+        if (!byTerm.has(r.term)) byTerm.set(r.term, []);
+        byTerm.get(r.term).push(r);
+      });
+      // the term with the highest recent interest speaks for the keyword
+      let best = null, bestVal = -1;
+      byTerm.forEach((rows, term) => {
+        const sorted = rows.slice().sort((a, b) => (a.week < b.week ? -1 : 1));
+        const last = sorted[sorted.length - 1];
+        if (last && last.value > bestVal) { bestVal = last.value; best = { term, sorted }; }
+      });
+      if (!best) return "";
+      const vals = best.sorted.map(r => r.value);
+      return `<div class="axgt" title="Google Trends interest for “${esc(best.term)}”, imported from a CSV. 0–100 relative to that term's own peak — not a rank and not a volume.">
+        <span class="gtlab">SEARCH</span>
+        <span class="gtq">${esc(best.term)}</span>
+        <b class="gtv">${Math.round(bestVal)}</b>
+        ${areaChart(vals, { color: "#8a3c17" })}</div>`;
+    };
+
     const axisBlock = (d, title) => {
-      const a = T.axisRows(items, Object.assign({ dim: d, top: 10 }, base));
+      const a = T.axisRows(items, Object.assign({ dim: d, top: 9 }, base));
       const roster = a.roster;
-      const body = a.rows.length ? a.rows.map(r => `<div class="axr">
-          <b class="axn">${r.n}<i>/${roster}</i></b>
-          <span class="axk">${esc(r.key)}<i class="axp">${r.products}</i></span>
-          ${d === "fabricfam" && blendMap[r.key]
-            ? `<span class="axb">${esc(blendMap[r.key])}</span>` : `<span class="axb"></span>`}
-          <span class="axd ${r.delta > 0 ? "up" : r.delta < 0 ? "down" : ""}"
-            title="${r.delta == null ? "no earlier " + unit + " to compare with"
-              : "against the " + a.shared + " shops that produced in both " + unit + "s"}">${
-            r.delta == null ? "—" : r.delta > 0 ? "+" + r.delta : String(r.delta)}</span>
-          <span class="axs">${sparkline(r.spark.filter(v => v != null))}</span>
-        </div>`).join("")
+      const body = a.rows.length ? a.rows.map(r => `<article class="axc">
+          <div class="axch"><span class="axk">${esc(r.key)}</span>
+            <span class="axd ${r.delta > 0 ? "up" : r.delta < 0 ? "down" : ""}"
+              title="${r.delta == null ? "no earlier " + unit + " to compare with"
+                : "against the " + a.shared + " shops that produced in both " + unit + "s"}">${
+              r.delta == null ? "—" : r.delta > 0 ? "▲" + r.delta
+                : r.delta < 0 ? "▼" + Math.abs(r.delta) : "0"}</span></div>
+          <div class="axnum"><b>${r.n}</b><i>/${roster} brands</i></div>
+          <div class="axmeta">${r.products} ${r.products === 1 ? "product" : "products"}${
+            d === "fabricfam" && blendMap[r.key] ? ` · ${esc(blendMap[r.key])}` : ""}</div>
+          ${areaChart(r.spark.filter(v => v != null))}
+          ${searchLane(r.key)}
+        </article>`).join("")
         : `<div class="none">nothing collected on this axis yet</div>`;
 
       /* What moved underneath. A brand that joined this week lifts every count
@@ -444,7 +504,7 @@
 
       return `<section class="sec ax"><h3>${esc(title)}
         <span class="sub">brands carrying it${roster ? `, of ${roster} that produced this ${unit}` : ""}</span></h3>
-        <div class="axrows">${body}</div>${cover}</section>`;
+        <div class="axcards">${body}</div>${cover}</section>`;
     };
 
     /* One context band: who is being read (tier · garment type) and what that
@@ -460,7 +520,7 @@
 
     el.innerHTML = `
       ${ctxBand}
-      <div class="axgrid">${AXES.map(a => axisBlock(a[0], a[1])).join("")}</div>
+      ${AXES.map(a => axisBlock(a[0], a[1])).join("")}
 
       <div class="labhead">
         <div class="tiles">

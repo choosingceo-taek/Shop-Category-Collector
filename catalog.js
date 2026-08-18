@@ -21,6 +21,7 @@
   const SCOPE_KEY = "wpb_labscope";
   let projects = [];
   let snapshots = [];         // frozen weekly numbers (survive product cleanup)
+  let trends = [];            // search interest, imported from a Google Trends CSV
   let merged = 0;             // rows collapsed as the same product
   let tiers = {};             // brand (lowercased) -> "Tier 1" … from the imported sheet
   let curTier = "";           // tier filter shared by LAB / New In / By Brand
@@ -400,6 +401,41 @@
         window.alert("Could not read that file: " + ((err && err.message) || err));
       } finally { btn.disabled = false; btn.textContent = was; paintDataChip(); }
     });
+
+    /* Google Trends, by CSV. trends.google.com → compare the terms → the
+       download arrow over "Interest over time". Reading the file rather than
+       calling an endpoint is not a compromise: there is no public API, the
+       internal one refuses a machine asking for thirty words a week, and a
+       rank cannot be collected retroactively — a CSV is dated, accurate and
+       allowed. Terms are matched to the axis keywords by whole word, so
+       "satin dress" answers for SATIN. */
+    $("#gtin").addEventListener("click", () => $("#gtfile").click());
+    $("#gtfile").addEventListener("change", async e => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      const btn = $("#gtin"), was = btn.textContent;
+      btn.disabled = true; btn.textContent = "Reading…";
+      try {
+        const parsed = window.TrendCalc.parseTrendsCsv(await file.text());
+        if (!parsed.rows.length) {
+          window.alert("No weekly numbers in that file.\n\n" +
+            "It should be the \"Interest over time\" CSV from trends.google.com — " +
+            "a date column and one column per search term.");
+        } else {
+          await window.CatalogStore.putTrends(parsed.rows);
+          trends = await window.CatalogStore.allTrends();
+          window.alert(`${parsed.terms.length} search terms · ` +
+            `${parsed.rows.length} weekly readings.\n\n` +
+            parsed.terms.slice(0, 6).join(", ") +
+            (parsed.terms.length > 6 ? "…" : "") +
+            "\n\nA term shows on a keyword card when it contains that keyword.");
+          redrawAll();
+        }
+      } catch (err) {
+        window.alert("Could not read that file: " + ((err && err.message) || err));
+      } finally { btn.disabled = false; btn.textContent = was; }
+    });
   }
 
   function paintStats() {
@@ -428,6 +464,7 @@
     /* Tier comes from the imported brand sheet and is applied HERE, by brand
        name, rather than being stamped during a scan. That way importing the
        sheet once labels everything collected months ago — no re-scan. */
+    try { trends = await window.CatalogStore.allTrends(); } catch (e) { trends = []; }
     try { lists = await window.ScanLists.load(); } catch (e) { lists = []; }
     try { tiers = window.ScanLists.tierMap(lists); } catch (e) { tiers = {}; }
     // repair rows the pre-fix scans stored with a placeholder "photo"
@@ -939,6 +976,8 @@
          would put the whole assortment's figures under a garment's name, so
          a narrowed view reads products only and says so. */
       snapshots: curGarment ? [] : labSnapshots,
+      // drawn on a card only when a term for that keyword was imported
+      trends,
       /* Said on screen, because a number computed from a quarter of what was
          collected must never look like a number about all of it. */
       sourceNote: `${fresh.length.toLocaleString()} of ${pool.length.toLocaleString()} collected products ` +

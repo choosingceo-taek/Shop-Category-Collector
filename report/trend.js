@@ -695,6 +695,75 @@
     return out;
   }
 
+  /* ---- Google Trends, brought in by hand ----------------------------------
+
+     What a designer downloads from trends.google.com is "Interest over time":
+     a couple of preamble lines, a header whose first cell is the time unit,
+     then one row per week. The columns are the terms, written as
+     "satin dress: (United States)".
+
+     Read exactly what the file says and nothing more. The numbers are Google's
+     0–100 interest index, NOT a rank and not a volume, so they are stored as
+     they came and labelled as what they are. A week the file does not mention
+     has no row — the line breaks there rather than dropping to zero, which is
+     the same rule the scan data follows. */
+  function parseTrendsCsv(text) {
+    const lines = String(text || "").split(/\r?\n/);
+    const cells = l => {
+      const out = []; let cur = "", q = false;
+      for (let i = 0; i < l.length; i++) {
+        const c = l[i];
+        if (c === '"') { if (q && l[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
+        else if (c === "," && !q) { out.push(cur); cur = ""; }
+        else cur += c;
+      }
+      out.push(cur);
+      return out.map(x => x.trim());
+    };
+    const isDate = s => /^\d{4}-\d{2}(-\d{2})?$/.test(s);
+    let head = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const c = cells(lines[i]);
+      if (c.length >= 2 && /^(week|day|month|time|주|일|월)\b/i.test(c[0]) && c[1]) { head = i; break; }
+    }
+    if (head < 0) {
+      // some exports have no header row at all — find the first dated line
+      for (let i = 0; i < lines.length; i++) {
+        const c = cells(lines[i]);
+        if (c.length >= 2 && isDate(c[0])) { head = i - 1; break; }
+      }
+    }
+    if (head < -1) return { terms: [], rows: [] };
+    const header = head >= 0 ? cells(lines[head]) : [];
+    const terms = header.slice(1).map(h =>
+      h.replace(/:\s*\([^)]*\)\s*$/, "").replace(/^"|"$/g, "").trim()).filter(Boolean);
+    const rows = [];
+    for (let i = head + 1; i < lines.length; i++) {
+      const c = cells(lines[i]);
+      if (!c.length || !isDate(c[0])) continue;
+      terms.forEach((term, j) => {
+        const raw = c[j + 1];
+        if (raw == null || raw === "") return;
+        // Trends writes "<1" for a value below one per cent of the peak
+        const v = /^<\s*1$/.test(raw) ? 0.5 : parseFloat(raw);
+        if (!isFinite(v)) return;
+        rows.push({ term, week: weekId(new Date(c[0] + "T00:00:00").getTime()), value: v });
+      });
+    }
+    return { terms, rows };
+  }
+
+  /* Which imported term belongs to an axis key. The designer types the query
+     the way people search ("satin dress"), and the axis key is one word
+     ("Satin"), so a term counts for a key when it CONTAINS that key as a whole
+     word. One key can gather several terms; the strongest is shown. */
+  function trendsForKey(key, rows) {
+    const k = String(key || "").toLowerCase().trim();
+    if (!k) return [];
+    const re = new RegExp("(^|[^a-z])" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-z]|$)", "i");
+    return (rows || []).filter(r => re.test(String(r.term || "")));
+  }
+
   /* ---- one axis, as the LAB draws it --------------------------------------
 
      Rows counted in BRANDS ("21 of the 32 shops that produced this week"),
@@ -805,6 +874,7 @@
   }
 
   const API = { timeline, sharesByBucket, periodsFor, series, movers, latestChange, blends, axisRows,
+    parseTrendsCsv, trendsForKey,
     emerging, ledger, ranked, priceByPeriod, overview, weeklySnapshots, weekId,
     weekCompare, pulse, collectionsOf, collectionKey,
     DIMS, bucketStart };

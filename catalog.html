@@ -98,37 +98,47 @@
   #v-lab h3 { font-size:13.5px; margin:0 0 8px; padding:0; border:0;
     font-weight:650; letter-spacing:-.01em; }
   #v-lab h3 .sub { font-weight:400; color:var(--muted); font-size:11.5px; margin-left:7px; }
-  /* ---- the four axes -------------------------------------------------------
-     The language of the Market lens sheet: a rule under an uppercase micro
-     label, numbers in the left margin, no boxes inside boxes. What a designer
-     reads first is the count of brands carrying it, so that is what sits in
-     the leftmost column at the largest size on the page. */
-  .axgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:0 0 10px; align-items:start; }
-  @media (max-width:900px) { .axgrid { grid-template-columns:1fr; } }
+  /* ---- the four axes, as cards --------------------------------------------
+     One card per keyword, because a designer compares keywords side by side
+     rather than reading down a column — and a card has room for the shape the
+     keyword has traced, and for the search lane under it. Editorial language
+     from the Market lens sheet: a rule under an uppercase micro label, figures
+     in the corner, no boxes inside boxes. */
   .ax h3 { font:700 10px/1 Helvetica,Arial,sans-serif; letter-spacing:.14em;
     text-transform:uppercase; color:var(--muted); padding-bottom:8px;
-    border-bottom:1px solid var(--ink); margin:0 0 4px; }
+    border-bottom:1px solid var(--ink); margin:0 0 12px; }
   .ax h3 .sub { font-weight:400; letter-spacing:.02em; text-transform:none; font-size:10.5px; }
-  .axrows { display:block; }
-  .axr { display:grid; grid-template-columns:52px 1fr auto 34px 58px; gap:9px;
-    align-items:baseline; padding:6px 0; border-bottom:1px solid var(--line); }
-  .axr:last-child { border-bottom:0; }
-  .axn { font:650 17px/1 Helvetica,Arial,sans-serif; letter-spacing:-.02em;
-    font-variant-numeric:tabular-nums; text-align:right; }
-  .axn i { font-style:normal; font-size:10px; font-weight:400; color:var(--muted); }
-  .axk { font-size:12.5px; text-transform:capitalize; }
-  /* volume, deliberately quiet: how many pieces, next to how many shops */
-  .axk .axp { font-style:normal; font-size:10px; color:var(--muted); margin-left:7px;
+  .axcards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
+  .axc { border:1px solid var(--line); border-radius:var(--r-s); padding:10px 11px 8px;
+    display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .axch { display:flex; align-items:baseline; gap:8px; }
+  .axk { font:700 10px/1.2 Helvetica,Arial,sans-serif; letter-spacing:.11em;
+    text-transform:uppercase; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; }
+  .axd { font:650 10.5px/1 Helvetica,Arial,sans-serif; color:var(--muted);
     font-variant-numeric:tabular-nums; }
-  .axb { font-size:10.5px; color:var(--muted); text-align:right; white-space:nowrap;
-    overflow:hidden; text-overflow:ellipsis; max-width:150px; }
-  .axd { font:650 11.5px/1 Helvetica,Arial,sans-serif; text-align:right;
-    font-variant-numeric:tabular-nums; color:var(--muted); }
   .axd.up { color:#1b7f4d; } .axd.down { color:var(--sale); }
-  .axs svg { display:block; width:58px; height:16px; }
-  /* what moved under the numbers — said once, under the rows it qualifies */
-  .axcov { font-size:10.5px; color:var(--muted); line-height:1.5; margin-top:7px;
-    padding-top:7px; border-top:1px solid var(--line); }
+  .axnum { display:flex; align-items:baseline; gap:5px; margin-top:3px; }
+  .axnum b { font:650 26px/1 Helvetica,Arial,sans-serif; letter-spacing:-.03em;
+    font-variant-numeric:tabular-nums; }
+  .axnum i { font-style:normal; font-size:10.5px; color:var(--muted); }
+  .axmeta { font-size:10.5px; color:var(--muted); line-height:1.45; min-height:15px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .axc svg.area { display:block; width:100%; height:46px; margin-top:6px; }
+  .axc .noarea { font-size:10px; color:var(--muted); margin-top:10px; height:46px; }
+  /* the search lane — only drawn when a Trends CSV has actually been imported */
+  /* the lane sits at the foot of the card, so cards with and without one line
+     up rather than staggering the grid */
+  .axgt { border-top:1px solid var(--line); margin-top:auto; padding-top:6px; }
+  .axgt .gtlab { font:700 8.5px/1 Helvetica,Arial,sans-serif; letter-spacing:.14em;
+    color:#8a3c17; }
+  .axgt .gtq { font-size:10px; color:var(--muted); margin-left:6px; }
+  .axgt .gtv { font:650 11px/1 Helvetica,Arial,sans-serif; float:right;
+    font-variant-numeric:tabular-nums; color:#8a3c17; }
+  .axgt svg.area { height:26px; margin-top:2px; }
+  /* what moved under the numbers — said once, under the cards it qualifies */
+  .axcov { font-size:10.5px; color:var(--muted); line-height:1.5; margin-top:10px;
+    padding-top:8px; border-top:1px solid var(--line); }
   .labhead { margin:0 0 10px; }
   .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:9px; }
   .tile { border:0; border-radius:var(--r); padding:9px 12px; background:var(--card);
@@ -394,6 +404,12 @@
         <button id="dataout">Back up (.json)</button>
         <button id="datain">Merge in a backup…</button>
         <input type="file" id="datafile" accept=".json,application/json" hidden>
+        <!-- Search interest. There is no public Google Trends API and a rank
+             cannot be collected retroactively, so the accurate road is the
+             CSV that trends.google.com exports. Until one is imported the
+             search lane on the cards simply is not drawn. -->
+        <button id="gtin">Add Google Trends (.csv)…</button>
+        <input type="file" id="gtfile" accept=".csv,text/csv" hidden>
       </div>
       <!-- What the scans think of their own results.
 
