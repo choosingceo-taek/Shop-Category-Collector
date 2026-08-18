@@ -518,6 +518,22 @@
     const ctxBand = `<div class="labctx">${opts.tierChips || ""}${opts.garmentChips || ""}${
       opts.sourceNote ? `<p class="srcnote">${esc(opts.sourceNote)}</p>` : ""}</div>`;
 
+    /* What this page was computed over. It used to be a paragraph above the
+       axes, which put grey prose between the reader and the first answer for
+       the sake of a fact that is only needed once. It belongs with the rest of
+       "what these figures are", at the foot — but it does have to be said:
+       the analysis reads New In pages only, so it is a part of the catalogue,
+       and a narrowed screen reads fewer weeks than a whole one. */
+    const b = opts.basis || null;
+    const basisNote = !b ? "" :
+      ` These figures are read from the ${b.fresh.toLocaleString()} of ${b.pool.toLocaleString()}` +
+      ` collected products that came from a New In page — the analysis uses those only, so each` +
+      ` ${unit} is the same kind of sample.` +
+      (b.garment
+        ? ` Narrowed to ${esc(b.garment)}: ${b.narrowed.toLocaleString()} of them, and the frozen` +
+          ` ${unit}ly records cover every garment type together, so they are left out while this is on.`
+        : "");
+
     el.innerHTML = `
       ${ctxBand}
       ${AXES.map(a => axisBlock(a[0], a[1])).join("")}
@@ -547,6 +563,7 @@
         The change beside it is against the previous ${unit} that had products, so skipping a
         ${unit} never reads as everything disappearing. Every figure is computed directly from what
         was collected; nothing is estimated or fetched from an outside service.${
+        basisNote}${
         o.archived ? ` Periods marked RECORD are ones whose products were cleaned up, leaving only the weekly totals.` : ""}${
         clipped ? ` ${clipped} hand-picked products are excluded here because that sample is biased (they remain in the product list and in Excel).` : ""}</p>`;
   }

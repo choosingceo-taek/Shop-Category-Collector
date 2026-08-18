@@ -438,21 +438,19 @@
     });
   }
 
+  /* The header tally is gone: the list chip beside it already names the scope
+     and its size, and the product / brand / photo counts are on the tiles in
+     the LAB, where they are being used for something.
+
+     One figure has no other home and must never be quiet — how many rows were
+     folded together as duplicates. A total that shrinks without saying why is
+     how a designer stops believing the tool, so it is said whenever it
+     happened and not at all otherwise. */
   function paintStats() {
-    const brands = new Set(items.map(i => i.brand).filter(Boolean)).size;
-    // How many rows carry a photo at all. A screenful of NO IMAGE has two
-    // possible causes and this number separates them in one glance: low here
-    // means the scan collected none, high here means the shop refused to serve
-    // what was collected.
-    const shot = items.filter(i => i.image_url).length;
-    const where = scopeId
-      ? ((lists.find(l => l.id === scopeId) || {}).name || "this list") + " · "
-      : "";
-    $("#stats").textContent = items.length
-      ? where + `${items.length.toLocaleString()} products · ${brands} brands` +
-        (merged && !scopeId ? ` · ${merged} duplicates merged` : "") +
-        ` · ${shot} with a photo`
-      : (scopeId ? where + "nothing collected yet" : "Nothing collected yet");
+    const el = $("#stats");
+    if (!el) return;
+    el.textContent = merged && !scopeId
+      ? `${merged} duplicate${merged === 1 ? "" : "s"} merged` : "";
   }
 
   wireDataBox();
@@ -961,13 +959,34 @@
       b.addEventListener("click", () => { curGarment = b.dataset.g; rerender(); }));
   }
 
+  /* Garment type is now one of the three controls that decide what the page is
+     computed over, beside PERIOD and INTERVAL, rather than a band of chips
+     between the reader and the first answer. The counts stay on the options —
+     a choice that empties the screen should be visible before it is made. */
+  function fillLabCat(rows) {
+    const sel = $("#labcat");
+    if (!sel) return;
+    const counts = new Map();
+    (rows || []).forEach(i => {
+      const g = garmentOf(i);
+      counts.set(g, (counts.get(g) || 0) + 1);
+    });
+    const list = GARMENT_ORDER.filter(g => counts.has(g));
+    if (curGarment && !counts.has(curGarment)) list.push(curGarment);
+    const all = [...counts.values()].reduce((a, b) => a + b, 0);
+    sel.innerHTML = `<option value="">All types${all ? ` · ${all}` : ""}</option>` +
+      list.map(g => `<option value="${esc(g)}">${esc(g)} · ${counts.get(g) || 0}</option>`).join("");
+    sel.value = curGarment;
+  }
+
   function renderLab() {
     const pool = items.filter(inTier);
     const fresh = pool.filter(isNewIn);
     const shown = fresh.filter(inGarment);
+    fillLabCat(fresh);
     window.LabView.render($("#labbody"), shown, {
       tierChips: tierChips(new Map(tierList().map(t => [t, items.filter(i => i.tier === t).length]))),
-      garmentChips: garmentChips(fresh),
+      garmentChips: "",
       months: parseInt($("#labmonths").value, 10) || 6,
       granularity: $("#labgran").value,
       // the record table below the axes ranks the same cloth vocabulary the
@@ -980,14 +999,15 @@
       snapshots: curGarment ? [] : labSnapshots,
       // drawn on a card only when a term for that keyword was imported
       trends,
-      /* Said on screen, because a number computed from a quarter of what was
-         collected must never look like a number about all of it. */
-      sourceNote: `${fresh.length.toLocaleString()} of ${pool.length.toLocaleString()} collected products ` +
-        `come from a New In page — the analysis reads those only, so each week is the same kind of sample.` +
-        (curGarment
-          ? ` Narrowed to ${curGarment}: ${shown.length.toLocaleString()} of them. ` +
-            `Weekly records of cleared weeks cover every type together, so they are left out here.`
-          : ""),
+      /* The paragraph that used to stand between the reader and the first
+         answer is gone. Both facts it carried are still said — at the foot of
+         the page, with the rest of "what these figures are" — because a number
+         computed from a quarter of what was collected must never look like a
+         number about all of it, and a narrowed screen quietly reading fewer
+         weeks would be worse than the paragraph ever was. */
+      sourceNote: "",
+      basis: { fresh: fresh.length, pool: pool.length, garment: curGarment,
+        narrowed: shown.length },
       sourceEmpty: pool.length && !fresh.length
         ? "None of the collected products came from a page named as new arrivals. " +
           "The analysis compares like with like, so it needs those: name a list entry " +
@@ -995,10 +1015,10 @@
         : "",
     });
     wireTierChips($("#labbody"), renderLab);
-    wireGarmentChips($("#labbody"), renderLab);
   }
   ["labmonths", "labgran"].forEach(id =>
     $("#" + id).addEventListener("change", renderLab));
+  $("#labcat").addEventListener("change", e => { curGarment = e.target.value; renderLab(); });
 
   /* ---- NEW ARRIVALS / BY BRAND --------------------------------------------
 
@@ -1629,7 +1649,8 @@
      "I can't get into the LAB". Now it names the one step that fixes it. */
   load().catch(err => {
     const msg = (err && err.message) || String(err);
-    $("#stats").textContent = "Could not open the catalog";
+    const st = $("#stats");
+    if (st) st.textContent = "Could not open the catalog";
     $("#labbody").innerHTML = `<div class="labempty"><b>The catalog did not open.</b><br>${
       esc(msg)}<br><br>Nothing collected has been lost — this is about opening the file, not its contents.</div>`;
     const grid = $("#grid");

@@ -437,11 +437,21 @@
          question — what am I looking at — and each had a band of its own. -->
     <div class="top">
       <h1>LAB</h1>
+      <!-- No "Scope" label: the chips are lists with names and counts on them,
+           and a word that has to be read every time the page opens to explain
+           what is already legible is furniture. -->
       <div class="scoperail" id="scoperail" hidden>
-        <span class="cap">Scope</span>
         <div class="scopechips" id="scopechips"></div>
       </div>
-      <span class="stats" id="stats">Loading…</span>
+      <!-- The tally that used to sit here ("FABRIC · 359 products · 11 brands ·
+           349 with a photo") repeated the chip beside it and the count tiles
+           below it, and it was the widest thing on the line. Gone.
+
+           What stays is the one figure that is not repeated anywhere: how many
+           rows were merged as duplicates. A number that quietly gets smaller
+           is how trust goes, so that one is always said — and it is silent on
+           every scan that merged nothing, which is nearly all of them. -->
+      <span class="stats" id="stats"></span>
       <!-- What the catalog weighs, and the one way to make it smaller. The
            weekly snapshots keep the trend after products are pruned, so this
            is a working-set control rather than a delete-your-history button.
@@ -566,6 +576,12 @@
           </select></div>
         <div class="selwrap"><span class="cap">Interval</span>
           <select id="labgran"><option value="week" selected>Weekly</option><option value="month">Monthly</option></select></div>
+        <!-- Garment type belongs with the other two things that decide what
+             the page is computed over. It was a row of chips below, which took
+             a whole band to say what a select says in one control — and it sat
+             between the reader and the first answer. -->
+        <div class="selwrap"><span class="cap">Category</span>
+          <select id="labcat"><option value="">All types</option></select></div>
         <!-- No measure picker: the axes are the four a designer asks of a
              season — FABRIC / COLOUR / FIT / DETAIL — and they are all on
              screen at once. Choosing one at a time meant holding the other
