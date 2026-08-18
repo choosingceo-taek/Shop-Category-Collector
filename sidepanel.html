@@ -170,6 +170,9 @@
      category are what the spreadsheet groups by, so they are the two lines
      the user reads before pressing Add — not the raw address. */
   .adder { margin:0 0 7px; }
+  /* Empty on every shop the extension can already reach, so it takes no space
+     there — an empty row still spends its margin. */
+  .adder:not(:has(button:not([hidden]))) { display:none; }
   .now { display:flex; align-items:flex-start; gap:9px; padding:10px 11px; margin-bottom:9px;
     background:var(--wash); border:0; border-radius:var(--r-s);
     font-size:11.5px; color:var(--ink2); line-height:1.45; }
@@ -213,8 +216,10 @@
   .panelcard { background:none; border:0; padding:0; margin:0; }
   .panelcard > .cap { display:block; color:var(--muted); margin-bottom:8px; }
   .lhead { display:flex; align-items:center; gap:7px; margin-bottom:7px; }
-  /* Lists as chips: every list and its size readable at rest, one tap to
-     switch, and a "＋" that is a list rather than an unlabelled icon. */
+  /* Lists as chips: every research question readable at rest, one tap to
+     switch, and a "＋" that is a word rather than an unlabelled icon. The
+     size is not on the chip — the line under the list says it for the open
+     one, and these have to fit several names across 350px. */
   .lchips { display:flex; flex-wrap:wrap; gap:5px; flex:1; min-width:0; }
   /* Boxes, like the rest. A pill among rules reads as a different family of
      control, and these are the same thing as everything else on the card. */
@@ -226,7 +231,6 @@
      shape as the two view tabs above, so the eye read one control with five
      options instead of "the research questions you keep". */
   .lchips button .ldot { width:7px; height:7px; border-radius:50%; flex:none; }
-  .lchips button .n { font-weight:400; opacity:.6; }
   .lchips button.on { background:var(--hard); color:#fff; border-color:var(--hard); }
   .lchips button.add { font-weight:400; color:var(--muted); }
   .lchips button.add .ldot { display:none; }
@@ -282,11 +286,6 @@
   .labbtn .lbmain { display:flex; align-items:center; justify-content:space-between;
     font:700 13px/1 Helvetica,Arial,sans-serif; letter-spacing:.12em; }
   .labbtn .lbgo { font-size:15px; opacity:.55; font-weight:400; letter-spacing:0; }
-  /* What is behind the door. Empty until there is something to say, so a new
-     install shows the name alone rather than a zero. */
-  .labbtn .lbsub { display:block; font-size:10.5px; color:rgba(255,255,255,.62);
-    margin-top:4px; letter-spacing:0; font-weight:400; }
-  .labbtn .lbsub:empty { display:none; }
   .capline { display:flex; align-items:center; justify-content:space-between; gap:8px;
     font-size:11px; color:var(--muted); margin-bottom:12px; }
   .capline select { width:auto; flex:0 0 auto; font-size:11px; padding:3px 6px; }
@@ -540,13 +539,16 @@
         <button id="uprestart" class="solid">↻ Restart on the new version</button>
       </div>
 
-      <!-- The destination. A black band with a lone chevron read as a divider
-           rather than a place to go, so it says what is behind it: how much
-           has been collected. That is also the one number a designer wants
-           before deciding whether it is worth opening. -->
+      <!-- The destination: the name and the way through, nothing else.
+
+           It carried a tally ("407 products · 12 brands") to prove it was a
+           door and not a divider. The door is not what that number is about —
+           it counts the whole catalogue, every list at once, while everything
+           under it here is about ONE list, so the two numbers on one screen
+           disagreed by design. The band is a place to go; what is in there is
+           said inside, where it can be said in the scope it belongs to. -->
       <button id="catalog" class="labbtn">
         <span class="lbmain">LAB<span class="lbgo">›</span></span>
-        <span class="lbsub" id="labsub"></span>
       </button>
 
       <div class="live" id="live"><span id="livetext"></span><div class="bar"><i></i></div></div>
@@ -585,6 +587,13 @@
             <button class="iconbtn" id="dellist" title="Delete this list" aria-label="Delete this list">🗑</button>
             <button class="xbtn" id="explisttxt" title="Export as .txt — edit it and import again">.txt</button>
             <button class="xbtn" id="explistxlsx" title="Export as .xlsx — edit it and import again">.xlsx</button>
+            <!-- Reading a sheet INTO this list is the same kind of act as
+                 writing one out of it, so it lives here with them and is
+                 offered by the same right-click. Drawn nowhere: on nearly
+                 every shop it was the only button in its row, which spent a
+                 permanent line above the list on something pressed when a
+                 list is first built. -->
+            <button class="xbtn" id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)">Import</button>
           </span>
           <div class="lmenu" id="lmenu" hidden role="menu"></div>
           <input type="file" id="importfile" accept=".xlsx,.xlsm,.csv,.tsv,.txt" hidden>
@@ -609,37 +618,28 @@
             <select id="listsel" title="Choose a list" hidden></select>
           </div>
 
-          <!-- Grabbing one page happens ON the page, at the round button in
-               its bottom-right corner — that is where the browsing is. What
-               is left here is bringing sites in by the sheet or the block,
-               plus a quiet fallback for the pages the button cannot reach
-               (a site the extension has no access to yet). -->
           <!-- No status readout here. What the page is and what it will be
                filed as is shown by the grab button ON the page, where the
                decision is actually made; repeating it here was a line that
                spent its life saying "Browser page — can't be added". -->
           <div class="adder">
-            <!-- Collecting happens on the page, at the round Grab button.
+            <!-- Nothing stands here in the normal case, and that is the point.
 
-                 Paste is gone: Import reads the same text with the same parser
-                 and does not need a textarea sitting open in the one place the
-                 list itself should be.
+                 Collecting happens on the page, at the round Grab button.
+                 Paste moved to the LAB's Scan lists tab. Import moved onto the
+                 list itself (right-click a chip), because it reads a file INTO
+                 the open list and belongs beside the export that wrote it.
 
-                 ＋ Page is not a second way to do what Grab does — it is the
+                 ＋ Add is not a second way to do what Grab does — it is the
                  ONLY way into a shop Chrome has not granted access to yet,
                  because a page with no access gets no content script and so no
                  Grab button, and Chrome will only grant on a click. So it is
-                 shown exactly when it is the only door: on a shop this
-                 extension cannot reach. Everywhere else the round button on
-                 the page is the way in, and this row is one button wide. -->
+                 drawn exactly when it is the only door, and the row is empty
+                 the rest of the time. -->
             <div class="addrow">
               <button id="addbtn" hidden title="This shop has not been allowed yet — adding it here asks Chrome for access" aria-label="Add this shop">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
                 <em>Add this shop</em>
-              </button>
-              <button id="importbtn" title="Read a list of sites from a file (.xlsx · .csv · .txt)" aria-label="Import">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l5 5-1.4 1.4L13 6.8V16h-2V6.8L8.4 9.4 7 8zM5 18h14v2H5z"/></svg>
-                <em>Import</em>
               </button>
             </div>
           </div>

@@ -513,14 +513,19 @@
        directly above them, so a row of boxes read as one control with five
        options instead of "here are the research questions you keep". The
        colour is derived, never stored, so a list looks the same in every
-       browser the team opens it in. */
+       browser the team opens it in.
+
+       No number on the chip. It was the count of URLs in the list, and the
+       line right below it already says "11 sites · 8 brands" for the open one
+       — so the row was carrying a figure that is repeated the moment you pick
+       a list, on chips that have to fit several names across 350px. It stays
+       in the chip's tooltip, where it costs nothing. */
     chips.innerHTML = lists.map(l =>
       `<button type="button" data-id="${esc(l.id)}"${curList && l.id === curList.id ? ' class="on"' : ""}` +
       ` title="${esc(l.name)} — ${(l.entries || []).length} sites${
         l.schedule && l.schedule.on ? " · scans itself" : ""}. Right-click for its tools.">` +
       `<span class="ldot" style="background:${brandColor(l.name)}"></span>` +
-      `${l.schedule && l.schedule.on ? "⏱ " : ""}${esc(l.name)}` +
-      `<span class="n">${(l.entries || []).length}</span></button>`).join("") +
+      `${l.schedule && l.schedule.on ? "⏱ " : ""}${esc(l.name)}</button>`).join("") +
       `<button type="button" class="add" id="newlist" title="Start another list">＋ New</button>`;
     chips.querySelectorAll("button[data-id]").forEach(b => {
       b.addEventListener("click", () => {
@@ -554,6 +559,13 @@
      bound by id elsewhere in this file, and a second copy of any of them would
      be the one that goes stale. */
   const LIST_MENU = [
+    /* Import belongs to a list — it reads a file INTO the one that is open —
+       so it is on the list, next to the export that wrote that file. As a
+       button of its own it was the only thing in its row on nearly every shop
+       (＋ Add appears only where Chrome has not granted access yet), which
+       spent a permanent line above the list on something used when a list is
+       first built. */
+    ["Import sites…", "#importbtn"],
     ["Rename", "#renlist"],
     ["Scan automatically…", "#schedtoggle"],
     ["Export as .txt", "#explisttxt"],
@@ -602,16 +614,6 @@
 
   function paintListResult() {
     const box = $("#listresult");
-    /* What is behind the LAB door, said on the door. A solid band with a
-       chevron and nothing else read as a divider rather than a destination,
-       and this is the one figure worth knowing before opening it. */
-    const sub = $("#labsub");
-    if (sub) {
-      const all = products.length;
-      const brands = new Set(products.map(p => p.brand).filter(Boolean)).size;
-      sub.textContent = all
-        ? `${all.toLocaleString()} products · ${brands} brand${brands === 1 ? "" : "s"}` : "";
-    }
     const rows = productsOfList(curList && curList.id);
     box.hidden = !rows.length;
     if (!rows.length) return;
@@ -1422,6 +1424,13 @@
     await stampScannable(parsed);
     const m = L.mergeEntries(curList.entries || [], parsed);
     curList.entries = m.list;
+    /* A plain list of URLs carries no brand — the text format takes it from a
+       heading line above the rows, and a sheet of bare addresses has none. The
+       repair that derives it from the shop already ran at load, so without
+       this the rows sat blank until the panel was next opened: pressed Import,
+       saw nameless rows, and the Excel written before that reopen would have
+       grouped them under nothing. Save what a reload would have shown. */
+    repairNames();
     await L.save(lists);
     fillListSelect(); renderList(); paintNow(); paintListResult();
     toast(`${m.added} added` + (m.updated ? ` · ${m.updated} updated` : "") +
