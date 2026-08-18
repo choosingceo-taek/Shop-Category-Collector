@@ -1427,10 +1427,36 @@
         if (ht !== priceText && goodName(ht, h, el)) return ht;
       }
 
-      const img = el.querySelector && el.querySelector("img");
+      /* The alt of the PHOTOGRAPH, never the alt of a colour chip.
+
+         tinyPicture already keeps 40px swatches out of the image column
+         (v2.5.0) and the name path never learned the same thing, so a tile
+         that previews its colourways before the garment was filed under
+         "Black" — with the right photograph beside it, which is what makes it
+         invisible: the row looks complete. Same rule, same reason: a picture
+         the markup itself declares as 100px square is not the garment, and an
+         image with no declared size is never skipped. */
+      const imgs = [...((el.querySelectorAll && el.querySelectorAll("img")) || [])];
+      const img = imgs.length > 1 ? (imgs.find(i => !tinyPicture(i)) || imgs[0]) : imgs[0];
       const alt = img && (img.getAttribute("alt") || "").trim();
       if (alt && alt.length >= 3 && alt.length <= 150 && !isUiText(alt) &&
           !/^(image|photo|thumbnail|product|products|img|picture)$/i.test(alt)) return alt;
+
+      /* A picture drawn as a CSS background still has the shop's own words on
+         it — in aria-label, because that is the only way such an element can
+         name itself to a screen reader. It is the same fact <img alt> carries,
+         written where the markup forced it to go, and not reading it cost the
+         WHOLE ROW: with the name empty and the price excluded there was
+         nothing left to keep, so a grid of background-image tiles inside
+         wrapping links came back as zero products — an empty spreadsheet for
+         that shop, which is the worst result this tool can produce. */
+      if (!alt) {
+        const lit = [...((el.querySelectorAll && el.querySelectorAll("[aria-label]")) || [])]
+          .find(n => bgUrl(n.getAttribute("style")) ||
+            (n.getAttribute("role") || "").toLowerCase() === "img");
+        const bl = lit && (lit.getAttribute("aria-label") || "").trim();
+        if (bl && bl.length >= 3 && bl.length <= 150 && !isUiText(bl)) return bl;
+      }
 
       const a = el.tagName === "A" ? el : (el.querySelector && el.querySelector("a[href]"));
       const label = a && ((a.getAttribute("title") || a.getAttribute("aria-label") || "").trim());
