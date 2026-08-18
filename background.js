@@ -254,8 +254,19 @@ async function noteReloadReturn() {
   try {
     const o = await new Promise(r => chrome.storage.local.get([RELOAD_TRY], r));
     if (!o || !o[RELOAD_TRY]) return;
+    const note = o[RELOAD_TRY] || {};
     await new Promise(r => chrome.storage.local.set({ [RELOAD_OK]: true }, r));
     await new Promise(r => chrome.storage.local.remove(RELOAD_TRY, r));
+    /* The safety net was only ever insurance against not coming back. We came
+       back, so it is litter — close it. It was opened in the background, so on
+       a normal update the designer never saw chrome://extensions at all. */
+    if (note.tab != null) {
+      try { chrome.tabs.remove(note.tab, () => void chrome.runtime.lastError); } catch (e) {}
+    }
+    /* The reload takes the side panel down with it, so the update finishes with
+       nothing on screen. Leave the outcome where the panel will find it. */
+    await new Promise(r => chrome.storage.local.set({ wpb_updated: {
+      to: chrome.runtime.getManifest().version, from: note.to || "", at: Date.now() } }, r));
   } catch (e) {}
 }
 
@@ -572,7 +583,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   if (msg && msg.type === "reloadSelf") {
     (async () => {
       try {
-        await new Promise(r => chrome.storage.local.set({ [RELOAD_TRY]: { at: Date.now() } }, r));
+        /* What came back with it: the id of the safety tab to close, and the
+           version that was just installed, so the panel can say so when it is
+           next opened. Nothing inside the extension can speak after the reload
+           unless it was written down before. */
+        await new Promise(r => chrome.storage.local.set({ [RELOAD_TRY]: {
+          at: Date.now(), tab: msg.safetyTab || null, to: msg.version || "" } }, r));
         send({ ok: true });
         setTimeout(() => { try { chrome.runtime.reload(); } catch (e) {} }, 250);
       } catch (e) { send({ ok: false }); }

@@ -788,6 +788,36 @@
   const ZIP_URL = "https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip";
   const running = chrome.runtime.getManifest().version;
   $("#verchip").textContent = "v" + running;
+
+  /* The chip answers "what am I running, and is it current?" without being
+     opened. It used to say only the number, so the state — up to date, or a
+     version behind — lived one click inside a box, which is the same as not
+     being on screen. It rides the header row, so saying more costs no height.
+
+     Three states, and they are the three a person asks about:
+       v3.1.0            this is the latest
+       v3.1.0 → 3.2.0    there is a newer one; pressing installs it
+       v3.1.0            (plain) GitHub could not be reached — no claim made */
+  function paintChip(latest) {
+    const chip = $("#verchip");
+    const newer = latest && latest !== running;
+    chip.textContent = newer ? `v${running} → ${latest}` : "v" + running;
+    chip.classList.toggle("new", !!newer);
+    chip.title = newer
+      ? `v${latest} is available — press to install it and restart`
+      : `Market Lens v${running}${latest ? " — the latest" : ""}`;
+  }
+
+  /* The restart takes the panel down with it, so the confirmation cannot be
+     shown at the time. The worker writes it down; the panel says it once when
+     it next opens, which is the moment the designer is looking for it. */
+  chrome.storage.local.get("wpb_updated", o => {
+    const u = (o || {}).wpb_updated;
+    if (!u || u.to !== running) return;
+    chrome.storage.local.remove("wpb_updated");
+    toast(`Updated to v${running}`);
+  });
+
   /* The chip IS the update.
 
      It used to open a box that then needed a second click. Once the folder is
@@ -802,11 +832,13 @@
         chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
           void chrome.runtime.lastError;
           newerNow = !!(r && r.newer);
+          paintChip(r && r.ok ? r.latest : "");
           res(newerNow);
         });
       } catch (e) { res(false); }
     });
   }
+  checkNewer();                              // the chip states it on open
 
   $("#verchip").addEventListener("click", async () => {
     const box = $("#updbox");
@@ -885,7 +917,7 @@
     $("#uauto").textContent = dir ? "⚡ Update now" : "📂 Choose my Market Lens folder";
     if (keepNote) return;
     $("#uautonote").textContent = dir
-      ? `writes straight into ${dir.name || "your Market Lens folder"} — then press ↻`
+      ? `writes straight into ${dir.name || "your Market Lens folder"} and restarts on it`
       : "one time only: point at the folder Chrome loaded, and updates become one click";
   }
 
@@ -971,31 +1003,41 @@
       await new Promise(r => chrome.storage.local.set({ [RELOAD_OK]: false }, r));
       await new Promise(r => chrome.storage.local.remove(RELOAD_TRY, r));
     }
-    const allowed = (stale ? false : v[RELOAD_OK]) !== false;
-    const btn = $("#ureload");
-    btn.hidden = !(allowed && filesJustWritten);
-    if (!allowed && filesJustWritten) {
-      $("#uautonote").textContent += " This browser does not come back from an " +
-        "automatic reload, so press ↻ on chrome://extensions.";
-    } else if (allowed && filesJustWritten) {
-      $("#uautonote").textContent += " One step left — and this can do it.";
-    }
+    /* The button is the fallback, not the path: the restart now happens by
+       itself. It stays visible after an install so a run that was held back
+       (a scan in progress, a browser that lost the extension once) still has
+       the one control that finishes the job. */
+    $("#ureload").hidden = !filesJustWritten;
+    return (stale ? false : v[RELOAD_OK]) !== false;
   }
 
-  function doReload(safetyNet) {
-    /* The safety net opens chrome://extensions FIRST, so a reload that does
-       not come back leaves the person looking at the page that brings it back
-       rather than at an extension that vanished. It is only needed while this
-       browser is unproven — once it has come back once, an extra tab on every
-       update is just litter. */
-    if (safetyNet) {
-      chrome.tabs.create({ url: "chrome://extensions" }, () => void chrome.runtime.lastError);
-      $("#uautonote").textContent = "Reloading… if Market Lens does not come back by itself, " +
-        "press ↻ on the page that just opened.";
-    }
-    chrome.runtime.sendMessage({ type: "reloadSelf" }, () => void chrome.runtime.lastError);
+  /* The safety net opens chrome://extensions BEHIND what the designer is
+     looking at, and the worker closes it as soon as the extension comes back.
+     So on a browser that survives the reload — which is every desktop Chrome
+     we know of — chrome://extensions is never seen; it is there only for the
+     one case where nothing of ours can speak afterwards, because the extension
+     is gone and the panel with it. Once this browser has come back once, the
+     tab is not opened at all. */
+  function doReload(safetyNet, version) {
+    const go = tabId => {
+      if (safetyNet) {
+        $("#uautonote").textContent = "Updating… Market Lens restarts in a moment. " +
+          "If it does not come back, a chrome://extensions tab is waiting in the background — " +
+          "press ↻ there.";
+      }
+      chrome.runtime.sendMessage({ type: "reloadSelf", safetyTab: tabId, version: version || "" },
+        () => void chrome.runtime.lastError);
+    };
+    if (!safetyNet) return go(null);
+    try {
+      chrome.tabs.create({ url: "chrome://extensions", active: false }, tab => {
+        void chrome.runtime.lastError;
+        go(tab && tab.id != null ? tab.id : null);
+      });
+    } catch (e) { go(null); }
   }
-  $("#ureload").addEventListener("click", () => doReload(true));
+  $("#ureload").addEventListener("click", async () =>
+    doReload((await reloadVerdict())[RELOAD_OK] !== true, running));
 
   /* Reload without being asked — but only where that is known to be safe.
 
@@ -1011,15 +1053,20 @@
      spreadsheet, and the update is not urgent enough to cost a morning. */
   async function maybeAutoReload(v) {
     const st = await reloadVerdict();
-    if (st[RELOAD_OK] !== true) return;          // unproven — leave it a click
+    if (st[RELOAD_OK] === false) {               // this browser lost it once — never again
+      $("#uautonote").textContent += " This browser does not come back from an " +
+        "automatic reload, so press ↻ on chrome://extensions.";
+      return;
+    }
     const q = await load(QUEUE);
     if (q && q.active) {
-      $("#uautonote").textContent += " A scan is running, so the reload is left " +
+      $("#uautonote").textContent += " A scan is running, so the restart is left " +
         "until it finishes — press ↻ Reload now then.";
       return;
     }
-    $("#uautonote").textContent = `v${v} installed — reloading Market Lens…`;
-    setTimeout(() => doReload(false), 600);      // let the message paint first
+    $("#uautonote").textContent = `v${v} installed — restarting Market Lens…`;
+    // unproven browsers get the background safety tab; proven ones get nothing
+    setTimeout(() => doReload(st[RELOAD_OK] !== true, v), 600);
   }
 
   $("#uext").addEventListener("click", () => {
@@ -1036,6 +1083,24 @@
     $("#updbox").hidden = false;
     refreshUpdBox(); paintAuto(); paintReload(false);
     $("#uauto").click();
+  });
+
+  /* Files already replaced on disk (update.bat, or a copy by hand) — the only
+     thing left is the restart, and that is a button here rather than an
+     instruction to go and find chrome://extensions. Held back while a scan is
+     running: restarting mid-run loses that morning's spreadsheet. */
+  $("#uprestart").addEventListener("click", async () => {
+    const q = await load(QUEUE);
+    if (q && q.active) { toast("A scan is running — restart when it finishes"); return; }
+    const st = await reloadVerdict();
+    if (st[RELOAD_OK] === false) {
+      toast("This browser needs chrome://extensions — press ↻ there");
+      chrome.tabs.create({ url: "chrome://extensions" }, () => void chrome.runtime.lastError);
+      return;
+    }
+    $("#uprestart").disabled = true;
+    $("#uprestart").textContent = "Restarting…";
+    doReload(st[RELOAD_OK] !== true, "");
   });
 
   $("#addbtn").addEventListener("click", addCurrentPage);

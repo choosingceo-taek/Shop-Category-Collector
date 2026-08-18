@@ -409,9 +409,11 @@
   <!-- Opened from the version chip. Three steps, in order, each with the
        button that performs it. -->
   <div class="updbox" id="updbox" hidden>
-    <!-- One click, once the folder is known. The browser can download, unzip
-         and write the files itself; what it cannot safely do is reload the
-         extension, so that stays a person's click. -->
+    <!-- One click, once the folder is known: download, unzip, write the files
+         into the extension's own folder, and restart on them. The restart is
+         the step that used to send a person to chrome://extensions; it now
+         happens here, with that page opened only in the background and only
+         until this browser has been seen to come back once. -->
     <div class="uone">
       <button id="uauto" class="solid">⚡ Update now</button>
       <button id="ureload" hidden>↻ Reload now</button>
@@ -449,9 +451,10 @@
       </div>
       <div class="upnote ready" id="upready" hidden>
         <div><b>Version <span id="rdver"></span> is in your folder</b>, ready to run</div>
-        <div class="uphow">One step left: open <b>chrome://extensions</b> and press ↻ on Market Lens.
-          Your lists, settings and collected products are kept, and the pages you have open
-          pick it up on their own.</div>
+        <div class="uphow">One step left, and this does it — Market Lens restarts on the new
+          files. Your lists, settings and collected products are kept, and the pages you have
+          open pick it up on their own.</div>
+        <button id="uprestart" class="solid">↻ Restart on the new version</button>
       </div>
 
       <button id="catalog" class="labbtn">
