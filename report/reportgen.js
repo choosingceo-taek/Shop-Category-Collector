@@ -89,7 +89,7 @@
       const h = Math.max(1, Math.round((H - padB - padT) * (x.count / max)));
       const bx = padL + i * bw, by = H - padB - h;
       // 2px gap between adjacent fills so bars read as separate marks
-      return `<rect x="${bx + 1}" y="${by}" width="${Math.max(1, bw - 3)}" height="${h}" rx="4" fill="${SERIES[0]}"/>
+      return `<rect class="hbar" x="${bx + 1}" y="${by}" width="${Math.max(1, bw - 3)}" height="${h}" rx="4" fill="${SERIES[0]}"/>
         <text x="${bx + bw / 2}" y="${H - padB + 13}" text-anchor="middle" font-size="10" fill="${MUTED}">$${Math.round(x.lo)}</text>`;
     }).join("");
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Price distribution">
@@ -139,6 +139,68 @@
 
   /* items: catalog rows (raw fields). images: { [product_url]: dataUri }.
      meta: { title, subtitle, period, scope, generatedAt } */
+  /* ---- dashboard pieces ----------------------------------------------------
+     The layout a designer asked for (their own Material Intelligence sheet):
+     a filter rail, a hero, a row of KPI tiles, ranking panels, a fibre donut,
+     three decision signals and a product wall. Every figure below comes from
+     the same Calc.aggregate the other templates read, so no two layouts can
+     ever show different numbers — the rule that has held since v3.8.0. */
+
+  // Ranking rows: name, a track that carries its own share, and the count.
+  function rankRows(rows, unit) {
+    if (!rows || !rows.length) return `<p class="sub">Nothing collected for this.</p>`;
+    const max = Math.max(...rows.map(r => r.value)) || 1;
+    return `<div class="rank">` + rows.map(r => `<div class="rrow">
+      <span class="rk">${esc(r.key)}</span>
+      <span class="rt"><i style="width:${Math.max(2, Math.round(r.value / max * 100))}%${
+        r.color ? `;background:${r.color}` : ""}"></i></span>
+      <span class="rv">${esc(String(r.label != null ? r.label : r.value))}${
+        unit ? `<em>${esc(unit)}</em>` : ""}</span></div>`).join("") + `</div>`;
+  }
+
+  /* A donut, drawn as stroked arcs on one circle — no library, no script, and
+     it survives being printed. The hole carries the total it is made of. */
+  function donut(rows, total, note) {
+    if (!rows || !rows.length) return `<p class="sub">No composition collected.</p>`;
+    const sum = rows.reduce((a, r) => a + r.value, 0) || 1;
+    const R = 54, C = 2 * Math.PI * R;
+    let at = 0;
+    const arcs = rows.map(r => {
+      const frac = r.value / sum;
+      const seg = `<circle class="dseg" r="${R}" cx="70" cy="70" fill="none"
+        stroke="${r.color}" stroke-width="26"
+        stroke-dasharray="${(frac * C).toFixed(2)} ${(C - frac * C).toFixed(2)}"
+        stroke-dashoffset="${(-at * C).toFixed(2)}"><title>${esc(r.key)}</title></circle>`;
+      at += frac;
+      return seg;
+    }).join("");
+    return `<div class="donutwrap">
+      <div class="donut"><svg viewBox="0 0 140 140" role="img" aria-label="Fibre mix">
+        <g transform="rotate(-90 70 70)">${arcs}</g></svg>
+        <div class="dhole"><b>${esc(String(total))}</b><span>${esc(note || "")}</span></div></div>
+      <p class="dnote">Ring segments are proportional to each fibre's share of products; the
+        figure beside each name is that share.</p>
+      <ul class="dlegend">${rows.map(r => `<li><i style="background:${r.color}"></i>
+        <span>${esc(r.key)}</span><b>${esc(String(r.label != null ? r.label : Math.round(r.value / sum * 100) + "%"))}</b></li>`).join("")}</ul>
+    </div>`;
+  }
+
+  // One KPI tile. The first on the row is filled, the way the reference sets it.
+  function dtile(label, value, sub, lead) {
+    return `<div class="dt${lead ? " lead" : ""}">
+      <span class="dtl">${esc(label)}</span>
+      <b class="dtv">${esc(String(value))}</b>
+      ${sub ? `<span class="dts">${esc(sub)}</span>` : ""}</div>`;
+  }
+
+  /* A "signal" states a fact the data already carries and names the count
+     behind it. Nothing here is inferred — the zero-hallucination rule applies
+     to a dashboard exactly as it applies to a spreadsheet cell. */
+  function signal(n, kicker, term, line, tone) {
+    return `<div class="sig ${tone}"><span class="sk">${esc(n)} · ${esc(kicker)}</span>
+      <b>${esc(term)}</b><span class="sl">${esc(line)}</span></div>`;
+  }
+
   function build(items, images, meta) {
     meta = meta || {}; images = images || {};
     const agg = Calc.aggregate(items);
@@ -382,18 +444,112 @@
       <div><span class="kicker">${esc(kicker)}</span><h2 class="big">${esc(titleText)}</h2></div>
       <span class="weektag">${esc(when)}</span></div>`;
 
+    /* The shell the designer asked for: a top bar that names what this is, a
+       row of section pills, a filter rail down the left, and the work in the
+       middle. The three sections that already existed keep their contents —
+       what changed is that they now sit inside a dashboard rather than under a
+       numbered rail. */
+    const fibTop = agg.fiberPresence.slice(0, 8).map((r, i2) => ({
+      key: r.key, value: r.pct, label: r.pct + "%", color: SERIES[i2 % SERIES.length] }));
+    const catRows = agg.categoryShare.slice(0, 8).map(r => ({ key: r.key, value: r.value, label: r.value }));
+    const brandRows = agg.brandShare.slice(0, 8).map(r => ({ key: r.key, value: r.value, label: r.value }));
+    const colRows = agg.colorFreq.slice(0, 8).map(r => ({
+      key: r.key, value: r.value, label: r.value, color: swatchFor(r.key) || SERIES[2] }));
+    const withFabric = norm.filter(p => p.fibers.length).length;
+
+    const heroChips = [
+      `${agg.count.toLocaleString()} products`,
+      `${agg.brandShare.length} brands`,
+      `${agg.categoryShare.length} categories`,
+      agg.medianPrice != null ? `median ${money(agg.medianPrice)}` : "",
+    ].filter(Boolean).map(t => `<span class="hchip">${esc(t)}</span>`).join("");
+
+    const sel = (id, label, rows) => `<div class="fgrp"><label for="${id}">${esc(label)}</label>
+      <select id="${id}"><option value="">All ${esc(label.toLowerCase())}</option>${
+        rows.map(r => `<option value="${esc(r.key)}">${esc(r.key)} (${r.value})</option>`).join("")}</select></div>`;
+
     const pulse = `
+<header class="topbar">
+  <div class="topline">
+    <div class="brand"><div class="bmark">ML</div>
+      <div><b>${esc(title)}</b><span>${esc([meta.scope, meta.period].filter(Boolean).join(" · ") || "Market Lens")}</span></div></div>
+    <div class="tsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a7 7 0 1 1-4.2 12.6l-2.1 2.1-1.4-1.4 2.1-2.1A7 7 0 0 1 10 3m0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10"/></svg>
+      <input id="q" type="search" placeholder="Search products, brands, categories or fabrics…"></div>
+    <span class="tstamp">${esc(when)}</span>
+  </div>
+  <nav class="pills">
+    <button class="nv on" data-s="over">Overview</button>
+    <button class="nv" data-s="new">New In</button>
+    <button class="nv" data-s="brand">By Brand</button>
+    <button class="nv" data-s="lab">LAB</button>
+  </nav>
+</header>
 <div class="shell">
   <aside class="rail">
-    <div class="logo"><i>M</i><span>MARKET<br>LENS</span></div>
-    <nav>
-      <button class="nv on" data-s="new">01 &nbsp;New In</button>
-      <button class="nv" data-s="brand">02 &nbsp;By Brand</button>
-      <button class="nv" data-s="lab">03 &nbsp;LAB</button>
-    </nav>
-    <div class="railfoot">WEEKLY EDIT · ${esc(when)}</div>
+    <div class="rhead"><b>FILTERS</b><button id="fclear" type="button">Clear all</button></div>
+    ${sel("fbrand", "Brand", agg.brandShare)}
+    ${sel("fcat", "Category", agg.categoryShare)}
+    ${sel("ffab", "Fabric", agg.fiberPresence.map(r => ({ key: r.key, value: r.count != null ? r.count : r.pct })))}
+    <div class="rnote"><b>${agg.count.toLocaleString()} source rows</b>
+      <span>${esc(meta.source || "collected by Market Lens")}</span>
+      <span>${withFabric} of ${agg.count} carry a composition read from the shop's own page. Nothing here is inferred.</span></div>
   </aside>
   <div class="content">
+    <section data-sec="over">
+      <div class="hero">
+        <span class="heyebrow">EXECUTIVE OVERVIEW</span>
+        <h1>${esc(meta.scope || "This week")},<br>decoded.</h1>
+        <p>A single view of the fabric, colour, brand and price decisions in the assortment collected for this list.</p>
+        <div class="hchips">${heroChips}</div>
+      </div>
+      <div class="dtiles">
+        ${dtile("Total products", agg.count.toLocaleString(), "unique product URLs", true)}
+        ${dtile("Brands", String(agg.brandShare.length), agg.brandShare.length ? "most: " + agg.brandShare[0].key : "")}
+        ${dtile("Categories", String(agg.categoryShare.length), "as filed by the list")}
+        ${dtile("Median price", agg.medianPrice != null ? money(agg.medianPrice) : "—",
+          agg.minPrice != null ? money(agg.minPrice) + " – " + money(agg.maxPrice) : "")}
+        ${dtile("On sale", agg.onSalePct + "%", agg.avgDiscountPct != null ? Math.round(agg.avgDiscountPct) + "% average markdown" : "nothing discounted")}
+        ${dtile("Fabric known", agg.compositionKnownPct + "%", withFabric + " of " + agg.count + " styles")}
+        ${dtile("Distinct colours", String(agg.distinctColors), "across the assortment")}
+      </div>
+
+      <div class="shead"><h2>Assortment architecture</h2>
+        <p>Every figure is counted from the products collected — no estimates, no sampling.</p></div>
+
+      <div class="pgrid">
+        <section class="panel"><div class="ptitle"><b>Fabric ranking</b><span>share of products using each fibre</span></div>
+          ${rankRows(fibTop)}</section>
+        <section class="panel"><div class="ptitle"><b>Category ranking</b><span>styles per category</span></div>
+          ${rankRows(catRows)}</section>
+      </div>
+      <div class="pgrid">
+        <section class="panel"><div class="ptitle"><b>Price distribution</b><span>current selling price</span></div>
+          ${histogram(agg.priceHistogram) || `<p class="sub">No price data.</p>`}</section>
+        <section class="panel"><div class="ptitle"><b>Fibre family mix</b><span>primary fibre across valid compositions</span></div>
+          ${donut(fibTop, withFabric, "with fabric")}</section>
+      </div>
+      <div class="pgrid">
+        <section class="panel"><div class="ptitle"><b>Brand ranking</b><span>styles per brand</span></div>
+          ${rankRows(brandRows)}</section>
+        <section class="panel"><div class="ptitle"><b>Colour frequency</b><span>colourways named by the shops</span></div>
+          ${rankRows(colRows)}</section>
+      </div>
+
+      <section class="panel wide"><div class="ptitle"><b>Decision signals</b><span>stated from the figures above, nothing inferred</span></div>
+        <div class="sigs">
+          ${agg.fiberPresence.length ? signal("01", "Fabric anchor", agg.fiberPresence[0].key,
+            `${agg.fiberPresence[0].pct}% of products with a composition use it.`, "a") : ""}
+          ${agg.categoryShare.length ? signal("02", "Assortment weight", agg.categoryShare[0].key,
+            `${agg.categoryShare[0].value} of ${agg.count} products sit in this category.`, "b") : ""}
+          ${agg.brandShare.length ? signal("03", "Largest drop", agg.brandShare[0].key,
+            `${agg.brandShare[0].value} products, the widest footprint in this list.`, "c") : ""}
+        </div></section>
+
+      <div class="shead"><h2>Representative products</h2>
+        <p>The assortment as collected, in the order the shops showed it.</p></div>
+      <div class="grid wall">${cardArr.slice(0, 24).join("")}</div>
+    </section>
+
     <section data-sec="new">
       ${secHead(`${agg.count.toLocaleString()} new arrivals · by first collected date`, "New In")}
       ${tierChips}
@@ -464,7 +620,34 @@
     var a = e.target.closest && e.target.closest(".bchip");
     if (a) show("brand");
   });
-  show("new");
+  /* The rail filters narrow the product wall and the two feeds together —
+     one filter, every view, the same rule the LAB scope follows. */
+  var q = document.getElementById("q");
+  var fs = { brand: document.getElementById("fbrand"), cat: document.getElementById("fcat"),
+             fab: document.getElementById("ffab") };
+  function railFilter() {
+    var b = fs.brand ? fs.brand.value : "", c = fs.cat ? fs.cat.value : "",
+        f = fs.fab ? fs.fab.value : "", t = q ? q.value.trim().toLowerCase() : "";
+    var cards = document.querySelectorAll(".p");
+    for (var i = 0; i < cards.length; i++) {
+      var el = cards[i], txt = (el.textContent || "").toLowerCase();
+      var keep = (!b || txt.indexOf(b.toLowerCase()) >= 0) &&
+                 (!c || txt.indexOf(c.toLowerCase()) >= 0) &&
+                 (!f || txt.indexOf(f.toLowerCase()) >= 0) &&
+                 (!t || txt.indexOf(t) >= 0);
+      el.style.display = keep ? "" : "none";
+    }
+  }
+  ["brand", "cat", "fab"].forEach(function (k) {
+    if (fs[k]) fs[k].addEventListener("change", railFilter);
+  });
+  if (q) q.addEventListener("input", railFilter);
+  var fc = document.getElementById("fclear");
+  if (fc) fc.addEventListener("click", function () {
+    ["brand", "cat", "fab"].forEach(function (k) { if (fs[k]) fs[k].value = ""; });
+    if (q) q.value = ""; railFilter();
+  });
+  show("over");
 })();
 </script>`;
 
@@ -664,6 +847,140 @@
     .p, .lb, .tb tr, .day, .bsec, .card, .kpi { break-inside:avoid; }
     .rail { display:none; } .shell { display:block; }
     [data-sec] { display:block !important; } }
+
+  /* ---- the dashboard the designer asked for ------------------------------
+     Their own Material Intelligence sheet: warm paper, one hot accent, soft
+     cards on a light ground. It departs from the panel's stark black-on-white
+     deliberately and by request — this file is the thing that gets sent on,
+     and they chose how it should look. */
+  :root { --dbg:#f4f4f0; --dsurf:#fff; --dsurf2:#f8f8f5; --dink:#151713; --dmut:#6f746c;
+    --dline:#e4e5de; --dacc:#ff5c35; --dacc2:#ffc247; --dacc3:#84a98c;
+    --dsoft:#fff0e9; --dshadow:0 14px 34px rgba(21,23,19,.07); --drad:18px; }
+  body { background:var(--dbg); color:var(--dink); }
+  .topbar { position:sticky; top:0; z-index:20; background:var(--dbg);
+    border-bottom:1px solid var(--dline); padding:14px 26px 0; }
+  .topline { display:flex; align-items:center; gap:18px; }
+  .brand { display:flex; align-items:center; gap:12px; flex:none; }
+  .bmark { width:38px; height:38px; border-radius:12px; background:var(--dink); color:#fff;
+    display:flex; align-items:center; justify-content:center; font:700 13px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.04em; }
+  .brand b { display:block; font-size:15px; }
+  .brand span { display:block; font-size:11.5px; color:var(--dmut); }
+  .tsearch { flex:1; min-width:0; position:relative; display:flex; align-items:center; }
+  .tsearch svg { position:absolute; left:14px; width:16px; height:16px; fill:var(--dmut); }
+  .tsearch input { width:100%; padding:11px 14px 11px 38px; border-radius:12px;
+    border:1px solid var(--dline); background:var(--dsurf); font-size:13.5px; color:var(--dink); }
+  .tstamp { flex:none; font-size:11.5px; color:var(--dmut); }
+  .pills { display:flex; gap:6px; padding:12px 0 10px; flex-wrap:wrap; }
+  .pills .nv { border:0; background:none; color:var(--dmut); font:600 13px/1 inherit;
+    padding:9px 16px; border-radius:999px; cursor:pointer; }
+  .pills .nv:hover { color:var(--dink); }
+  .pills .nv.on { background:var(--dink); color:#fff; }
+
+  .shell { display:grid; grid-template-columns:244px 1fr; gap:22px; padding:22px 26px 60px;
+    align-items:start; min-height:0; }
+  .rail { position:sticky; top:112px; background:var(--dsurf); border:1px solid var(--dline);
+    border-radius:var(--drad); box-shadow:var(--dshadow); padding:18px; height:auto;
+    display:block; color:var(--dink); }
+  .rhead { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .rhead b { font:700 11.5px/1 Helvetica,Arial,sans-serif; letter-spacing:.12em; }
+  .rhead button { border:0; background:none; color:var(--dacc); font:600 11.5px/1 inherit; cursor:pointer; }
+  .fgrp { margin-bottom:12px; }
+  .fgrp label { display:block; font-size:11.5px; color:var(--dmut); margin-bottom:5px; }
+  .fgrp select { width:100%; padding:9px 10px; border-radius:10px; border:1px solid var(--dline);
+    background:var(--dsurf); font-size:13px; color:var(--dink); }
+  .rnote { margin-top:16px; padding:12px; border-radius:12px; background:var(--dsurf2);
+    font-size:11.5px; line-height:1.55; color:var(--dmut); }
+  .rnote b { display:block; color:var(--dink); margin-bottom:3px; }
+  .rnote span { display:block; margin-top:6px; }
+  .content { padding:0; }
+
+  .hero { position:relative; overflow:hidden; border-radius:var(--drad); padding:34px 36px 30px;
+    color:#fff; background:linear-gradient(120deg,#1b1d19 0%,#2b241f 46%,#7a3a22 100%); }
+  .heyebrow { font:700 11.5px/1 Helvetica,Arial,sans-serif; letter-spacing:.22em; opacity:.72; }
+  .hero h1 { margin:14px 0 10px; font-size:46px; line-height:1.02; letter-spacing:-.02em; color:#fff; }
+  .hero p { margin:0; max-width:60ch; font-size:13.5px; color:rgba(255,255,255,.78); }
+  .hchips { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+  .hchip { padding:7px 13px; border-radius:999px; font-size:11.5px;
+    background:rgba(255,255,255,.12); color:rgba(255,255,255,.9); }
+
+  .dtiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:12px; margin:14px 0 26px; }
+  .dt { background:var(--dsurf); border:1px solid var(--dline); border-radius:14px; padding:14px 15px;
+    box-shadow:var(--dshadow); }
+  .dt.lead { background:var(--dacc); border-color:var(--dacc); color:#fff; }
+  .dtl { display:block; font:700 10.5px/1.3 Helvetica,Arial,sans-serif; letter-spacing:.11em;
+    text-transform:uppercase; color:var(--dmut); }
+  .dt.lead .dtl { color:rgba(255,255,255,.86); }
+  .dtv { display:block; font-size:30px; line-height:1.1; margin:9px 0 5px; letter-spacing:-.02em; }
+  .dts { display:block; font-size:11px; color:var(--dmut); }
+  .dt.lead .dts { color:rgba(255,255,255,.85); }
+
+  .shead { margin:26px 0 12px; }
+  .shead h2 { margin:0; font-size:22px; letter-spacing:-.01em; }
+  .shead p { margin:5px 0 0; font-size:12.5px; color:var(--dmut); }
+
+  .pgrid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;
+    align-items:start; }
+  .panel { background:var(--dsurf); border:1px solid var(--dline); border-radius:var(--drad);
+    box-shadow:var(--dshadow); padding:18px 20px 20px; }
+  .panel.wide { grid-column:1/-1; }
+  .ptitle { margin-bottom:14px; }
+  .ptitle b { display:block; font-size:15px; }
+  .ptitle span { display:block; font-size:11.5px; color:var(--dmut); margin-top:3px; }
+
+  .rank { display:flex; flex-direction:column; gap:9px; }
+  .rrow { display:grid; grid-template-columns:minmax(90px,168px) 1fr auto; gap:12px; align-items:center; }
+  .rk { font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rt { height:9px; border-radius:999px; background:var(--dsurf2); overflow:hidden; }
+  .rt i { display:block; height:100%; border-radius:999px; background:var(--dacc); }
+  .rv { font-size:11.5px; color:var(--dmut); font-variant-numeric:tabular-nums; }
+  .rv em { font-style:normal; }
+
+  .donutwrap { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  .donut { position:relative; width:140px; height:140px; flex:none; }
+  .donut svg { width:140px; height:140px; }
+  .dhole { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; }
+  .dhole b { font-size:24px; line-height:1; }
+  .dhole span { font-size:10px; color:var(--dmut); margin-top:3px; }
+  .dlegend { list-style:none; margin:0; padding:0; flex:1; min-width:150px;
+    display:flex; flex-direction:column; gap:6px; }
+  .dlegend li { display:flex; align-items:center; gap:8px; font-size:12px; }
+  .dlegend i { width:9px; height:9px; border-radius:3px; flex:none; }
+  .dlegend span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dlegend b { color:var(--dmut); font-weight:600; font-variant-numeric:tabular-nums; }
+  .dnote { flex-basis:100%; margin:12px 0 0; font-size:11px; color:var(--dmut); line-height:1.5; }
+  /* the histogram is shared with the other templates; only its colour is this
+     sheet's, so the bars stop being the one blue thing on a warm page */
+  .panel .hbar { fill:var(--dacc); }
+
+  .sigs { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+  .sig { border-radius:14px; padding:16px 17px; }
+  .sig.a { background:var(--dsoft); } .sig.b { background:#eef4ef; } .sig.c { background:#fff6e2; }
+  .sk { display:block; font:700 10.5px/1 Helvetica,Arial,sans-serif; letter-spacing:.08em;
+    color:var(--dacc); text-transform:uppercase; }
+  .sig b { display:block; font-size:19px; margin:9px 0 7px; letter-spacing:-.01em; }
+  .sl { display:block; font-size:12px; color:var(--dmut); line-height:1.5; }
+
+  .grid.wall { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:14px; }
+  .content .p { background:var(--dsurf); border:1px solid var(--dline); border-radius:14px;
+    overflow:hidden; box-shadow:var(--dshadow); }
+  .content .p img, .content .p .ph { border-radius:0; }
+  .content footer { margin-top:34px; padding-top:18px; border-top:1px solid var(--dline);
+    font-size:11.5px; color:var(--dmut); line-height:1.6; }
+
+  @media (max-width:980px) {
+    .shell { grid-template-columns:1fr; }
+    .rail { position:static; }
+    .pgrid { grid-template-columns:1fr; }
+    .hero h1 { font-size:34px; }
+  }
+  @media print {
+    .topbar, .rail { display:none; }
+    .shell { display:block; padding:0; }
+    .panel, .dt { box-shadow:none; }
+    [data-sec] { display:block !important; }
+  }
 </style></head>
 <body>${isPulse ? body : `<div class="sheet">
 <header>
