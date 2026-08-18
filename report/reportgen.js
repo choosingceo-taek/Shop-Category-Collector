@@ -407,7 +407,7 @@
     </section>
     <section data-sec="lab">
       ${secHead("result analysis · every figure computed from collected data", "LAB")}
-      ${charts}
+      ${meta.labHtml || charts}
     </section>
     <footer>
       This file holds the information exactly as it was when generated. Images and figures
@@ -610,7 +610,57 @@
     .rail { position:static; height:auto; flex-direction:row; align-items:center; gap:10px;
       border-right:0; border-bottom:1px solid #dfe7e4; }
     .rail nav { flex-direction:row; } .railfoot { display:none; } .content { padding:20px 16px 50px; } }
+  /* ---- the LAB, as it is on the workbench ---------------------------------
+     The markup in this section is produced by the same function that draws the
+     screen, so the figures cannot drift apart. Only the typesetting lives
+     here, in the sheet's own editorial idiom: rules instead of shadows,
+     squared corners, uppercase micro-labels. */
+  [data-sec="lab"] .sec { border:1px solid ${GRID}; padding:12px 14px 13px; margin-bottom:11px; background:#fff; }
+  [data-sec="lab"] .sec h3 { font:700 10px/1 Helvetica,Arial,sans-serif; letter-spacing:.14em;
+    text-transform:uppercase; color:${MUTED}; padding-bottom:8px; border-bottom:1px solid ${INK};
+    margin:0 0 12px; }
+  [data-sec="lab"] .sec h3 .sub { font-weight:400; letter-spacing:.02em; text-transform:none;
+    font-size:10.5px; color:${MUTED}; margin-left:7px; display:inline; }
+  .axcards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
+  .axc { border:1px solid ${GRID}; padding:10px 11px 8px; display:flex; flex-direction:column;
+    gap:2px; min-width:0; }
+  .axch { display:flex; align-items:baseline; gap:8px; }
+  .axk { font:700 10px/1.2 Helvetica,Arial,sans-serif; letter-spacing:.11em; text-transform:uppercase;
+    flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .axd { font:650 10.5px/1 Helvetica,Arial,sans-serif; color:${MUTED}; font-variant-numeric:tabular-nums; }
+  .axd.up { color:#1b7f4d; } .axd.down { color:#8a3c17; }
+  .axnum { display:flex; align-items:baseline; gap:5px; margin-top:3px; }
+  .axnum b { font:650 26px/1 Helvetica,Arial,sans-serif; letter-spacing:-.03em;
+    font-variant-numeric:tabular-nums; }
+  .axnum i { font-style:normal; font-size:10.5px; color:${MUTED}; }
+  .axmeta { font-size:10.5px; color:${MUTED}; line-height:1.45; min-height:15px; }
+  .axc svg.area { display:block; width:100%; height:46px; margin-top:6px; }
+  .axc .noarea { font-size:10px; color:${MUTED}; margin-top:10px; height:46px; }
+  .axgt { border-top:1px solid ${GRID}; margin-top:auto; padding-top:6px; }
+  .axgt .gtlab { font:700 8.5px/1 Helvetica,Arial,sans-serif; letter-spacing:.14em; color:#8a3c17; }
+  .axgt .gtq { font-size:10px; color:${MUTED}; margin-left:6px; }
+  .axgt .gtv { font:650 11px/1 Helvetica,Arial,sans-serif; float:right; color:#8a3c17; }
+  .axgt svg.area { height:26px; margin-top:2px; }
+  .axcov { font-size:10.5px; color:${MUTED}; line-height:1.5; margin-top:10px; }
+  [data-sec="lab"] .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:11px; margin:0 0 11px; }
+  [data-sec="lab"] .tile { border:1px solid ${GRID}; background:#fff; padding:10px 12px; }
+  [data-sec="lab"] .tile .tl { font:700 9px/1 Helvetica,Arial,sans-serif; letter-spacing:.13em;
+    text-transform:uppercase; color:${MUTED}; }
+  [data-sec="lab"] .tile .tv { font:650 26px/1.1 Helvetica,Arial,sans-serif; margin:5px 0 3px;
+    letter-spacing:-.03em; }
+  [data-sec="lab"] .tile .ts { font-size:10.5px; color:${MUTED}; }
+  table.lg2 { width:100%; border-collapse:collapse; font-size:12px; }
+  table.lg2 th { text-align:left; font:700 9px/1 Helvetica,Arial,sans-serif; letter-spacing:.12em;
+    text-transform:uppercase; color:${MUTED}; padding:0 8px 7px 0; border-bottom:1px solid ${INK}; }
+  table.lg2 td { padding:7px 8px 7px 0; border-bottom:1px solid ${GRID}; vertical-align:top; }
+  table.lg2 .num, table.lg2 td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  [data-sec="lab"] .foot { font-size:10.5px; color:${MUTED}; line-height:1.6; margin-top:12px; }
+  [data-sec="lab"] .none, [data-sec="lab"] .labempty { color:${MUTED}; font-size:12px; padding:14px 0; }
+  [data-sec="lab"] .pk, [data-sec="lab"] .pn { color:${MUTED}; font-size:10.5px; }
+  [data-sec="lab"] .up { color:#1b7f4d; } [data-sec="lab"] .down { color:#8a3c17; }
   @media print { body { background:#fff; } .sheet { box-shadow:none; max-width:none; }
+    .axc, .sec { break-inside:avoid; }
     .p, .lb, .tb tr, .day, .bsec, .card, .kpi { break-inside:avoid; }
     .rail { display:none; } .shell { display:block; }
     [data-sec] { display:block !important; } }

@@ -748,6 +748,33 @@
     }
 
     btn.textContent = "Building the report…";
+    /* The LAB section of the file is the LAB — rendered by the same function
+       that draws the screen, into an element nobody sees.
+
+       It used to be a second, older dashboard: KPI tiles, a price histogram
+       and four bar charts. So the screen answered "how many brands carry
+       satin, and is that rising" while the file it produced answered "what
+       share of products is polyester", and a designer comparing the two found
+       two different reports of one week. Same figures everywhere is a rule
+       this project already holds for its three templates; the file and the
+       workbench are the same case. */
+    const labHtml = (() => {
+      try {
+        const box = document.createElement("div");
+        window.LabView.render(box, rows.filter(i => i && i.source !== "clip" && isNewIn(i)), {
+          months: parseInt($("#labmonths").value, 10) || 6,
+          granularity: $("#labgran").value,
+          dim: "fabricfam",
+          snapshots: curGarment ? [] : labSnapshots,
+          trends,
+          // the chips are controls; a file has nothing to press
+          tierChips: "", garmentChips: "", sourceNote: "",
+          basis: { fresh: rows.filter(isNewIn).length, pool: rows.length,
+            garment: curGarment, narrowed: rows.filter(i => isNewIn(i) && inGarment(i)).length },
+        });
+        return box.innerHTML;
+      } catch (e) { return ""; }
+    })();
     const b = $("#brand").value, c = $("#cat").value, s = $("#src").value;
     const scope = [b, c, s].filter(Boolean).join(" · ");
     // say plainly which slice this is, so the file still explains itself later
@@ -760,7 +787,7 @@
       title: proj ? proj.name : (scope ? `${scope} market research` : "Market research report"),
       subtitle: [periodLabel, proj ? scope : ""].filter(Boolean).join(" · ") || (scope ? "" : "Whole catalog"),
       scope, period: periodLabel, generatedAt: today,
-      template: $("#tmpl").value,
+      template: $("#tmpl").value, labHtml,
       source: [...new Set(rows.map(r => r.site || r.source).filter(Boolean))].join(", "),
     });
 
