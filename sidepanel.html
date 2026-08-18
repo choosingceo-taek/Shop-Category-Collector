@@ -175,13 +175,13 @@
      to be decoded every time — which is what "▶ ⏸ ■ ⬇" in a row asks of
      someone who opens this once a week — and a box with a word under the mark
      is read, not deciphered. */
-  .rbtn { display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:6px; height:62px; flex:1; min-width:0; padding:0; border-radius:var(--r-s);
+  /* Marks only, so the box loses the row the word stood in — and the mark
+     takes some of it back, because it is now the whole message. */
+  .rbtn { display:inline-flex; align-items:center; justify-content:center;
+    height:50px; flex:1; min-width:0; padding:0; border-radius:var(--r-s);
     background:var(--card); border:1px solid var(--line2); color:var(--ink);
     transition:background .15s ease, color .15s ease, transform .12s ease, opacity .15s ease; }
-  .rbtn svg { width:21px; height:21px; fill:currentColor; flex:none; }
-  .rbtn em { display:block; font:700 10px/1 Helvetica,Arial,sans-serif;
-    letter-spacing:.1em; text-transform:uppercase; font-style:normal; }
+  .rbtn svg { width:24px; height:24px; fill:currentColor; flex:none; }
   .rbtn.go { background:var(--cta); color:var(--cta-ink); border-color:var(--cta); }
   .rbtn.go:hover:not(:disabled) { background:var(--cta-hi); }
   .rbtn:hover:not(:disabled) { border-color:var(--hard); transform:translateY(-1px); }
@@ -803,24 +803,29 @@
              because the bar is a transport, not a form — and because at this
              size a glyph is read faster than a word. Every scan reads the
              first page only, so there is nothing to configure here. -->
-        <!-- Each is a box with its mark over its name. The marks are the
-             transport ones every player uses — a triangle, two bars, a square
-             — and pause still swaps to a triangle so the state it will move to
-             is visible without reading. The word under the mark is there
-             because this panel is opened once a week, not once an hour, and a
-             row of bare glyphs is deciphered rather than read. -->
+        <!-- Marks only. Three of them are the transport controls every player
+             on earth uses — a triangle, two bars, a square — and pause still
+             swaps to a triangle so the state it will move to is visible
+             without reading anything. The fourth is a sheet with a downward
+             arrow: a file to take away, which is the one thing here that is
+             not transport.
+
+             Which means the mark has to actually carry it, and one of them
+             did not. The old download glyph was written as "M12 3v10.2 … V3z"
+             — a line down and back up the same x — so the stem enclosed no
+             area and never painted. What rendered was an arrowhead over a
+             rule, which reads as "collapse", not "save the file". It only
+             survived because the word EXCEL was underneath it, and taking the
+             words away is exactly what would have shipped it. -->
         <div class="runrow" role="group" aria-label="Scan controls">
           <button id="runlist" class="rbtn go" title="Scan all — every site in this list" aria-label="Scan all">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-            <em id="runlabel">Scan all</em>
           </button>
           <button id="jpause" class="rbtn" title="Hold the run — it keeps its place" aria-label="Pause">
             <svg id="pauseicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5.5h3v13H9zM14 5.5h3v13h-3z"/></svg>
-            <em id="pauselabel">Pause</em>
           </button>
           <button id="jreset" class="rbtn" title="Stop the run and save what was collected" aria-label="Stop">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
-            <em>Stop</em>
           </button>
           <!-- The file, only when it is asked for. A run fills the catalog —
                PRODUCTS and the LAB have the products the moment each shop
@@ -828,8 +833,7 @@
                every photo in the run, so it waits for this. Asleep until a
                finished run has rows to put in it. -->
           <button id="jxlsx" class="rbtn" title="Take the last run as an Excel file" aria-label="Excel">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10.2l3.6-3.6 1.4 1.4L12 16 7 11l1.4-1.4 3.6 3.6V3zM5 18h14v2H5z"/></svg>
-            <em>Excel</em>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.6h6.2L18 7.4v4.1h-2V8.4h-3.6V4.6H7v14.8h3.1v2H7a2 2 0 0 1-2-2V4.6a2 2 0 0 1 2-2z"/><path d="M15.9 12.9h2.2v4.4l1.9-1.9 1.5 1.5-4.5 4.5-4.5-4.5 1.5-1.5 1.9 1.9z"/></svg>
           </button>
         </div>
       </div>

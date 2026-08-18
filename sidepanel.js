@@ -699,17 +699,22 @@
     const paused = !!(job && job.paused);
     const btn = $("#runlist");
     btn.disabled = busy || btn.dataset.empty === "1";
-    $("#runlabel").textContent = busy ? "Scanning…"
-      : (btn.dataset.n ? `Scan all (${btn.dataset.n})` : "Scan all");
-    /* Pause and resume are one button in two states, so it shows the state it
-       will move to — icon and word together, since two grey squares said
-       nothing about which control did what. */
+    /* The words are gone from the bar, so what they carried moves into the
+       tooltip and the accessible name — the two places a control is allowed
+       to keep its long form. What the run is doing is still on screen
+       regardless: the progress rule above the header, the bar in the status
+       line, and this button asleep while it runs. */
+    btn.title = busy ? "Scanning…"
+      : (btn.dataset.n ? `Scan all — ${btn.dataset.n} sites in this list`
+        : "Scan all — every site in this list");
+    btn.setAttribute("aria-label", busy ? "Scanning" : "Scan all");
+    /* Pause and resume are one button in two states, so its mark shows the
+       state it will move to. */
     const hold = $("#jpause");
     hold.disabled = !on;
     hold.classList.toggle("held", paused);
     hold.title = paused ? "Resume the run where it stopped" : "Hold the run — it keeps its place";
     hold.setAttribute("aria-label", paused ? "Resume" : "Pause");
-    $("#pauselabel").textContent = paused ? "Resume" : "Pause";
     $("#pauseicon").innerHTML = paused
       ? '<path d="M8 5.5v13l11-6.5z"/>'                      // ▶ resume
       : '<path d="M9 5.5h3v13H9zM14 5.5h3v13h-3z"/>';        // ⏸ hold

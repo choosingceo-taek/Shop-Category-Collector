@@ -71,7 +71,7 @@ const lists = [{
       s.textContent = ":root{" + c + "}";
       document.head.appendChild(s);
     }, css);
-    await p.waitForTimeout(350);
+    await p.waitForTimeout(4200);
     await p.screenshot({ path: `palette-${name}.png` });
     console.log("drew palette-" + name + ".png");
   }

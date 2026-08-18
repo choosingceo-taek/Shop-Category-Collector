@@ -150,7 +150,56 @@ const products = Array.from({ length: 24 }, (_, i) => ({
   ok("it is opaque, so photographs do not show through",
     stuck.opaque !== "rgba(0, 0, 0, 0)" && stuck.opaque !== "transparent", stuck.opaque);
 
-  /* ---- 4. the grab button carries no count ---- */
+  /* ---- 4. the run bar is marks only, and every mark carries its weight ----
+
+     A bare glyph has to say the whole thing, so the floor is measured rather
+     than guessed: the transport marks cover 12.7–16.9% of their box and the
+     download glyph that never painted its stem covered 9.4%. 12% sits
+     between them (tests/glyph-probe.js). */
+  await p.click('.tab[data-view="collector"]').catch(() => {});
+  await p.waitForTimeout(400);
+  const bar = await p.evaluate(async () => {
+    const btns = [...document.querySelectorAll(".runrow .rbtn")];
+    const ink = async svg => {
+      const src = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">${svg.innerHTML}</svg>`;
+      const img = new Image();
+      img.src = "data:image/svg+xml;base64," + btoa(src);
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = c.height = 96;
+      const g = c.getContext("2d");
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, 96, 96).data;
+      let on = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 40) on++;
+      return (on / 9216) * 100;
+    };
+    const out = [];
+    for (const b of btns) {
+      const svg = b.querySelector("svg");
+      out.push({
+        id: b.id,
+        text: (b.textContent || "").replace(/\s+/g, ""),
+        title: b.getAttribute("title") || "",
+        label: b.getAttribute("aria-label") || "",
+        h: b.getBoundingClientRect().height,
+        marks: svg ? 1 : 0,
+        ink: svg ? await ink(svg) : 0,
+      });
+    }
+    return out;
+  });
+  ok("all four run controls are there", bar.length === 4, `${bar.length}`);
+  bar.forEach(b => {
+    ok(`${b.id}: no word on it`, b.text === "", JSON.stringify(b.text));
+    ok(`${b.id}: has a mark`, b.marks === 1);
+    ok(`${b.id}: keeps its name on hover`, b.title.length > 3, b.title);
+    ok(`${b.id}: keeps its name for a screen reader`, b.label.length > 1, b.label);
+    ok(`${b.id}: still a target you can hit`, b.h >= 44, `${b.h.toFixed(0)}px`);
+    ok(`${b.id}: the mark actually paints`, b.ink >= 12, `${b.ink.toFixed(1)}% of its box`);
+  });
+
+  /* ---- 5. the grab button carries no count ---- */
   const fab = await p.evaluate(async () => {
     // A <script src> of the extension's own file — the page's CSP allows
     // 'self' and nothing else, so this is the only way to run it here.

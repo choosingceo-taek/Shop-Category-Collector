@@ -73,14 +73,22 @@ const ENTRIES = [
     const px = s => { const e = document.querySelector(s); return e ? parseFloat(getComputedStyle(e).fontSize) : 0; };
     return { body: px("body"), row: px("#listbody .ent .lb"), brand: px("#listbody .ent .bn"),
       tab: px("#lchips button"), lab: px("#catalog .lbmain"), view: px(".tab"),
-      run: px("#runlist em") };
+      /* The transport row is marks now, by request, so what has to be legible
+         there is the mark. Its size is the measurement that replaces the word
+         it used to carry; what the mark MEANS is held by tabs-e2e, which
+         requires each one to actually put ink on its box. */
+      run: (() => {
+        const s = document.querySelector("#runlist svg");
+        return s ? s.getBoundingClientRect().width : 0;
+      })() };
   });
   ok("the addresses a designer reads are body size or larger",
     sizes.row >= 13, JSON.stringify(sizes));
   ok("the brand over each row is readable, not a watermark",
     sizes.brand >= 10, JSON.stringify(sizes));
   ok("the list tabs are readable at rest", sizes.tab >= 12, JSON.stringify(sizes));
-  ok("the transport names are readable", sizes.run >= 10, JSON.stringify(sizes));
+  ok("the transport marks are big enough to read at a glance",
+    sizes.run >= 22, JSON.stringify(sizes));
   ok("the way to the LAB is the largest thing on the panel",
     sizes.lab >= 16 && sizes.lab > sizes.view && sizes.lab > sizes.tab, JSON.stringify(sizes));
 
