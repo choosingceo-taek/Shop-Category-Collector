@@ -674,8 +674,14 @@
     const running = !!(queue && queue.active);
     box.hidden = !running;
     if (running) {
-      const cur = queue.list[queue.idx] || {};
-      box.innerHTML = `<b>${queue.idx + 1}/${queue.list.length}</b> ${esc(cur.brand || "")} · ${esc(cur.label || "")}`;
+      /* A run record written by an older build may not carry `list` at all,
+         and reaching into it threw where the panel paints — which takes the
+         whole panel down, not just this line. The queue is the one record
+         here written by another context, so it is read defensively. */
+      const items = (queue && queue.list) || [];
+      const cur = items[queue.idx] || {};
+      box.innerHTML = `<b>${queue.idx + 1}/${items.length || "?"}</b> ` +
+        `${esc(cur.brand || "")} · ${esc(cur.label || "")}`;
     }
     renderList();
     paintLive();          // the controls depend on BOTH the job and the queue
@@ -1030,19 +1036,68 @@
      it — reload. Nothing here is a new capability; it is the two clicks that
      already existed, collapsed into the one the designer reaches for. */
   let newerNow = null;                       // last answer from the worker
+  let latestSeen = "";                       // ...and the version it named
   function checkNewer() {
     return new Promise(res => {
       try {
         chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
           void chrome.runtime.lastError;
           newerNow = !!(r && r.newer);
+          latestSeen = (r && r.ok && r.latest) || "";
           paintChip(r && r.ok ? r.latest : "", !!(r && r.ok));
           res(newerNow);
         });
       } catch (e) { res(false); }
     });
   }
-  checkNewer();                              // the chip states it on open
+  /* ---- updating without being asked --------------------------------------
+
+     Everything needed already existed and nothing ever started it: the worker
+     knows a newer version is out, the folder is remembered, the installer
+     writes and the browser restarts itself — but all of it hung off a press,
+     and the press was the thing a designer never got round to.
+
+     So the panel does it on the way in. Chrome will not update a folder-loaded
+     extension itself, and no part of this can run while the panel is shut (a
+     stored directory handle needs a document to speak for it), so "automatic"
+     here means: the notification tells you a version is out, and by the time
+     you have opened Market Lens it has already updated. That is the whole
+     distance a person has to travel.
+
+     It refuses in every case where acting would cost something:
+       · no folder remembered, or its permission would need a prompt
+       · a scan running — a restart mid-run loses that morning's spreadsheet
+       · this browser has failed to come back from a reload before
+       · the same version already tried and failed, so it cannot loop
+       · switched off */
+  const AUTO_KEY = "wpb_autoupdate", AUTO_TRIED = "wpb_autotried";
+
+  const autoUpdateOn = () => new Promise(r => chrome.storage.local.get(AUTO_KEY,
+    o => r((o || {})[AUTO_KEY] !== false)));          // on unless turned off
+
+  async function maybeSelfUpdate(latest) {
+    try {
+      if (!latest || !await autoUpdateOn()) return false;
+      const tried = await new Promise(r =>
+        chrome.storage.local.get(AUTO_TRIED, o => r((o || {})[AUTO_TRIED] || "")));
+      if (tried === latest) return false;             // already had a go at this one
+      const st = await reloadVerdict();
+      if (st[RELOAD_OK] === false) return false;
+      const q = await load(QUEUE);
+      if (q && q.active) return false;
+      // no prompt: if the grant has lapsed this waits for a real press
+      if (!await knownFolder(false)) return false;
+      await new Promise(r => chrome.storage.local.set({ [AUTO_TRIED]: latest }, r));
+      $("#updbox").hidden = false;
+      refreshUpdBox(); await paintAuto(); paintReload(false);
+      $("#uautonote").textContent = `v${latest} is out — installing it now.`;
+      $("#uauto").click();                            // the handler that already exists
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // the chip states it on open, and the update starts itself from that answer
+  checkNewer().then(newer => { if (newer) maybeSelfUpdate(latestSeen); });
 
   $("#verchip").addEventListener("click", async () => {
     const box = $("#updbox");
@@ -1103,8 +1158,34 @@
     } catch (e) { paintNotify(); }
   });
 
+  /* The switch for it. Shown next to the notification one because they are
+     the two halves of the same promise — one tells you, the other acts. */
+  async function paintSelfUpd() {
+    const b = $("#uselfupd");
+    if (!b) return;
+    const on = await autoUpdateOn();
+    const dir = await knownFolder(false);
+    b.hidden = false;
+    b.classList.toggle("on", on);
+    b.textContent = !dir
+      ? "⚙ Install updates by itself — choose your folder above first"
+      : on ? "✓ Updates install themselves when you open Market Lens — press to stop"
+           : "⚙ Install updates by itself when you open Market Lens";
+    b.disabled = !dir;
+    b.title = dir
+      ? "A scan in progress is never interrupted, and the folder is never asked for silently"
+      : "Market Lens needs to know which folder to write into before it can do this on its own";
+  }
+
+  $("#uselfupd") && $("#uselfupd").addEventListener("click", async () => {
+    const on = await autoUpdateOn();
+    await new Promise(r => chrome.storage.local.set({ [AUTO_KEY]: !on }, r));
+    await paintSelfUpd();
+  });
+
   function refreshUpdBox() {
     paintNotify();
+    paintSelfUpd();
     const foot = $("#ufoot");
     foot.textContent = `You are running v${running}. Checking…`;
     chrome.storage.local.get("wpb_filesready", o => {

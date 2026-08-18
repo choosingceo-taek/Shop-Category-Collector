@@ -573,6 +573,12 @@
          the person is already thinking about the question. Optional, so
          nothing breaks if the answer is no. -->
     <button id="unotify" class="unotify" hidden></button>
+    <!-- The other half of automatic. Chrome will not update a folder-loaded
+         extension itself, and nothing here can run while the panel is shut, so
+         this is the whole distance: the notification says a version is out,
+         and opening Market Lens finds it already installing. Off-switch
+         included, because a restart is not nothing. -->
+    <button id="uselfupd" class="unotify" hidden></button>
     <details class="umanual">
       <summary>Do it by hand instead</summary>
       <div class="ustep"><b>1</b><button id="udl">⬇ Download the latest</button>
