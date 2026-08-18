@@ -26,6 +26,20 @@
   // Generic embedded-data helpers (shared by every adapter)
   // ---------------------------------------------------------------------------
 
+  /* The first <h1> on the page is usually the category. Sometimes it is an
+     interstitial that got there first — Gap's stores put "Want to shop
+     athleta.com?" above the grid to send a visitor to another storefront, and
+     that sentence became the category on every row of the scan.
+
+     The test is a shape, not a shop: a category is a noun phrase. It is never
+     a question, and it never contains a web address. Anything that is one of
+     those is not what this page sells, so the reader falls through to the
+     address — which the shop also wrote, and which says "all-new-arrivals". */
+  const notACategory = t => {
+    const s = String(t || "").trim();
+    return /\?\s*$/.test(s) || /\b[a-z0-9-]+\.(com|net|org|co\.[a-z]{2}|[a-z]{2})\b/i.test(s);
+  };
+
   // Collect every parseable JSON object a page (or fetched HTML doc) ships.
   // Order of reliability: __NEXT_DATA__ > typed JSON scripts > inline state vars.
   // Content scripts run in an isolated world, so page-set window.__STATE__ globals
@@ -2422,7 +2436,7 @@
       const h1 = doc.querySelector && doc.querySelector("h1");
       if (h1) {
         const t = (h1.textContent || "").replace(/\s*\(\d[\d,]*\)\s*$/, "").replace(/\s+/g, " ").trim();
-        if (t && t.length <= 60) return t;
+        if (t && t.length <= 60 && !notACategory(t)) return t;
       }
       return categoryFromUrl(url);
     }
@@ -2724,7 +2738,8 @@
       const h1 = doc.querySelector && doc.querySelector("h1");
       if (h1) {
         const t = (h1.textContent || "").replace(/\s*\(\d[\d,]*\)\s*$/, "").replace(/\s+/g, " ").trim();
-        if (t && t.length <= 60 && !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
+        if (t && t.length <= 60 && !notACategory(t) &&
+            !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
       }
       try {
         const segs = new URL(url).pathname.split("/").filter(Boolean);
@@ -2961,7 +2976,8 @@
       const h1 = doc.querySelector && doc.querySelector("h1");
       if (h1) {
         const t = (h1.textContent || "").replace(/\s*\(\d[\d,]*\)\s*$/, "").replace(/\s+/g, " ").trim();
-        if (t && t.length <= 60 && !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
+        if (t && t.length <= 60 && !notACategory(t) &&
+            !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
       }
       return categoryFromUrl(url);
     }
@@ -3407,7 +3423,8 @@
       const h1 = doc.querySelector && doc.querySelector("h1");
       if (h1) {
         const t = (h1.textContent || "").replace(/\s*\(\d[\d,]*\)\s*$/, "").replace(/\s+/g, " ").trim();
-        if (t && t.length <= 60 && !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
+        if (t && t.length <= 60 && !notACategory(t) &&
+            !/^\d[\d,]*\s*(?:results?|items?)$/i.test(t)) return t;
       }
       return categoryFromUrl(url);
     }
@@ -3544,6 +3561,7 @@
   const SITES = {
     shared,
     inditex,           // exposed for the Node suite (pure parseProduct/pelementOf)
+    notACategory,      // ditto — the interstitial guard on the <h1> reader
     adapters: ADAPTERS,
     // doc is optional — adapters that detect by page content (e.g. shopify's
     // cdn markers) use it; URL-pattern adapters (walmart) ignore it.

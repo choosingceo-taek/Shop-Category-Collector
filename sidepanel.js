@@ -376,13 +376,11 @@
     $("#runlist").dataset.n = scannableCount === entries.length ? "" : String(scannableCount);
     paintLive();     // the one run button reads list count + job + queue state
 
-    /* The row carries the count, so it is there whenever there are sites. The
-       two controls on it appear only when they have work to do: the filter
-       once the list is longer than a screen, the fold once there is more than
-       one brand to fold. */
+    /* The row carries the count, and the fold appears once there is more than
+       one brand to fold. The filter box is no longer drawn at all — the field
+       is kept empty so everything downstream still reads a query of "". */
     $("#lsearch").hidden = !entries.length;
-    $("#lq").hidden = entries.length < 7;
-    if (entries.length < 7) { listQuery = ""; $("#lq").value = ""; }
+    listQuery = ""; $("#lq").value = "";
 
     if (!entries.length) {
       /* An empty list needs no paragraph. The three buttons directly above

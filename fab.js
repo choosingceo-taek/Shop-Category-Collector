@@ -72,14 +72,10 @@
     animation: spin 1s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  #count {
-    position: absolute; top: -3px; right: -3px; min-width: 20px; height: 20px;
-    padding: 0 5px; border-radius: 999px; background: #D9634A; color: #fff;
-    font-size: 11px; font-weight: 700; display: none;
-    align-items: center; justify-content: center;
-    box-shadow: 0 0 0 2px rgba(255,255,255,.9);
-  }
-  #count.on { display: inline-flex; }
+  /* No count badge. It carried the number of URLs in the list a grab would
+     default to — a figure that means nothing while standing on a shop page,
+     and that a red disc on the button made look like an alert. The number
+     lives in the panel, beside the list it belongs to. */
 
   /* the "+1" that flies off the chip you tapped */
   #pop {
@@ -180,7 +176,6 @@
       <circle cx="10.2" cy="10.2" r="6.9" stroke="url(#lensg)" stroke-width="2.2"/>
       <path d="M15.17 15.17 L21 21" stroke="url(#lensg)" stroke-width="2.6" stroke-linecap="round"/>
     </svg>
-    <span id="count"></span>
   </button>
 </div>`;
 
@@ -252,20 +247,11 @@
     }
   }
 
-  function paintCount() {
-    const l = listOf(lastId) || lists[0];
-    const n = l ? (l.entries || []).length : 0;
-    const c = $("#count");
-    c.textContent = n > 99 ? "99+" : String(n);
-    c.classList.toggle("on", n > 0);
-  }
-
   async function load() {
     const api = L();
     lists = api ? await api.load() : [];
     const o = await get(LAST);
     lastId = o[LAST] || (lists[0] && lists[0].id) || "";
-    paintCount();
     if (open) renderChips();
   }
 
@@ -313,7 +299,7 @@
       ? `Grabbed into <b>${esc(l.name)}</b> — ${(l.entries || []).length} sites.`
       : `Updated in <b>${esc(l.name)}</b>.`;
     msg.classList.add("on");
-    paintCount(); renderChips();
+    renderChips();
     setTimeout(() => { if (open) close(); dirty = false; }, 950);
   }
 

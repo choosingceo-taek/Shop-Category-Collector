@@ -294,10 +294,31 @@
   // Excel and the LAB, so a raw hostname must never reach a cell.
   const SUFFIX = new Set(["com", "net", "org", "co", "uk", "us", "au", "kr", "jp", "cn",
     "de", "fr", "es", "it", "nl", "se", "dk", "no", "fi", "pl", "ca", "nz", "in", "io", "eu"]);
+  /* Labels that say WHERE you are, not WHAT is sold. A shop puts these in
+     front of its own domain — shop.lululemon.com, us.boohoo.com,
+     row.gymshark.com ("rest of world") — and none of them is a brand.
+
+     The set is closed on purpose, and everything else in that position is
+     taken to be a name. That is the case this exists for: a house brand
+     lives on its parent company's domain (athleta.gap.com,
+     bananarepublic.gap.com, oldnavy.gap.com), and reading the registrable
+     domain filed all of them as GAP — four different shops merged into one
+     row in the Excel and one bar in the LAB, which is the failure a wrong
+     brand always causes here. A label of two characters or fewer is a
+     country or a language, never a brand. */
+  const ROUTING = new Set(["www", "www2", "www3", "shop", "shops", "shopping",
+    "store", "stores", "mobile", "secure", "checkout", "cart", "account",
+    "accounts", "my", "web", "online", "int", "intl", "international",
+    "global", "row", "apac", "emea", "latam", "americas", "asia", "europe",
+    "outlet", "sale", "static", "assets", "images", "img", "cdn", "media",
+    "content", "api", "home", "main"]);
   function brandFromHost(host) {
     const parts = String(host || "").toLowerCase().replace(/^www\./, "").split(".");
     while (parts.length > 1 && SUFFIX.has(parts[parts.length - 1])) parts.pop();
-    const name = parts[parts.length - 1] || String(host || "");
+    let i = 0;
+    while (i < parts.length - 1 &&
+      (parts[i].length <= 2 || /^\d+$/.test(parts[i]) || ROUTING.has(parts[i]))) i++;
+    const name = parts[i] || parts[parts.length - 1] || String(host || "");
     return name.split(/[-_]/).filter(Boolean)
       .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") || String(host || "");
   }

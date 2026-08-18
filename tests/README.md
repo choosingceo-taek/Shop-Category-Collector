@@ -33,6 +33,8 @@ node tests/encoding-test.js
 | `goal-e2e.js` | the goal sentence: three differently-shaped shops → one Scan all → every row with brand, name, photo and composition → clean health → LAB → dashboard |
 | `edge-e2e.js` | the extension still opens on a Chromium browser with no side-panel API (Edge): the toolbar button falls back to a tab |
 | `price-test.js` | money as the shops write it, including the comma decimal that read "120,00 €" as 12000 |
+| `naming-test.js` | what a page is filed as: a house brand on its parent's domain is not the parent (Athleta ≠ GAP), and a category is a noun phrase, never an interstitial's question |
+| `tabs-e2e.js` | the panel's furniture, measured on screen: the ＋ never prints under a tab, no Filter sites box, PRODUCTS keeps its search and selects pinned, the grab button carries no count |
 | `matrix-probe.js` | 83 generated shop shapes; the reader's output checked against what the page actually says (explorer and contract in one file) |
 | `dashboard-e2e.js` | the exported HTML is the dashboard, is self-contained, and its figures agree with each other |
 | `encoding-test.js` | no shipped file carries a Unicode noncharacter (Chrome refuses the whole manifest over one), the ship list is real, the manifest parses |
