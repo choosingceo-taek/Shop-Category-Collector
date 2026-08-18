@@ -154,6 +154,28 @@ const SAY_NEWER = `(() => {
   ok("…inside the click, before anything is awaited", asked.afterAwait === false,
     JSON.stringify(asked));
 
+  /* A check that cannot be made must not draw what a successful one draws.
+     The repository is private, so raw.githubusercontent.com answers 404 to
+     every request this extension can make — and for release after release
+     that failure was painted as "you are up to date".
+
+     Driven through the worker rather than by stubbing the panel's own
+     sendMessage: the chip is repainted by the startup check, and the one on
+     opening the box sits behind a `knownFolder() &&` that short-circuits when
+     no folder has been chosen. */
+  await sw.evaluate(() => new Promise(r => chrome.storage.local.remove("wpb_update", r)));
+  await sw.evaluate(() => { self.LensUpdate.check = async () => ({ ok: false }); });
+  await panel.reload();
+  await panel.waitForTimeout(1600);
+  const unsure = await panel.evaluate(() => {
+    const c = document.querySelector("#verchip");
+    return { text: c.textContent, cls: c.className, title: c.title }; });
+  ok("a check that could not be made says so on the chip",
+    /\?/.test(unsure.text) && /unsure/.test(unsure.cls), JSON.stringify(unsure));
+  ok("…and never claims to be the latest",
+    !/the latest/i.test(unsure.title) && /could not reach/i.test(unsure.title),
+    JSON.stringify(unsure));
+
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();

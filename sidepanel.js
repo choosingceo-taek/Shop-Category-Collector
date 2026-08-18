@@ -983,14 +983,33 @@
        v3.1.0            this is the latest
        v3.1.0 → 3.2.0    there is a newer one; pressing installs it
        v3.1.0            (plain) GitHub could not be reached — no claim made */
-  function paintChip(latest) {
+  /* Three states, and the third one has to LOOK different.
+
+     "Checked, you are current" and "could not check at all" both drew the
+     plain version number, differing only in a tooltip nobody hovers. So a
+     check that has never once succeeded — the repository is private, and
+     raw.githubusercontent.com answers 404 to a request carrying no
+     credentials, which is every request this extension can make — was
+     indistinguishable from being up to date, for release after release. A
+     silent failure that looks like success is worse than no check.
+
+       v3.13.0            checked: this is the latest
+       v3.13.0 → 3.14.0   there is a newer one; pressing installs it
+       v3.13.0 ?          could not ask — no claim either way */
+  function paintChip(latest, ok) {
     const chip = $("#verchip");
     const newer = latest && latest !== running;
-    chip.textContent = newer ? `v${running} → ${latest}` : "v" + running;
+    const unknown = ok === false;
+    chip.textContent = newer ? `v${running} → ${latest}`
+      : unknown ? `v${running} ?` : "v" + running;
     chip.classList.toggle("new", !!newer);
+    chip.classList.toggle("unsure", !!unknown && !newer);
     chip.title = newer
       ? `v${latest} is available — press to install it and restart`
-      : `Market Lens v${running}${latest ? " — the latest" : ""}`;
+      : unknown
+        ? `Market Lens v${running} — could not reach GitHub, so whether a newer ` +
+          `version exists is unknown. Press for the ways to update by hand.`
+        : `Market Lens v${running} — the latest`;
   }
 
   /* The restart takes the panel down with it, so the confirmation cannot be
@@ -1017,7 +1036,7 @@
         chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
           void chrome.runtime.lastError;
           newerNow = !!(r && r.newer);
-          paintChip(r && r.ok ? r.latest : "");
+          paintChip(r && r.ok ? r.latest : "", !!(r && r.ok));
           res(newerNow);
         });
       } catch (e) { res(false); }
