@@ -53,11 +53,106 @@ try { importScripts("update.js"); } catch (e) {}
    to be awake. When the repo carries a newer version the toolbar icon gets a
    NEW badge and the panel shows a download banner; a failed check just means
    no notice (never an error — the extension works fine without it). */
-const UPDATE_KEY = "wpb_update";
+/* Both of the facts the toolbar mark is made of, named here because the one
+   function that owns that mark reads them together. */
+const UPDATE_KEY = "wpb_update";           // { newer, latest, current, … } from GitHub
+const DISK_CHECK = "wpb_diskcheck";
+const DISK_READY = "wpb_filesready";       // { onDisk, running, at } — files replaced
+
+/* ---- the toolbar mark has ONE writer --------------------------------------
+
+   Three functions used to set it: the update check wrote NEW, the disk watcher
+   wrote ↻ or "", and the post-reload pass wrote "". Two of those cleared it
+   unconditionally, and the disk watcher runs every five minutes — so a NEW
+   badge lived until the next tick and then vanished, with the stored record
+   still saying a newer version was out. Measured: badge "NEW" → one disk check
+   → "". In practice nobody ever saw it.
+
+   Now nothing touches the badge but this, and it decides from both facts in
+   the order of how close they are to done:
+     ↻  the new files are already in the folder — one restart away
+     NEW a newer version exists on GitHub — a download away
+     ""  nothing to say. */
+async function paintBadge() {
+  try {
+    const o = await new Promise(r => chrome.storage.local.get([DISK_READY, UPDATE_KEY], r));
+    const ready = !!(o && o[DISK_READY]);
+    const newer = !!(o && o[UPDATE_KEY] && o[UPDATE_KEY].newer);
+    chrome.action.setBadgeText({ text: ready ? "↻" : newer ? "NEW" : "" });
+    if (ready || newer) {
+      chrome.action.setBadgeBackgroundColor({ color: ready ? "#2e8b57" : "#d03b3b" });
+    }
+  } catch (e) {}
+}
+
+/* ---- and the browser says it out loud, once -------------------------------
+
+   A badge is only seen by someone already looking at the toolbar. Chrome can
+   raise a real notification, which is the only thing here that reaches a
+   designer who has the panel closed — which is nearly always.
+
+   It is OPTIONAL, and asked for by a click in the panel. A required
+   permission would, the day this goes to the Web Store, disable the extension
+   on every teammate's browser until they re-accept it — the exact update
+   friction this feature exists to remove. Without it, everything below simply
+   does not run and the badge and the chip carry on as before.
+
+   Once per version, never repeated: a notice that reappears is one people
+   learn to dismiss without reading. */
+const NOTIFIED_KEY = "wpb_notifiedfor";
+const NOTE_ID = "wpb-update";
+
+async function canNotify() {
+  try {
+    if (!chrome.notifications) return false;
+    return await new Promise(r =>
+      chrome.permissions.contains({ permissions: ["notifications"] }, v => r(!!v)));
+  } catch (e) { return false; }
+}
+
+async function announceUpdate(rec) {
+  try {
+    if (!rec || !rec.newer || !rec.latest) return false;
+    const seen = await new Promise(r => chrome.storage.local.get(NOTIFIED_KEY, o => r((o || {})[NOTIFIED_KEY] || "")));
+    if (seen === rec.latest) return false;      // already said, for this version
+    if (!await canNotify()) return false;
+    await new Promise(r => chrome.notifications.create(NOTE_ID, {
+      type: "basic",
+      iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+      title: `Market Lens ${rec.latest} is out`,
+      message: `You are on ${rec.current}. Open Market Lens and press the version to install it.`,
+      priority: 1,
+    }, () => { void chrome.runtime.lastError; r(); }));
+    await new Promise(r => chrome.storage.local.set({ [NOTIFIED_KEY]: rec.latest }, r));
+    return true;
+  } catch (e) { return false; }
+}
+
+/* The notice is about the panel, so it opens the panel. Chrome counts a
+   notification click as a gesture, and if it does not, the badge and chip are
+   still there — so a failure here is silent rather than an error. */
+try {
+  chrome.notifications.onClicked.addListener(async () => {
+    try { chrome.notifications.clear(NOTE_ID); } catch (e) {}
+    try {
+      const w = await chrome.windows.getLastFocused();
+      await chrome.sidePanel.open({ windowId: w.id });
+    } catch (e) {}
+  });
+} catch (e) {}
+
 async function refreshUpdate(force) {
   const cur = chrome.runtime.getManifest().version;
   const prev = await new Promise(r => chrome.storage.local.get(UPDATE_KEY, o => r(o[UPDATE_KEY] || null)));
-  if (!force && prev && prev.current === cur && Date.now() - (prev.checkedAt || 0) < 6 * 3600e3) return prev;
+  if (!force && prev && prev.current === cur && Date.now() - (prev.checkedAt || 0) < 6 * 3600e3) {
+    /* Cached, but still say it. The answer being six minutes old rather than
+       six hours old does not change whether the toolbar should carry the mark
+       — and someone who has just turned notifications on is owed the notice
+       they turned them on for, not one at the next network read. */
+    await paintBadge();
+    await announceUpdate(prev);
+    return prev;
+  }
   const res = await self.LensUpdate.check({ current: cur });
   const rec = {
     checkedAt: Date.now(), current: cur,
@@ -65,13 +160,18 @@ async function refreshUpdate(force) {
     newer: !!(res.ok && res.newer), zip: self.LensUpdate.ZIP,
   };
   await new Promise(r => chrome.storage.local.set({ [UPDATE_KEY]: rec }, r));
-  try {
-    chrome.action.setBadgeText({ text: rec.newer ? "NEW" : "" });
-    if (rec.newer) chrome.action.setBadgeBackgroundColor({ color: "#d03b3b" });
-  } catch (e) {}
+  await paintBadge();
+  await announceUpdate(rec);
   return rec;
 }
 refreshUpdate(false);
+
+/* Saying yes is the moment the notice is wanted, not at the next network read. */
+try {
+  chrome.permissions.onAdded.addListener(p => {
+    if (p && (p.permissions || []).includes("notifications")) refreshUpdate(false);
+  });
+} catch (e) {}
 
 /* ---- on-demand engine injection -------------------------------------------
 
@@ -192,9 +292,6 @@ try {
    the reload: the engine goes back into the shop tabs that are already open,
    which is what the F5 in the old instructions was for (and why "Extension
    context invalidated" used to greet anyone who skipped it). */
-const DISK_CHECK = "wpb_diskcheck";
-const DISK_READY = "wpb_filesready";      // { onDisk, running, at }
-
 async function diskVersion() {
   try {
     const url = chrome.runtime.getURL("manifest.json") + "?t=" + Date.now();
@@ -212,10 +309,10 @@ async function checkForReplacedFiles() {
     await new Promise(r => (ready
       ? chrome.storage.local.set({ [DISK_READY]: ready }, r)
       : chrome.storage.local.remove(DISK_READY, r)));
-    try {
-      chrome.action.setBadgeText({ text: ready ? "↻" : "" });
-      if (ready) chrome.action.setBadgeBackgroundColor({ color: "#2e8b57" });
-    } catch (e) {}
+    /* It used to write the mark itself, and wrote "" when there was nothing on
+       disk — erasing the NEW badge every five minutes. It states its fact and
+       lets the one owner decide what the toolbar says. */
+    await paintBadge();
     return !!ready;
   } catch (e) { return false; }
 }
@@ -230,7 +327,10 @@ async function reinjectOpenTabs() {
     if (seen === running) return;
     await new Promise(r => chrome.storage.local.set({ wpb_ranversion: running }, r));
     await new Promise(r => chrome.storage.local.remove(DISK_READY, r));
-    try { chrome.action.setBadgeText({ text: "" }); } catch (e) {}
+    /* Running on the new files, so the disk fact is spent. Whether anything is
+       left to say is the badge owner's call — clearing it here is how a NEW
+       badge disappeared the first time a new version ran. */
+    await paintBadge();
     if (!seen) return;                       // first ever run — nothing to refresh
     const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
     for (const t of tabs) { try { await ensureEngine(t.id); } catch (e) {} }
@@ -385,7 +485,13 @@ async function onScheduleAlarm(name) {
 }
 chrome.alarms.onAlarm.addListener(a => {
   const n = (a && a.name) || "";
-  if (n === DISK_CHECK) return void checkForReplacedFiles();
+  /* The five-minute tick looks at both places a new version can be: the
+     folder on disk, and the repo. Asking GitHub costs nothing extra here —
+     refreshUpdate keeps its own 6-hour cache, so this is at most four reads of
+     a few hundred bytes a day — and without it the repo was consulted only
+     when the worker happened to start or when the panel was opened, which is
+     the one moment the person is already looking. */
+  if (n === DISK_CHECK) { checkForReplacedFiles(); refreshUpdate(false); return; }
   onScheduleAlarm(n);
 });
 

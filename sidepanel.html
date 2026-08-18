@@ -265,6 +265,13 @@
   .updbox .ubar { height:4px; border-radius:999px; background:var(--wash); overflow:hidden;
     margin:0 0 8px; }
   .updbox .ubar i { display:block; height:100%; width:0; background:var(--ink); transition:width .2s ease; }
+  /* A quiet line, not a second call to action — the loud thing in this box is
+     the button that installs the update. */
+  .unotify { display:block; width:100%; text-align:left; margin:0 0 7px;
+    padding:7px 9px; font-size:10.5px; color:var(--ink2);
+    background:var(--wash); border:1px solid var(--line); border-radius:var(--r-s); }
+  .unotify:hover { border-color:var(--line2); color:var(--ink); }
+  .unotify.on { color:var(--muted); }
   .umanual { margin:2px 0 6px; }
   .umanual summary { cursor:pointer; color:var(--muted); font-size:10.5px; margin-bottom:6px; }
   .explist { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
@@ -503,6 +510,14 @@
       <div class="unote" id="uautonote"></div>
     </div>
     <div class="ubar" id="ubar" hidden><i id="ubarfill"></i></div>
+    <!-- The browser can say it out loud. A badge on the toolbar is only seen
+         by someone already looking there, and this panel is closed nearly all
+         the time — so the one thing that actually reaches a designer working
+         in another window is a notification. Asked for here, in the box about
+         updates, because Chrome only grants inside a click and this is where
+         the person is already thinking about the question. Optional, so
+         nothing breaks if the answer is no. -->
+    <button id="unotify" class="unotify" hidden></button>
     <details class="umanual">
       <summary>Do it by hand instead</summary>
       <div class="ustep"><b>1</b><button id="udl">⬇ Download the latest</button>

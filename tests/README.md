@@ -1,0 +1,56 @@
+# tests
+
+The regression suite. It lives **in the repository** — it used to live in a
+scratch directory outside it, and on 2026-08-18 that directory was cleared
+between sessions and roughly 150 suites went with it. Code that is worth
+keeping is code that is committed.
+
+`pack.sh` builds the store ZIP from a whitelist, so nothing here is ever
+shipped to a browser.
+
+## Running
+
+Playwright drives a real Chrome with the extension loaded. Headless cannot
+load extensions, so the display comes from xvfb, and Playwright is installed
+globally in this environment:
+
+```sh
+cd tests
+NODE_PATH=/opt/node22/lib/node_modules xvfb-run -a node updnote-e2e.js
+```
+
+Pure-Node suites need neither:
+
+```sh
+node tests/encoding-test.js
+```
+
+## What is here
+
+| file | what it holds to |
+| --- | --- |
+| `encoding-test.js` | no shipped file carries a Unicode noncharacter (Chrome refuses the whole manifest over one), the ship list is real, the manifest parses |
+| `updnote-e2e.js` | a new version reaches the person: one owner for the toolbar badge, the repo asked on a timer, an optional notification said once per version |
+| `menuimport-e2e.js` | Import lives on the list's right-click menu and really opens a file picker, landing rows in the list the menu was opened on |
+| `panelshot.js` | draws the panel (Collector and Products) to `shot-panel-*.png` — for looking, not asserting |
+| `panelgeo.js` | prints the geometry of the panel's controls |
+| `updnote-probe.js` | prints what the browser currently says about a new version |
+
+## Rebuilding what was lost
+
+The suites named throughout `CLAUDE.md` — `panelui-e2e`, `compact-e2e`,
+`health-test`, `label-test`, `shapes-e2e`, `goal-e2e` and the rest — are gone.
+Each is worth rebuilding at the moment its area is next touched, against the
+contract described in the charter entry that introduced it, rather than all at
+once from memory: a test rebuilt without re-deriving what it was guarding
+passes without guarding anything.
+
+## The rule that made these worth writing
+
+A new test must **fail on the code before the fix**. Check it:
+
+```sh
+git stash -q && (cd tests && NODE_PATH=/opt/node22/lib/node_modules xvfb-run -a node <file>) ; git stash pop
+```
+
+Run `git stash pop` from the repository root, not from `tests/`.

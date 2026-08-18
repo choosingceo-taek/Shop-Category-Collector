@@ -1036,7 +1036,56 @@
     if (await knownFolder(false) && await checkNewer()) $("#uauto").click();
   });
 
+  /* Being told, rather than having to look.
+
+     The toolbar badge only reaches someone whose eyes are already on the
+     toolbar, and this panel is shut nearly all the time — so on its own the
+     notice depended on the designer wondering, unprompted, whether there was a
+     new version. Chrome can raise a real notification instead, and that is the
+     only thing here that arrives while they are working in another window.
+
+     It is an optional permission asked for by this click. Requiring it would,
+     the day this ships through the Web Store, disable Market Lens on every
+     teammate's browser until they re-accepted it — which is the very update
+     friction this is meant to remove. Declining costs nothing: the badge and
+     the chip carry on exactly as before. */
+  async function hasNotify() {
+    return new Promise(r => {
+      try { chrome.permissions.contains({ permissions: ["notifications"] }, v => r(!!v)); }
+      catch (e) { r(false); }
+    });
+  }
+
+  /* Held here because the click below must not await anything before it asks:
+     Chrome grants a permission only inside the gesture, and the first await
+     spends it. The box is repainted whenever it opens, so this is current. */
+  let notifyOn = false;
+
+  async function paintNotify() {
+    const b = $("#unotify");
+    if (!b) return;
+    const on = notifyOn = await hasNotify();
+    b.hidden = false;
+    b.classList.toggle("on", on);
+    b.textContent = on
+      ? "✓ Chrome will tell you when a new version is out — press to stop"
+      : "🔔 Tell me when a new version is out";
+    b.title = on
+      ? "Turning this off removes the permission; the toolbar badge stays either way"
+      : "Chrome will show a notification once for each new version, even with this panel closed";
+  }
+
+  $("#unotify") && $("#unotify").addEventListener("click", () => {
+    const done = () => { void chrome.runtime.lastError; paintNotify(); };
+    try {
+      // called straight out of the click — nothing awaited first
+      if (notifyOn) chrome.permissions.remove({ permissions: ["notifications"] }, done);
+      else chrome.permissions.request({ permissions: ["notifications"] }, done);
+    } catch (e) { paintNotify(); }
+  });
+
   function refreshUpdBox() {
+    paintNotify();
     const foot = $("#ufoot");
     foot.textContent = `You are running v${running}. Checking…`;
     chrome.storage.local.get("wpb_filesready", o => {
