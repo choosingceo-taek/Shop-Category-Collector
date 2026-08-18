@@ -308,6 +308,9 @@
      address is identity, not reading matter — it lives in the row's tooltip
      (user request: the list shows brand and category, nothing else). */
   .ent .lb { font-size:11.5px; line-height:1.45; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* No name yet — said as a prompt rather than dressed up as one. The host
+     used to stand in here, which reads like a category and is not one. */
+  .ent.noname .lb { color:var(--muted); font-style:italic; }
   /* Scan is the norm and needs no label; only the exceptions are marked. */
   .ent .tag { font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
     border:1px solid var(--line2); border-radius:var(--r); padding:1px 6px; flex:none; }

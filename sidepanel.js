@@ -391,8 +391,19 @@
       return;
     }
     const shown = [...groups.values()].reduce((n, r) => n + r.length, 0);
-    $("#lsum").textContent = q ? `${shown} of ${entries.length}`
-      : `${entries.length} sites · ${groups.size} brands`;
+    /* Unnamed rows are counted out loud. The name is what the analysis reads to
+       tell a New In page from a shelf, so a row without one is collected but
+       never analysed — a quiet subtraction, and those are the ones that cost
+       trust. */
+    const unnamed = entries.filter(e => !String(e.label || "").trim()).length;
+    $("#lsum").textContent = (q ? `${shown} of ${entries.length}`
+      : `${entries.length} sites · ${groups.size} brands`) +
+      (unnamed && !q ? ` · ${unnamed} unnamed` : "");
+    $("#lsum").title = unnamed
+      ? `${unnamed} page${unnamed === 1 ? " has" : "s have"} no name yet. ` +
+        "The analysis reads the name to tell a New In page from a shelf, so " +
+        "they are collected but left out of the LAB until one is given."
+      : "";
     // nothing to fold when every site is one brand
     $("#lfold").hidden = groups.size < 2;
 
@@ -410,11 +421,18 @@
       <div class="gbody">${rows.map(({ e, i }) => {
         const qi = qIdx(e);
         const cls = running ? (qi > -1 && qi < queue.idx ? " done" : qi === queue.idx ? " cur" : "") : "";
-        // Brand and category are the reading matter (user request); the address
-        // is identity only, so it lives in the tooltip and the ↗ button.
-        return `<div class="ent${cls}" data-i="${i}" title="${esc(e.url)}">
+        /* Brand and category are the reading matter (user request); the address
+           is identity only, so it lives in the tooltip and the ↗ button.
+
+           A row with no name used to fall back to the host, which READS like a
+           category and is not one — and the cost is invisible: the analysis
+           decides what is a New In page from this word, so an unnamed row
+           quietly leaves the LAB while looking perfectly filed. It says what it
+           is instead, and the ✎ beside it is the fix. */
+        const named = String(e.label || "").trim();
+        return `<div class="ent${cls}${named ? "" : " noname"}" data-i="${i}" title="${esc(e.url)}">
           <div class="txt">
-            <div class="lb">${esc(e.label || hostOf(e.url) || e.url)}</div>
+            <div class="lb">${named ? esc(named) : "Name this page"}</div>
           </div>
           ${e.scannable === false ? '<span class="tag">Ref</span>'
             : e.scannable ? '<span class="tag on">Scan</span>'
