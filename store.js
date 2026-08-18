@@ -259,6 +259,26 @@
     return b;
   }
 
+  /* The category column has the same problem, and it is the other key the
+     Excel and the LAB group by.
+
+     Shops hang an id on the end of a category address — lululemon's
+     /n14f1wz6o10, nike's -3n82yz5e1x6z9om13 — and it reached the column
+     through the list entry's label. A key in there splits one page into as
+     many groups as it has ids, exactly as a style code did to brands.
+
+     Repaired on write and on read, so rows collected before this stop being
+     their own group the next time the LAB opens — no migration, no re-scan.
+     What is left when the id goes is kept; when nothing is left, the column is
+     empty, which is honest and which the designer's own label overrides. */
+  function cleanCategory(cat) {
+    const c = String(cat == null ? "" : cat).trim();
+    if (!c) return "";
+    const api = self.ScanLists;
+    if (!api || !api.stripCodes) return c;
+    return api.stripCodes(c) || "";
+  }
+
   // Merge an incoming row over the stored one. A re-scan should refresh prices
   // and fill gaps WITHOUT wiping a field the new scan happened to miss —
   // otherwise a partial run degrades good data already in the catalog.
@@ -268,10 +288,12 @@
     if (out.image_url) out.image_url = cleanImage(out.image_url);
     // a style-code "brand" counts as a gap too, so a real one can land in it
     if (out.brand) out.brand = cleanBrand(out.brand, out.product_url || out.url);
+    if (out.category) out.category = cleanCategory(out.category);
     Object.keys(incoming).forEach(k => {
       let v = incoming[k];
       if (k === "image_url") v = cleanImage(v);
       if (k === "brand") v = cleanBrand(v, incoming.product_url || incoming.url || out.product_url);
+      if (k === "category") v = cleanCategory(v);
       if (v === "" || v == null) return;             // never overwrite with blank
       out[k] = v;
     });
@@ -338,6 +360,8 @@
       if (!r) return;
       const fixed = cleanBrand(r.brand, r.product_url || r.url);
       if (fixed !== r.brand) r.brand = fixed;
+      const cat = cleanCategory(r.category);
+      if (cat !== r.category) r.category = cat;
     });
     return rows;
   });
@@ -594,7 +618,7 @@
     appendRunRows, getRunRows, clearRunRows,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
     pruneOlderThan, usage, exportAll, importAll,
-    clearAll, productKey, merge, dedupe, cleanImage, cleanBrand };
+    clearAll, productKey, merge, dedupe, cleanImage, cleanBrand, cleanCategory };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;
 })(typeof self !== "undefined" ? self : this);

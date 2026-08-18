@@ -307,6 +307,27 @@
      "Women's T-shirts"). Only segments that repeat the brand/domain or are
      pure storefront wording are dropped, so a real category that happens to
      contain a dash survives untouched. */
+  /* A word a shop generated, not a word a person wrote.
+
+     Shops hang an opaque id on the end of a category address — lululemon's
+     /c/women-whats-new/n14f1wz6o10, nike's /w/new-womens-tops-t-shirts-
+     3n82yz5e1x6z9om13 — and it arrives in the row as part of the name. It is
+     not a category, it is a database key, and the Excel and the LAB group by
+     that column.
+
+     The test is deliberately narrow, because throwing away a real name is
+     worse than keeping a code: at least six characters, at least two digits
+     AND at least two letters. That is every id these shops mint and no word a
+     designer types — "1990s" has one letter, "y2k" and "90s" are too short,
+     "501" and "3/4" have no letters at all, and they all survive. */
+  function isCodeWord(w) {
+    const s = String(w || "");
+    if (s.length < 6) return false;
+    return (s.match(/\d/g) || []).length >= 2 && (s.match(/[a-z]/gi) || []).length >= 2;
+  }
+  const stripCodes = text => String(text || "")
+    .split(/\s+/).filter(w => w && !isCodeWord(w)).join(" ").trim();
+
   function cleanLabel(raw, brand, host) {
     const norm = x => String(x || "").toLowerCase().replace(/[^a-z0-9가-힣]+/g, "");
     const bn = norm(brand);
@@ -319,7 +340,8 @@
       if (boiler || (bn && ln.includes(bn)) || (stem && ln.includes(stem))) segs.pop();
       else break;
     }
-    return segs.join(" · ").slice(0, 60);
+    // and never a shop's own id, wherever in the name it turned up
+    return stripCodes(segs.join(" · ")).slice(0, 60);
   }
 
   /* A category name taken from the address, for rows that never got one.
@@ -343,7 +365,10 @@
       // like /n1jux6 or /cat90030. No separator plus a digit means a code, so
       // keep walking up the path to the segment a human wrote.
       if (!/[-_+]/.test(s) && /\d/.test(s)) continue;
-      const words = s.replace(/[-_+]+/g, " ").replace(/\b[a-z]?\d{3,}\b/gi, "").trim();
+      /* The id is not always a segment of its own: nike writes the whole
+         category and the key as one slug, /w/new-womens-tops-t-shirts-
+         3n82yz5e1x6z9om13, so a name has to be cleaned as well as chosen. */
+      const words = stripCodes(s.replace(/[-_+]+/g, " ").replace(/\b[a-z]?\d{3,}\b/gi, "")).trim();
       if (words.length < 2) continue;
       return words.replace(/\s+/g, " ").replace(/\b\w/g, c => c.toUpperCase()).slice(0, 60);
     }
@@ -416,6 +441,7 @@
   const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl,
     toText, toGrid, GRID_HEADER, tierOf, tierMap, load, save, KEY,
     brandFromHost, cleanLabel, brandFor, PLATFORM_LABEL, labelFromUrl, looksLikeUrl,
+    isCodeWord, stripCodes,
     nextRun, scheduleLabel, DAY_NAMES };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.ScanLists = API;

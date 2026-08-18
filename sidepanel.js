@@ -195,10 +195,16 @@
       if (!brand.trim() || L.PLATFORM_LABEL.test(brand.trim())) {
         brand = brandFromHost(hostOf(e.url));
       }
-      // A row has to read as a category. An address never did — it is the
-      // identity of the page, not what the designer is watching there.
-      let label = cleanLabel(e.label, brand, hostOf(e.url)) || e.label || "";
-      if (!label.trim() || L.looksLikeUrl(label)) label = L.labelFromUrl(e.url) || label;
+      /* A row has to read as a category. An address never did — it is the
+         identity of the page, not what the designer is watching there — and
+         neither does a shop's own id, which is what lululemon and nike hang on
+         the end of a category address.
+
+         The cleaned label is taken even when it comes back EMPTY: falling back
+         to the stored one would put the id straight back, which is how
+         "n14f1wz6o10" survived every reload. Empty means "ask the address". */
+      let label = cleanLabel(e.label, brand, hostOf(e.url));
+      if (!label.trim() || L.looksLikeUrl(label)) label = L.labelFromUrl(e.url);
       if (brand !== e.brand || label !== e.label) { e.brand = brand; e.label = label; changed++; }
     }));
     return changed;                 // the caller saves — see loadLists
