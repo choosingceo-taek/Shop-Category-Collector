@@ -29,16 +29,28 @@
        canvas, and a single rust flag for state. The panel, the LAB and the
        sheet a designer sends on are one product, so they are one palette —
        and a magazine's radius is nothing at all. */
-    --bg:#f5f5f5; --card:#fff; --ink:#000; --ink2:#1a1a1a; --muted:#757575;
-    --line:#e0e0e0; --line2:#d0d0d0; --hard:#000; --wash:#f5f5f5;
+    /* Softened a step, and only in temperature and radius — the structure is
+       untouched. Pure #000 on #f5f5f5 with nothing rounded reads as a printed
+       form; a near-black on a lighter ground, hairlines a shade lighter and a
+       real corner radius read as a tool. Every one of these is a token, which
+       is the test of whether this is a palette at all: the whole panel was
+       redrawn in three of them without one new rule.
+
+       The ground stays ACHROMATIC on purpose. v1.98.0 took out a warm greige
+       for a reason that has not changed — PRODUCTS is a wall of garment
+       photographs, and a tool whose job is judging their colour must put no
+       colour of its own beside them. */
+    --bg:#f7f7f7; --card:#fff; --ink:#151515; --ink2:#2a2a2a; --muted:#6f6f6f;
+    --line:#ececec; --line2:#dedede; --hard:#1a1a1a; --wash:#f7f7f7;
     --overlay:rgba(0,0,0,.45);
-    /* The only colour left, and it is spent on state alone: a run in
-       progress, the row being scanned. */
-    --accent:#8a3c17; --accent2:#757575;
-    --cta:#000; --cta-ink:#fff; --cta-hi:#000;
+    /* The only colour, and it is spent on state alone: a run in progress, the
+       row being scanned. Now the same orange the dashboard is set in, so the
+       one accent in the product is one accent. */
+    --accent:#ff5c35; --accent2:#6f6f6f;
+    --cta:#1a1a1a; --cta-ink:#fff; --cta-hi:#000;
     --serif: ui-serif, Georgia, "Times New Roman", "Apple SD Gothic Neo", serif;
-    --r:0;                          /* squared, like a printed page */
-    --r-s:0;
+    --r:10px;
+    --r-s:8px;
   }
   * { box-sizing:border-box; }
   /* Opened as a tab — the fallback on a browser with no side panel — the same
@@ -117,7 +129,10 @@
      should be solid. */
   .tabs { display:flex; gap:0; flex:1; min-width:0; border:0;
     border-bottom:1px solid var(--line); }
-  .tab { flex:1; border:0; border-bottom:2px solid transparent; background:none;
+  /* An underline, not a box — so it keeps square corners while the rest of
+     the panel rounds, and its focus ring hugs the word instead of drawing a
+     second, larger tab above it. */
+  .tab { flex:1; border:0; border-radius:0; border-bottom:2px solid transparent; background:none;
     padding:9px 0 8px; font:700 12.5px/1 Helvetica,Arial,sans-serif;
     letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
   .tab:hover:not(.on) { color:var(--ink2); }
