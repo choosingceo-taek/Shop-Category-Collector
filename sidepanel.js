@@ -976,7 +976,7 @@
      Three steps, each with the button that performs it: fetch the zip, replace
      the folder, reload. Step 3 can be opened from here — an extension may open
      chrome://extensions itself (checked, not assumed). */
-  const ZIP_URL = "https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip";
+  const ZIP_URL = "https://github.com/choosingceo-taek/Shop-Category-Collector/releases/latest/download/market-lens.zip";
   const running = chrome.runtime.getManifest().version;
   $("#verchip").textContent = "v" + running;
 

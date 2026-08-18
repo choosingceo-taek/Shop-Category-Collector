@@ -35,7 +35,7 @@ on:
         options: [default, trustedTesters]
 
 permissions:
-  contents: read
+  contents: write        # to publish the release the team downloads from
 
 jobs:
   publish:
@@ -60,6 +60,45 @@ jobs:
           name: market-lens-${{ steps.v.outputs.version }}
           path: dist/*.zip
           if-no-files-found: error
+
+      # A stable download for the team, and one less trap.
+      #
+      # A GitHub branch archive wraps everything in a folder named after the
+      # branch, and picking that wrapper instead of the folder inside it is the
+      # single most common way this install goes wrong. pack.sh already builds
+      # a FLAT zip -- the extension at the root -- so publishing that as a
+      # release asset means: download, unzip, load the folder you unzipped.
+      # There is no inner folder to find, and the link never changes:
+      #     .../releases/latest/download/market-lens.zip
+      #
+      # curl and the token the job already has, because a release asset is code
+      # on its way to every teammate's browser and that is not a supply chain
+      # to lend to a third-party action.
+      - name: Publish the release the team downloads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -e
+          cp "dist/market-lens-$VERSION.zip" dist/market-lens.zip
+          API="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          TAG="v$VERSION"
+          ID=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" "$API/releases/tags/$TAG" \
+            | python3 -c "import sys,json;print(json.load(sys.stdin).get('id',''))" || true)
+          if [ -z "$ID" ]; then
+            ID=$(curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" "$API/releases" \
+              -d "{\"tag_name\":\"$TAG\",\"name\":\"Market Lens $VERSION\",\"body\":\"Unzip and load the folder in chrome://extensions with Developer mode on.\"}" \
+              | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+          fi
+          OLD=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" "$API/releases/$ID/assets" \
+            | python3 -c "import sys,json;print(next((a['id'] for a in json.load(sys.stdin) if a['name']=='market-lens.zip'),''))")
+          if [ -n "$OLD" ]; then
+            curl -sS -X DELETE -H "Authorization: Bearer $GH_TOKEN" "$API/releases/assets/$OLD" >/dev/null
+          fi
+          curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/zip" \
+            --data-binary @dist/market-lens.zip \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$ID/assets?name=market-lens.zip" >/dev/null
+          echo "::notice::Published $TAG with a flat market-lens.zip"
 
       - name: Stop here if the store credentials are not set up yet
         id: gate

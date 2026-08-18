@@ -17,7 +17,7 @@
 # ============================================================================
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
-URL="https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip"
+URL="https://github.com/choosingceo-taek/Shop-Category-Collector/releases/latest/download/market-lens.zip"
 TMP="$(mktemp -d)"
 
 fail() {

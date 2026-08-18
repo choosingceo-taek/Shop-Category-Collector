@@ -20,7 +20,13 @@
   const OWNER_REPO = "choosingceo-taek/Shop-Category-Collector";
   const BRANCH = "claude/main-session-cudnkx";
   const SRC = `https://raw.githubusercontent.com/${OWNER_REPO}/${BRANCH}/manifest.json`;
-  const ZIP = `https://github.com/${OWNER_REPO}/archive/refs/heads/${BRANCH}.zip`;
+  /* The release asset, not the branch archive. A branch archive wraps the
+     extension in a folder named after the branch, and choosing that wrapper
+     instead of the folder inside it is the commonest way this install goes
+     wrong — and the commonest way a catalog is lost, since an unpacked
+     extension's identity is its path. The release asset is flat: unzip it and
+     the folder you unzipped IS the extension. The link never moves. */
+  const ZIP = `https://github.com/${OWNER_REPO}/releases/latest/download/market-lens.zip`;
 
   // "1.42.0" vs "1.9.3" — numeric per segment, so 42 > 9 (string compare lies)
   function cmp(a, b) {

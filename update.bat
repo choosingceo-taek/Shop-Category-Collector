@@ -14,7 +14,7 @@ rem  tabs you already have open.
 rem ===========================================================================
 setlocal
 set "DIR=%~dp0"
-set "URL=https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip"
+set "URL=https://github.com/choosingceo-taek/Shop-Category-Collector/releases/latest/download/market-lens.zip"
 set "ZIP=%TEMP%\marketlens.zip"
 set "OUT=%TEMP%\marketlens_unpacked"
 

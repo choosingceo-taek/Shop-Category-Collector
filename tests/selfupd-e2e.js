@@ -23,16 +23,27 @@ const ok = (n, c, x) => { if (c) { pass++; console.log("  ok  " + n); } else { f
 const TARGET = "/tmp/ml-target";     // the folder the update is written into
 const ZIPDIR = "/tmp/ml-zip";
 
-/* A zip GitHub would serve: one wrapper folder, then the extension. */
-function makeZip(version) {
-  execSync(`rm -rf ${ZIPDIR} && mkdir -p ${ZIPDIR}/Shop-Category-Collector-branch`);
-  execSync(`cd ${REPO} && git ls-files | tar -cf - -T - | tar -x -C ${ZIPDIR}/Shop-Category-Collector-branch`);
-  const mf = `${ZIPDIR}/Shop-Category-Collector-branch/manifest.json`;
+/* Two shapes of zip, because the download moved.
+
+   `flat` is what the release asset is — pack.sh's output, the extension at the
+   root, so unzipping it gives a folder that IS the extension and nobody has to
+   hunt for an inner one. `wrapped` is what a GitHub branch archive is, one
+   folder named after the branch. Copies installed before the link changed
+   still fetch the wrapped kind, so both have to land correctly. */
+function makeZip(version, shape) {
+  const inner = shape === "flat" ? "" : "/Shop-Category-Collector-branch";
+  execSync(`rm -rf ${ZIPDIR} && mkdir -p ${ZIPDIR}${inner}`);
+  execSync(`cd ${REPO} && git ls-files | tar -cf - -T - | tar -x -C ${ZIPDIR}${inner}`);
+  const mf = `${ZIPDIR}${inner}/manifest.json`;
   const m = JSON.parse(fs.readFileSync(mf, "utf8"));
   m.version = version;
   fs.writeFileSync(mf, JSON.stringify(m, null, 2));
-  execSync(`cd ${ZIPDIR} && rm -rf Shop-Category-Collector-branch/tests && zip -qr out.zip Shop-Category-Collector-branch`);
-  return fs.readFileSync(`${ZIPDIR}/out.zip`);
+  execSync(`cd ${ZIPDIR}${inner} && rm -rf tests dist`);
+  execSync("rm -f /tmp/ml-out.zip");     // zip APPENDS to an existing archive
+  execSync(shape === "flat"
+    ? `cd ${ZIPDIR} && zip -qr /tmp/ml-out.zip . -x out.zip`
+    : `cd ${ZIPDIR} && zip -qr /tmp/ml-out.zip Shop-Category-Collector-branch`);
+  return fs.readFileSync("/tmp/ml-out.zip");
 }
 
 (async () => {
@@ -41,7 +52,7 @@ function makeZip(version) {
   fs.writeFileSync(`${TARGET}/manifest.json`,
     JSON.stringify({ manifest_version: 3, name: "Market Lens", version: "1.0.0" }));
 
-  const zip = makeZip("99.9.0");
+  const zip = makeZip("99.9.0", "flat");
   const ctx = await chromium.launchPersistentContext("/tmp/pw-selfupd", {
     executablePath: "/opt/pw-browsers/chromium", headless: false,
     args: [`--disable-extensions-except=${REPO}`, `--load-extension=${REPO}`, "--no-sandbox"] });
@@ -129,8 +140,8 @@ function makeZip(version) {
   });
   ok("the new files are really in the folder", wrote.count > 15 && wrote.hasEngine,
     JSON.stringify(wrote));
-  ok("…and the wrapper folder GitHub adds was stripped", wrote.ver === "99.9.0",
-    JSON.stringify(wrote));
+  ok("…at the top of the folder, from the flat release asset",
+    wrote.ver === "99.9.0", JSON.stringify(wrote));
 
   /* It must not try the same version again and again on every open. */
   const tried = await panel.evaluate(() => new Promise(r =>
@@ -177,6 +188,22 @@ function makeZip(version) {
   ok("…and it can be turned off there",
     /install updates by itself/i.test(await panel.locator("#uselfupd").innerText()),
     await panel.locator("#uselfupd").innerText());
+
+  /* A copy installed before the link moved still asks for the branch archive,
+     and that one is wrapped. Both shapes must land the same way, or the first
+     automatic update after this change writes a folder inside the folder. */
+  const wrapped = makeZip("99.8.0", "wrapped");
+  const landed = await panel.evaluate(async bytes => {
+    const dir = await window.__mlFolderReady;
+    const I = window.LensInstaller;
+    const out = await I.install(dir, new Uint8Array(bytes).buffer, () => {});
+    const names = [];
+    for await (const [n] of dir.entries()) names.push(n);
+    return { version: out.version, top: names.includes("manifest.json"),
+      nested: names.some(n => /Shop-Category-Collector/.test(n)) };
+  }, Array.from(wrapped));
+  ok("a wrapped archive still lands at the top of the folder",
+    landed.version === "99.8.0" && landed.top && !landed.nested, JSON.stringify(landed));
 
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);

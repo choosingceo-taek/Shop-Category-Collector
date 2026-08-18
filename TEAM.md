@@ -3,25 +3,25 @@
 브라우징하다 발견한 카테고리 페이지를 리스트로 모으고, 그 리스트를 한 번에 스캔해
 **브랜드 · 카테고리 · 상품명 · 썸네일 · URL · 원단 · 혼용률** 엑셀을 만드는 도구입니다.
 
-설치는 **한 번, 약 5분**입니다. 그 뒤로는 업데이트도 알아서 됩니다.
+설치는 **한 번, 약 3분**입니다. 그 뒤로는 업데이트도 알아서 됩니다.
 
 ---
 
 ## 1. 설치 (한 번만)
 
-1. **[ZIP 받기](https://github.com/choosingceo-taek/Shop-Category-Collector/archive/refs/heads/claude/main-session-cudnkx.zip)**
-2. 압축을 풉니다. 폴더가 한 겹 더 생기는데, **`manifest.json`이 바로 들어 있는 안쪽 폴더**가 진짜입니다.
-3. 그 폴더를 **앞으로 옮기지 않을 자리**에 둡니다.
-   예: `문서\Market Lens\` — 바탕화면 임시 폴더는 피하세요. (아래 *데이터* 참고)
-4. 크롬 주소창에 `chrome://extensions` → 오른쪽 위 **개발자 모드** 켜기
-5. **압축해제된 확장 프로그램을 로드** → 3번의 폴더 선택
-6. 툴바 퍼즐 아이콘 → **Market Lens** 옆 압정을 눌러 고정
+1. **[market-lens.zip 받기](https://github.com/choosingceo-taek/Shop-Category-Collector/releases/latest/download/market-lens.zip)**
+2. **`문서\Market Lens\`** 같은, 앞으로 옮기지 않을 자리에 폴더를 하나 만들고
+   **거기에 압축을 풉니다.** 그 폴더가 곧 확장입니다 — 안쪽 폴더를 더 찾을 필요
+   없습니다. (바탕화면 임시 폴더는 피하세요. 이유는 아래 *데이터*)
+3. 크롬 주소창에 `chrome://extensions` → 오른쪽 위 **개발자 모드** 켜기
+4. **압축해제된 확장 프로그램을 로드** → 2번의 폴더 선택
+5. 툴바 퍼즐 아이콘 → **Market Lens** 옆 압정을 눌러 고정
 
 ### 설치 직후 한 번만 해두면 좋은 것
 
 Market Lens를 열고 **오른쪽 위 버전 번호**(`v3.20.0`)를 누르면 상자가 열립니다.
 
-- **📂 Choose my Market Lens folder** → 3번의 그 폴더를 지정
+- **📂 Choose my Market Lens folder** → 2번의 그 폴더를 지정
   → 이걸 해두면 **새 버전이 나올 때 패널만 열어도 알아서 설치**됩니다.
 - **🔔 Tell me when a new version is out** → 크롬이 새 버전을 알려줍니다.
 
