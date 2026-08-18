@@ -513,6 +513,21 @@ function healthMark(rec) {
    The middle one is the whole point. "no fabric on any of the 30" could mean
    any of the three, so it sent the last three rounds of photo bugs looking in
    the wrong place; quoting the shop's own sentence back ends that. */
+/* A product page that has not been built yet.
+
+   Fetching gives the document the server sent; a page whose content is drawn
+   by scripts afterwards arrives as a shell, and reading "no composition" off
+   it is reading our own request, not the shop. Two facts settle it, and both
+   are already in the probe: hardly any text, and no structured product data.
+   Recorded by diagnoseDetail as textLen. */
+function looksLikeShell(d) {
+  d = d || {};
+  if (d.textLen == null) return false;                 // probed before this existed
+  const types = (d.ld && d.ld.types) || [];
+  const hasProduct = types.some(t => /product/i.test(String(t)));
+  return d.textLen < 400 && !hasProduct;
+}
+
 function fabricBecause(d) {
   d = d || {};
   const st = d.pdpStatus || (d.js && d.js.status) || 0;
@@ -533,6 +548,17 @@ function fabricBecause(d) {
   }
   if (d.js && d.js.descPct) {
     return ` — but the shop's own product data states one, so this is ours to fix`;
+  }
+  /* "The page does not state one" is only true of the page a PERSON sees. What
+     we fetched may be a shell that scripts fill in afterwards — Alo's product
+     pages arrive with almost no text in them — and blaming the shop for that
+     sends the next round looking at the wrong thing. The shell is
+     recognisable: a product page that says almost nothing and carries no
+     structured product data is not a product page yet. */
+  if (looksLikeShell(d)) {
+    return ` — its product page arrives nearly empty and is filled in by scripts ` +
+      `afterwards, so fetching it cannot see the blend. This is ours: the page has ` +
+      `to be read in a tab, not fetched`;
   }
   return ` — its product page does not state one anywhere either, so there was nothing to read`;
 }
@@ -694,6 +720,11 @@ async function diagnoseDetail(item) {
       // every place the served page says "<number>%" near words — the raw
       // sightings the composition parser would have to read
       const text = (doc.body && doc.body.textContent || "").replace(/\s+/g, " ");
+      /* How much of a page actually arrived. A product page that scripts build
+         afterwards comes back nearly empty, and without this the report says
+         the shop states no composition when what it means is that we fetched
+         a shell. */
+      out.textLen = text.trim().length;
       out.pctRuns = (text.match(/[^%\d]{0,30}\d{1,3}\s?%[^\d]{0,40}/g) || [])
         .map(s => clip(s, 70)).filter(s => /[A-Za-z가-힣]/.test(s)).slice(0, 4);
     }
@@ -1104,6 +1135,30 @@ async function runStep(j) {
       return;
     }
     // Lazily-rendered grids (Target): tiles only render as you scroll, so at
+    /* The control that hands out the next tray of products.
+       Matched on its own words and nothing else — a closed list, because the
+       one thing worse than not finding it is pressing something else on a
+       shop's page. "Add to bag", "Sign up", "Apply filters" and every other
+       button on a listing page say none of these.
+       It has to be visible and it has to be small: a whole section that
+       happens to contain the phrase is not the button. */
+    // eslint-disable-next-line no-inner-declarations
+    function findLoadMore() {
+      const WORDS = /^(load|show|view|see)\s+(\d+\s+)?more(\s+(products?|items?|styles?|results?))?$|^more(\s+(products?|items?))?$|^더\s?보기$|^더\s?많은\s?상품$/i;
+      const cands = document.querySelectorAll(
+        'button, a[role="button"], [role="button"], input[type="button"], input[type="submit"]');
+      for (const el of cands) {
+        if (el.disabled || el.getAttribute("aria-disabled") === "true") continue;
+        const t = (el.innerText || el.value || el.getAttribute("aria-label") || "")
+          .replace(/\s+/g, " ").trim();
+        if (!t || t.length > 40 || !WORDS.test(t)) continue;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) continue;                  // not on the page
+        if (getComputedStyle(el).visibility === "hidden") continue;
+        return el;
+      }
+      return null;
+    }
     // load time just the first viewport-full exists (e.g. 14 of 24/97). Scroll
     // to the bottom repeatedly until the tile count AND page height stop
     // growing, THEN scrape — no selectors involved, the site renders itself.
@@ -1111,6 +1166,7 @@ async function runStep(j) {
       // adapter may set a number = max scroll rounds (infinite-scroll sites like
       // Zara hold whole categories on one page and need more than Target's 20)
       const rounds = typeof a.lazyScroll === "number" ? a.lazyScroll : 20;
+      const MORE_PRESSES = 8;
       let lastN = -1, lastH = -1, stable = 0;
       /* A grid that is already fully rendered still has to prove it is, so it
          pays the stability rounds every time — three of them, and at 700ms
@@ -1125,6 +1181,19 @@ async function runStep(j) {
          them" from "the trigger went past us". */
       let said = 0;
       try { said = (a.resultCount && a.resultCount(document)) || 0; } catch (e) {}
+      /* Nothing has rendered YET is not the same as nothing is there.
+         adidas and nike paint their grids from JavaScript after the document
+         is ready, and the stability test could not tell the difference: zero
+         equals zero equals zero, so two looks — under a second and a half —
+         and the scan reported an empty page with no grid on it. The band then
+         said the shop had sent nothing, which was our clock talking.
+         A grid that really is absent pays this wait once, at the end of a
+         scan that was going to fail anyway. */
+      const ZERO_GRACE = 9000;
+      const startedAt = Date.now();
+      /* Some grids hand out the rest on a press rather than on a scroll, and
+         nothing here had ever pressed anything. */
+      let pressed = 0;
       let i = 0;
       for (; i < rounds && stable < 2; i++) {
         /* Step down a screen at a time rather than jumping to the bottom.
@@ -1149,6 +1218,15 @@ async function runStep(j) {
         const h = document.body.scrollHeight;
         if (n === lastN && h === lastH) stable++; else { stable = 0; if (lastN >= 0 && n > lastN) grew = true; }
         lastN = n; lastH = h;
+        /* Still nothing, and there is time left: keep looking instead of
+           calling the page empty. The round budget is not spent on waiting —
+           an app that takes four seconds to paint would otherwise use up every
+           round before its first tile exists. */
+        if (!n && Date.now() - startedAt < ZERO_GRACE) {
+          stable = 0; i--;
+          await report(`Waiting for the grid… ${Math.round((Date.now() - startedAt) / 1000)}s`);
+          continue;
+        }
         /* Scrolling only downward can pass a trigger for good: a grid that
            hands out more when a marker enters the viewport gets one chance at
            it, and if anything tall sits below the grid — a long footer is
@@ -1160,6 +1238,27 @@ async function runStep(j) {
         /* Sweep again while the page still says it is holding more. Bounded
            by the round budget and by our own 60 cap, so a shop that claims
            thousands cannot turn this into an endless crawl. */
+        /* Some grids do not listen to the scroll at all — they hand out the
+           next tray when a button is pressed. Nothing here had ever pressed
+           one, so those shops came back with whatever the first screen held:
+           4 of the 66 the page said it was showing, 40 of 269. Scrolling can
+           never fix that, however many sweeps it takes.
+
+           Only while we are short of the shop's own count, and only a bounded
+           number of times, so this cannot become a crawl. */
+        if (stable >= 2 && short && pressed < MORE_PRESSES) {
+          const btn = findLoadMore();
+          if (btn) {
+            /* A press is progress, not a probe, so it does not spend a round.
+               A grid that opens twelve at a time would otherwise run out of
+               budget long before it ran out of products. */
+            pressed++; stable = 0; grew = true; i--;
+            btn.click();
+            await report(`Loading all items… ${n} rendered, asked for more`);
+            await sleep(1200);
+            continue;
+          }
+        }
         if (stable >= 2 && (grew || short) && sweeps < 4) {
           sweeps++; stable = 0;
           window.scrollTo(0, 0);
@@ -1181,7 +1280,13 @@ async function runStep(j) {
          worst thing this tool can do: the spreadsheet looks whole. The cap is
          a deliberate stop (60 is one research pass); running out of rounds is
          not. */
-      if (!capped && stable < 2 && grew && i >= rounds) j.moreWaiting = true;
+      /* …unless the shop's own count says we have it all. Running out of
+         rounds on the last look of a grid that handed over every one of the
+         40 it advertised is not a half scan, and reporting it as one puts a
+         mark on a shop that behaved perfectly — the same crying-wolf that
+         made the drop-name warning worthless. */
+      const gotItAll = said && lastN >= said;
+      if (!capped && !gotItAll && stable < 2 && grew && i >= rounds) j.moreWaiting = true;
       /* Still fewer than the shop said it was showing, and not because of our
          own cap: the grid kept the rest. Said on the page, with both numbers,
          because a half grid that grades itself complete is the one failure
