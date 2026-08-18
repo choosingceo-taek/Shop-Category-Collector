@@ -90,9 +90,33 @@
       label: "Weave / structure",
       keysOf: it => Calc.normItem(it).nameKinds.weave.map(titleCase),
     },
+    /* How the garment sits, kept out of the detail bucket — a season that goes
+       oversized and a season that goes ruched are different findings. */
+    fit: {
+      label: "Fit",
+      keysOf: it => Calc.normItem(it).nameKinds.fit.map(titleCase),
+    },
     keyword: {
       label: "Design detail",
       keysOf: it => Calc.normItem(it).nameKinds.detail.map(titleCase),
+    },
+    /* The cloth, named the way a designer names it: the weave when the shop
+       states one (satin, poplin, jersey), otherwise the fibre that the
+       composition says the garment is mostly made of. Kept separate from the
+       `fabric` axis above — that one counts every fibre in the blend and is
+       what the stored weekly records have always held. */
+    fabricfam: {
+      label: "Fabric",
+      keysOf: it => {
+        const nk = Calc.normItem(it).nameKinds;
+        if (nk.weave.length) return nk.weave.map(titleCase);
+        const fib = Calc.parseFibers(it.fabric_composition);
+        if (fib.length) {
+          const top = fib.slice().sort((a, b) => (b.pct || 0) - (a.pct || 0))[0];
+          if (top && top.fiber) return [titleCase(top.fiber)];
+        }
+        return nk.material.length ? [titleCase(nk.material[0])] : [];
+      },
     },
     brand: { label: "Brand", keysOf: it => (it.brand ? [it.brand] : []) },
     category: { label: "Category", keysOf: it => (it.category ? [it.category] : []) },
@@ -106,16 +130,59 @@
   const DIM_KEYS = Object.keys(DIMS);
 
   // Per-bucket share (%) for every key in a dimension.
-  function sharesByBucket(buckets, dim) {
+  /* ---- what a number counts ------------------------------------------------
+
+     Two honest units, and they answer different questions.
+
+     PRODUCTS — "of everything that arrived this week, how much of it was
+     linen". Sensitive to volume: one shop that drops sixty linen pieces moves
+     the figure as much as twenty shops adopting linen.
+
+     BRANDS — "of the shops we watched this week, how many put out any linen at
+     all". One shop counts once however much it makes, so the figure answers
+     the question a designer actually proposes on: is the market moving, or is
+     one label busy. It is also what makes timing readable — the same keyword
+     climbing from four brands to twenty is a wave; sixty products from one
+     brand is a drop. */
+  const brandOf = it => String((it && it.brand) || "").trim();
+  const rosterOf = items => new Set((items || []).map(brandOf).filter(Boolean)).size;
+
+  function tallyIn(items, d, unit) {
+    const counts = new Map();
+    if (unit === "brands") {
+      const seen = new Map();                    // key -> Set(brand)
+      (items || []).forEach(it => {
+        const b = brandOf(it);
+        if (!b) return;
+        d.keysOf(it).forEach(k => {
+          if (!k) return;
+          if (!seen.has(k)) seen.set(k, new Set());
+          seen.get(k).add(b);
+        });
+      });
+      seen.forEach((set, k) => counts.set(k, set.size));
+      return counts;
+    }
+    (items || []).forEach(it => d.keysOf(it).forEach(k => {
+      if (k) counts.set(k, (counts.get(k) || 0) + 1);
+    }));
+    return counts;
+  }
+
+  function sharesByBucket(buckets, dim, unit) {
     const d = DIMS[dim] || DIMS.fabric;
     return buckets.map(b => {
-      const counts = new Map();
-      b.items.forEach(it => d.keysOf(it).forEach(k => {
-        if (k) counts.set(k, (counts.get(k) || 0) + 1);
-      }));
+      const counts = tallyIn(b.items, d, unit);
+      /* The denominator has to match the numerator. Brand counts are out of
+         the brands that produced anything that week, product counts out of the
+         products. Mixing them would put a brand count over a product total and
+         read as a collapse. */
+      const brands = rosterOf(b.items);
+      const base = unit === "brands" ? brands : b.count;
       const shares = new Map();
-      counts.forEach((v, k) => shares.set(k, b.count ? (v / b.count) * 100 : 0));
-      return { label: b.label, start: b.start, count: b.count, counts, shares };
+      counts.forEach((v, k) => shares.set(k, base ? (v / base) * 100 : 0));
+      return { label: b.label, start: b.start, count: b.count, brands,
+        base, unit: unit === "brands" ? "brands" : "products", counts, shares };
     });
   }
 
@@ -163,16 +230,15 @@
     [...new Set((items || []).map(collectionKey).filter(k => k.trim() !== "·"))].sort();
 
   // Counts and shares for one set of items, in one dimension.
-  function tallyOf(items, dim) {
+  function tallyOf(items, dim, unit) {
     const d = DIMS[dim] || DIMS.fabric;
-    const counts = new Map();
-    (items || []).forEach(it => d.keysOf(it).forEach(k => {
-      if (k) counts.set(k, (counts.get(k) || 0) + 1);
-    }));
+    const counts = tallyIn(items, d, unit);
     const n = (items || []).length;
+    const brands = rosterOf(items);
+    const base = unit === "brands" ? brands : n;
     const shares = new Map();
-    counts.forEach((v, k) => shares.set(k, n ? (v / n) * 100 : 0));
-    return { count: n, counts, shares };
+    counts.forEach((v, k) => shares.set(k, base ? (v / base) * 100 : 0));
+    return { count: n, brands, base, counts, shares };
   }
 
   function rowsBetween(A, B, minCount, top) {
@@ -217,10 +283,12 @@
     const dropped = [...rosterA].filter(k => !rosterB.has(k)).sort();
 
     const inCommon = it => commonSet.has(collectionKey(it));
-    const mA = tallyOf(A.items.filter(inCommon), dim);
-    const mB = tallyOf(B.items.filter(inCommon), dim);
-    const aA = tallyOf(A.items, dim);
-    const aB = tallyOf(B.items, dim);
+    // `unit` here is already the TIME unit (week/month) — this is the counting one
+    const countUnit = (opts && opts.unit) || "products";
+    const mA = tallyOf(A.items.filter(inCommon), dim, countUnit);
+    const mB = tallyOf(B.items.filter(inCommon), dim, countUnit);
+    const aA = tallyOf(A.items, dim, countUnit);
+    const aB = tallyOf(B.items, dim, countUnit);
 
     return {
       ok: true, dim, unit,
@@ -300,9 +368,8 @@
     };
   }
 
-  function countKeys(items, dim, topN) {
-    const c = new Map();
-    items.forEach(it => DIMS[dim].keysOf(it).forEach(k => { if (k) c.set(k, (c.get(k) || 0) + 1); }));
+  function countKeys(items, dim, topN, unit) {
+    const c = tallyIn(items, DIMS[dim], unit);
     const rows = [...c.entries()].sort((a, b) => b[1] - a[1]);
     const out = {};
     (topN ? rows.slice(0, topN) : rows).forEach(([k, v]) => { out[k] = v; });
@@ -321,7 +388,13 @@
     const listId = opts.listId || "";
     return timeline(items, opts).filter(b => b.count).map(b => {
       const dims = {};
-      DIM_KEYS.forEach(d => { dims[d] = countKeys(b.items, d, topN); });
+      const bdims = {};
+      DIM_KEYS.forEach(d => {
+        dims[d] = countKeys(b.items, d, topN);
+        // the same week counted by brands — a few hundred bytes more, and the
+        // only way a cleaned-up week can still answer "how many shops"
+        bdims[d] = countKeys(b.items, d, topN, "brands");
+      });
       const uniq = f => new Set(b.items.map(f).filter(Boolean)).size;
       return {
         id: (listId ? listId + "|" : "") + weekId(b.start), listId,
@@ -333,30 +406,40 @@
            can only ever be read on a basis nobody can check. Capped, because a
            snapshot is meant to stay a few KB. */
         collections: collectionsOf(b.items).slice(0, 400),
-        dims, builtAt: opts.now || Date.now(),
+        dims, bdims, builtAt: opts.now || Date.now(),
       };
     });
   }
 
   // A stored snapshot, reshaped to look exactly like a live bucket.
-  function periodOfSnapshot(s, dim, label) {
-    const counts = new Map(Object.entries((s.dims && s.dims[dim]) || {}));
+  function periodOfSnapshot(s, dim, label, unit) {
+    /* A frozen week answers in the unit it recorded. Records written before
+       brand counts existed hold product counts only — reading those as brands
+       would put a product number over a brand roster, so such a week is
+       reported as having nothing rather than as a collapse. */
+    const src = unit === "brands"
+      ? ((s.bdims && s.bdims[dim]) || null)
+      : ((s.dims && s.dims[dim]) || {});
+    const counts = new Map(Object.entries(src || {}));
+    const base = unit === "brands" ? (src ? (s.brands || 0) : 0) : s.products;
     const shares = new Map();
-    counts.forEach((v, k) => shares.set(k, s.products ? (v / s.products) * 100 : 0));
-    return { label: label || s.label, start: s.start, count: s.products,
-      counts, shares, fromSnapshot: true };
+    counts.forEach((v, k) => shares.set(k, base ? (v / base) * 100 : 0));
+    return { label: label || s.label, start: s.start,
+      count: unit === "brands" ? (src ? s.products : 0) : s.products,
+      brands: s.brands || 0, base, counts, shares, fromSnapshot: true };
   }
 
   /* The bucket series every chart below runs on. Live products first; where a
      week has no products left, a stored snapshot stands in. Snapshots are
      weekly, so they are only consulted at week granularity. */
   function periodsFor(items, dim, opts) {
-    const per = sharesByBucket(timeline(items, opts), dim);
+    const unit = (opts && opts.unit) || "products";
+    const per = sharesByBucket(timeline(items, opts), dim, unit);
     const snaps = (opts && opts.snapshots) || [];
     if (!snaps.length || (opts && opts.granularity) !== "week") return per;
     const byStart = new Map(snaps.map(s => [s.start, s]));
     return per.map(p => (p.count || !byStart.has(p.start))
-      ? p : periodOfSnapshot(byStart.get(p.start), dim, p.label));
+      ? p : periodOfSnapshot(byStart.get(p.start), dim, p.label, unit));
   }
 
   /* Series for charting: the top N keys by recent presence, each with a value
@@ -374,8 +457,13 @@
     const keys = [...totals.keys()].sort((a, b) => rank(b) - rank(a)).slice(0, opts.top || 6);
     return {
       dim, label: (DIMS[dim] || DIMS.fabric).label,
+      unit: (opts.unit === "brands" ? "brands" : "products"),
       labels: per.map(p => p.label),
       counts: per.map(p => p.count),
+      // how many shops produced anything in each period — the denominator a
+      // brand-counted share is read against ("21 of 32")
+      brands: per.map(p => p.brands || 0),
+      bases: per.map(p => p.base || 0),
       // null, not 0, for a period with nothing collected — "we didn't look" is
       // not "it disappeared", and a 0 would draw a cliff that never happened
       series: keys.map(k => ({
@@ -575,6 +663,103 @@
      are products, not mentions: a name repeating a word does not vote twice
      (keysOf de-duplicates per item), so the ranking cannot be inflated by
      wordy titles. */
+  /* What a fabric key is actually made of, in the shops' own numbers.
+
+     The axis key is a name ("Satin", "Viscose"); the line under it is the
+     composition the products behind that name most often carried, so a
+     designer reads the cloth AND the blend without opening anything. Modal
+     rather than averaged: an average of two different blends is a blend
+     nobody makes. */
+  function blends(items, opts) {
+    opts = opts || {};
+    const d = DIMS[opts.dim || "fabricfam"] || DIMS.fabricfam;
+    const per = new Map();                     // key -> Map(blend -> n)
+    (items || []).forEach(it => {
+      const fib = Calc.parseFibers(it.fabric_composition);
+      if (!fib.length) return;
+      const blend = fib.slice().sort((a, b) => (b.pct || 0) - (a.pct || 0))
+        .slice(0, 3)
+        .map(f => `${f.fiber.toLowerCase()}${f.pct != null ? " " + f.pct : ""}`)
+        .join(" · ");
+      d.keysOf(it).forEach(k => {
+        if (!k) return;
+        if (!per.has(k)) per.set(k, new Map());
+        const m = per.get(k);
+        m.set(blend, (m.get(blend) || 0) + 1);
+      });
+    });
+    const out = {};
+    per.forEach((m, k) => {
+      out[k] = [...m.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    });
+    return out;
+  }
+
+  /* ---- one axis, as the LAB draws it --------------------------------------
+
+     Rows counted in BRANDS ("21 of the 32 shops that produced this week"),
+     with the change measured LIKE FOR LIKE: only the shops present in both
+     weeks. Without that rule the number rises whenever the designer adds a
+     brand to the list, and "satin +4" turns out to mean "we started watching
+     four more shops" — the same-store-sales rule this file already applies to
+     the week comparison, applied where the eye actually lands.
+
+     The headline count is still every shop that produced this week, because
+     that is a fact about this week; only the CHANGE is restricted. What moved
+     in and out of the roster is returned alongside, so the screen can say it
+     rather than bury it. */
+  function axisRows(items, opts) {
+    opts = opts || {};
+    const d = DIMS[opts.dim] || DIMS.fabricfam;
+    const per = timeline(items, opts).map(b => {
+      const brands = new Set((b.items || []).map(brandOf).filter(Boolean));
+      const byKey = new Map();
+      const nKey = new Map();
+      (b.items || []).forEach(it => {
+        const br = brandOf(it);
+        d.keysOf(it).forEach(k => {
+          if (!k) return;
+          nKey.set(k, (nKey.get(k) || 0) + 1);
+          if (!br) return;
+          if (!byKey.has(k)) byKey.set(k, new Set());
+          byKey.get(k).add(br);
+        });
+      });
+      return { label: b.label, start: b.start, count: b.count, brands, byKey, nKey };
+    });
+    const withData = per.filter(p => p.count);
+    const last = withData[withData.length - 1] || null;
+    const prev = withData[withData.length - 2] || null;
+    if (!last) return { dim: opts.dim, label: d.label, rows: [], roster: 0, shared: 0,
+      joined: [], left: [], labels: per.map(p => p.label) };
+
+    const shared = prev ? new Set([...last.brands].filter(b => prev.brands.has(b))) : new Set();
+    const inShared = (p, k) => {
+      const set = p && p.byKey.get(k);
+      return set ? [...set].filter(b => shared.has(b)).length : 0;
+    };
+    const rows = [...last.byKey.keys()].map(k => ({
+      key: k,
+      n: last.byKey.get(k).size,
+      products: last.nKey.get(k) || 0,
+      // null when there is no earlier week to compare with, or no shop in common
+      delta: (prev && shared.size) ? inShared(last, k) - inShared(prev, k) : null,
+      spark: per.map(p => (p.count
+        ? Math.round(((p.byKey.get(k) ? p.byKey.get(k).size : 0) / (p.brands.size || 1)) * 1000) / 10
+        : null)),
+    })).sort((a, b) => b.n - a.n || b.products - a.products)
+      .slice(0, opts.top || 10);
+
+    return {
+      dim: opts.dim, label: d.label, rows,
+      roster: last.brands.size,
+      shared: shared.size,
+      joined: prev ? [...last.brands].filter(b => !prev.brands.has(b)).sort() : [],
+      left: prev ? [...prev.brands].filter(b => !last.brands.has(b)).sort() : [],
+      labels: per.map(p => p.label),
+    };
+  }
+
   function ranked(items, opts) {
     opts = opts || {};
     const dim = opts.dim || "keyword";
@@ -619,7 +804,7 @@
     };
   }
 
-  const API = { timeline, sharesByBucket, periodsFor, series, movers, latestChange,
+  const API = { timeline, sharesByBucket, periodsFor, series, movers, latestChange, blends, axisRows,
     emerging, ledger, ranked, priceByPeriod, overview, weeklySnapshots, weekId,
     weekCompare, pulse, collectionsOf, collectionKey,
     DIMS, bucketStart };

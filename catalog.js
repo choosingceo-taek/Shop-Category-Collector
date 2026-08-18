@@ -931,7 +931,9 @@
       garmentChips: garmentChips(fresh),
       months: parseInt($("#labmonths").value, 10) || 6,
       granularity: $("#labgran").value,
-      dim: $("#labdim").value,
+      // the record table below the axes ranks the same cloth vocabulary the
+      // FABRIC axis uses; there is no picker any more
+      dim: "fabricfam",
       /* A frozen week is one number for the whole population — it cannot be
          split by garment type. Reading it while the screen says "Dresses"
          would put the whole assortment's figures under a garment's name, so
@@ -954,7 +956,7 @@
     wireTierChips($("#labbody"), renderLab);
     wireGarmentChips($("#labbody"), renderLab);
   }
-  ["labmonths", "labgran", "labdim"].forEach(id =>
+  ["labmonths", "labgran"].forEach(id =>
     $("#" + id).addEventListener("change", renderLab));
 
   /* ---- NEW ARRIVALS / BY BRAND --------------------------------------------

@@ -386,46 +386,65 @@
       return;
     }
 
-    const s = T.series(items, Object.assign({ dim, top: 6 }, base));
-    const m = T.movers(items, Object.assign({ dim, top: 6, minCount: opts.minCount || 3 }, base));
-    const w = T.pulse(items, Object.assign({ dim, top: 12, minCount: 2, spark: 8 }, base));
-    const e = T.emerging(items, Object.assign({ dim, top: 8, window: 3, minCount: 2 }, base));
+    /* Only what the page below actually draws. The pulse table, the watch
+       list, the frequency ranking and the movers pair all answered questions
+       the four axis blocks now answer in one place, and each of them was a
+       full pass over every product. */
     const led = T.ledger(items, Object.assign({ dim, top: 4 }, base));
-    const rk = T.ranked(items, Object.assign({ dim, top: 20, minCount: 2 }, base));
-    const label = (T.DIMS[dim] || {}).label || dim;
     const unit = granularity === "week" ? "week" : "month";
 
-    /* The two axes this tool exists for, always on screen.
+    /* ---- the four axes ------------------------------------------------------
 
-       A designer's question is "what is happening to fabric" and "what is
-       happening to the details" — composition and design vocabulary. Those two
-       used to be one choice among eight in a selector, so seeing both meant
-       switching back and forth and holding the first in your head. They are now
-       the headline: one long-term share line each, with what is moving under
-       it. The selector still drives everything below, for the seasons when the
-       question is colour or brand.
+       FABRIC / COLOR / FIT / DETAIL, one block each, always on screen. A
+       designer asks four questions of a season and they are these four; a
+       selector that shows one at a time means holding three in your head.
 
-       Fabric reads the measured composition; design detail reads the product
-       name AND the shop's own copy from the product page, which is where the
-       square necks and the ruching are actually stated. */
-    const axis = (d) => {
-      const label = (T.DIMS[d] || {}).label || d;
-      const ser = T.series(items, Object.assign({ dim: d, top: 6 }, base));
-      const mv = T.movers(items, Object.assign({ dim: d, top: 3, minCount: opts.minCount || 3 }, base));
-      const now = (ser.series || []).map(x => ({
-        key: x.key, last: [...(x.values || [])].reverse().find(v => v != null),
-      })).filter(x => x.last != null).sort((a, b) => b.last - a.last).slice(0, 3);
-      return `<section class="sec axis"><h3>${d === "fabric" ? "🧵" : "✂️"} ${esc(label)}
-        <span class="sub">share of each ${unit}\u2019s new arrivals</span></h3>
-        ${lineChart(ser, { alt: label + " share over time" })}
-        <div class="axisnow">${now.length
-          ? "Now: " + now.map(x => `<b>${esc(x.key)}</b> ${x.last}%`).join(" · ")
-          : "not enough collected yet"}</div>
-        <div class="axismv">${(mv.risers || []).length
-          ? "Rising: " + (mv.risers || []).map(r => `${esc(r.key)} +${r.delta}%p`).join(" · ")
-          : "nothing rising yet"}${(mv.fallers || []).length
-          ? " &nbsp;·&nbsp; Falling: " + (mv.fallers || []).map(r => `${esc(r.key)} ${r.delta}%p`).join(" · ")
-          : ""}</div></section>`;
+       Each row is counted in BRANDS, not products: "21 of the 32 shops that
+       produced this week put out satin". One shop that drops sixty satin
+       pieces counts once, which is the difference between a market moving and
+       a label being busy — and the only one of those two worth developing
+       against. The product count is still there, in smaller type, because
+       volume is a real second fact.
+
+       FABRIC carries the blend under the name (the shops' own percentages,
+       modal not averaged), so the cloth and what it is made of are read in one
+       line. */
+    const AXES = [
+      ["fabricfam", "Fabric"],
+      ["color", "Colour"],
+      ["fit", "Fit"],
+      ["keyword", "Detail"],
+    ];
+    const blendMap = T.blends ? T.blends(items, { dim: "fabricfam" }) : {};
+
+    const axisBlock = (d, title) => {
+      const a = T.axisRows(items, Object.assign({ dim: d, top: 10 }, base));
+      const roster = a.roster;
+      const body = a.rows.length ? a.rows.map(r => `<div class="axr">
+          <b class="axn">${r.n}<i>/${roster}</i></b>
+          <span class="axk">${esc(r.key)}<i class="axp">${r.products}</i></span>
+          ${d === "fabricfam" && blendMap[r.key]
+            ? `<span class="axb">${esc(blendMap[r.key])}</span>` : `<span class="axb"></span>`}
+          <span class="axd ${r.delta > 0 ? "up" : r.delta < 0 ? "down" : ""}"
+            title="${r.delta == null ? "no earlier " + unit + " to compare with"
+              : "against the " + a.shared + " shops that produced in both " + unit + "s"}">${
+            r.delta == null ? "—" : r.delta > 0 ? "+" + r.delta : String(r.delta)}</span>
+          <span class="axs">${sparkline(r.spark.filter(v => v != null))}</span>
+        </div>`).join("")
+        : `<div class="none">nothing collected on this axis yet</div>`;
+
+      /* What moved underneath. A brand that joined this week lifts every count
+         on the page, so the change column already ignores it — but the fact
+         has to be visible, not merely handled. */
+      const cover = (a.joined.length || a.left.length) ? `<div class="axcov">${
+        a.joined.length ? `+${a.joined.length} new this ${unit} (${esc(a.joined.slice(0, 3).join(", "))}${a.joined.length > 3 ? "…" : ""})` : ""}${
+        a.joined.length && a.left.length ? " · " : ""}${
+        a.left.length ? `−${a.left.length} not read this ${unit} (${esc(a.left.slice(0, 3).join(", "))}${a.left.length > 3 ? "…" : ""})` : ""}
+        — the change column reads only the ${a.shared} shops in both</div>` : "";
+
+      return `<section class="sec ax"><h3>${esc(title)}
+        <span class="sub">brands carrying it${roster ? `, of ${roster} that produced this ${unit}` : ""}</span></h3>
+        <div class="axrows">${body}</div>${cover}</section>`;
     };
 
     /* One context band: who is being read (tier · garment type) and what that
@@ -441,7 +460,7 @@
 
     el.innerHTML = `
       ${ctxBand}
-      <div class="movers axespair">${axis("fabric")}${axis("keyword")}</div>
+      <div class="axgrid">${AXES.map(a => axisBlock(a[0], a[1])).join("")}</div>
 
       <div class="labhead">
         <div class="tiles">
@@ -453,46 +472,21 @@
             <div class="tv">${o.latest ? o.latest.count : "—"}</div>
             <div class="ts">${o.latest ? esc(o.latest.label) : ""}${
               o.deltaVsPrev != null ? ` · vs previous ${unit} ${o.deltaVsPrev >= 0 ? "+" : ""}${o.deltaVsPrev}` : ""}</div></div>
-          <div class="tile"><div class="tl">${esc(label)} to watch</div>
-            <div class="tv">${e.ok ? e.rows.length : 0}</div>
-            <div class="ts">new or consecutively rising</div></div>
         </div>
       </div>
 
-      <section class="sec"><h3>📊 ${esc(label)} pulse
-        <span class="sub">${unit} on ${unit}, like for like — same shops in both</span></h3>
-      ${compareBoard(w, label)}</section>
-
-      <section class="sec"><h3>👀 ${esc(label)} to watch now <span class="sub">reason always shown</span></h3>
-      ${emergingBoard(e)}</section>
-
-      <section class="sec"><h3>🏆 Most seen ${esc(label)} <span class="sub">whole window, by frequency</span></h3>
-      ${rankedList(rk)}</section>
-
-      <section class="sec"><h3>🆕 New arrivals per period</h3>
-      ${volumeChart(s.labels, s.counts)}</section>
-
-      <section class="sec"><h3>📈 ${esc(label)} share over time <span class="sub">% of each period\u2019s new arrivals</span></h3>
-      ${lineChart(s, { alt: label + " share over time" })}</section>
-
-      <div class="movers">
-        <section class="sec"><h3>⬆️ Rising over the window</h3>${moverList(m.risers || [], "up")}</section>
-        <section class="sec"><h3>⬇️ Falling over the window</h3>${moverList(m.fallers || [], "down")}</section>
-      </div>
-
-      <section class="sec"><h3>💰 Price &amp; markdown pressure <span class="sub">where the season stands</span></h3>
+      <section class="sec"><h3>Price &amp; markdown pressure <span class="sub">where the season stands</span></h3>
       ${priceBoard(T.priceByPeriod(items, base), unit)}</section>
 
-      <section class="sec"><h3>🗓️ Record by ${unit} <span class="sub">at a glance</span></h3>
+      <section class="sec"><h3>Record by ${unit} <span class="sub">at a glance</span></h3>
       ${ledgerTable(led)}</section>
 
       <p class="foot">
-        <b>Latest change</b> compares the last two periods that actually have data, so skipping a
-        ${unit} never reads as everything disappearing. <b>Rising / falling over the window</b> is the
-        share difference between the first and second half (in percentage points) — halves rather than
-        single periods, so one odd ${unit} isn\u2019t mistaken for a trend — and anything with fewer than
-        ${opts.minCount || 3} samples is left out. Every figure is computed directly from the products
-        collected; nothing is estimated or fetched from an outside service.${
+        Each axis counts BRANDS, not products: a shop that puts out sixty of something counts once,
+        so the figure answers whether the market moved rather than whether one label was busy.
+        The change beside it is against the previous ${unit} that had products, so skipping a
+        ${unit} never reads as everything disappearing. Every figure is computed directly from what
+        was collected; nothing is estimated or fetched from an outside service.${
         o.archived ? ` Periods marked RECORD are ones whose products were cleaned up, leaving only the weekly totals.` : ""}${
         clipped ? ` ${clipped} hand-picked products are excluded here because that sample is biased (they remain in the product list and in Excel).` : ""}</p>`;
   }

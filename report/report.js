@@ -162,18 +162,35 @@
     "quilted,padded,brushed,bonded,ottoman,milano"
   ).split(","));
 
-  // Which bucket a name word belongs to, or "" when it is neither.
+  /* How the garment sits on the body — its own axis, not a design detail.
+
+     A season where everything goes oversized and a season where everything
+     goes ruched are different findings, and merging them buries both. Like
+     the fibre and weave lists this is a closed vocabulary, because proportion
+     words are a settled trade language; anything outside it stays a detail, so
+     a silhouette nobody has named yet still arrives on its own. */
+  const FIT = new Set((
+    "oversized,boxy,relaxed,loose,slouchy,baggy,roomy,easy," +
+    "slim,skinny,fitted,tailored,bodycon,snug,compression," +
+    "straight,wide,wide-leg,flared,flare,bootcut,tapered,carrot,barrel,balloon-leg," +
+    "cropped,crop,longline,elongated,micro,extended," +
+    "high-waisted,high-rise,mid-rise,low-rise,low-waisted,dropped,drop-shoulder," +
+    "a-line,empire,column,shift,swing,trapeze,cocoon,peg"
+  ).split(","));
+
+  // Which bucket a name word belongs to, or "" when it is none of them.
   function kindOf(word) {
     const w = String(word || "").toLowerCase();
     if (MATERIAL.has(w)) return "material";
     if (WEAVE.has(w)) return "weave";
+    if (FIT.has(w)) return "fit";
     return "";
   }
 
-  /* Split a name's keywords into the three kinds. Every word appears in
+  /* Split a name's keywords into the four kinds. Every word appears in
      exactly one bucket, so counting them never double-counts a product. */
   function classifyKeywords(text) {
-    const out = { material: [], weave: [], detail: [] };
+    const out = { material: [], weave: [], fit: [], detail: [] };
     const seen = new Set();
     nameKeywords(text).forEach(w => {
       if (seen.has(w)) return;
@@ -423,7 +440,7 @@
 
   const API = {
     parsePrice, parseFibers, parseColors, parseDesign, nameKeywords, classifyKeywords,
-    kindOf, MATERIAL, WEAVE, normItem, normScan,
+    kindOf, MATERIAL, WEAVE, FIT, normItem, normScan,
     aggregate, compare, priceHistogram, mean, median, tally,
     isoWeek, weekly, weeklyTrend, inspoImages,
   };
