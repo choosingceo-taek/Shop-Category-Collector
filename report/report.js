@@ -7,9 +7,28 @@
   "use strict";
 
   // "$1,299.00" -> 1299 ; "€59.95" -> 59.95 ; "" / "정보 확인" -> null
+  /* Money, as half of Europe writes it.
+
+     Stripping every comma turned "120,00 €" into 12000 — and since the
+     spreadsheet keeps the shop's own characters, nothing downstream noticed
+     until a median price read "$45.00 – $12000.00" on a dashboard. A comma is
+     a decimal point when it is followed by one or two final digits (120,00 ·
+     89,5) and a thousands separator otherwise (1,299). With both marks
+     present the LAST one is the decimal point, which covers 1.299,00 and
+     1,299.00 alike. */
   function parsePrice(v) {
     if (v == null) return null;
-    const m = String(v).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+    let t = String(v);
+    const lastDot = t.lastIndexOf("."), lastCom = t.lastIndexOf(",");
+    if (lastDot >= 0 && lastCom >= 0) {
+      t = lastCom > lastDot
+        ? t.replace(/\./g, "").replace(",", ".")     // 1.299,00
+        : t.replace(/,/g, "");                       // 1,299.00
+    } else if (lastCom >= 0) {
+      // decimal only when it separates a final group of one or two digits
+      t = /,\d{1,2}(?!\d)/.test(t) ? t.replace(",", ".") : t.replace(/,/g, "");
+    }
+    const m = t.match(/-?\d+(?:\.\d+)?/);
     if (!m) return null;
     const n = parseFloat(m[0]);
     return isFinite(n) ? n : null;

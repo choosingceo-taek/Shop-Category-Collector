@@ -1,2 +1,5 @@
 dist/
 tests/shot-*.png
+tests/ref-*.png
+tests/rep-*.png
+tests/goal-report.png

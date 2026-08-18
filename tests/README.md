@@ -29,6 +29,11 @@ node tests/encoding-test.js
 
 | file | what it holds to |
 | --- | --- |
+| `run-all.sh` | every contract below, in one command — `sh tests/run-all.sh` |
+| `goal-e2e.js` | the goal sentence: three differently-shaped shops → one Scan all → every row with brand, name, photo and composition → clean health → LAB → dashboard |
+| `price-test.js` | money as the shops write it, including the comma decimal that read "120,00 €" as 12000 |
+| `matrix-probe.js` | 83 generated shop shapes; the reader's output checked against what the page actually says (explorer and contract in one file) |
+| `dashboard-e2e.js` | the exported HTML is the dashboard, is self-contained, and its figures agree with each other |
 | `encoding-test.js` | no shipped file carries a Unicode noncharacter (Chrome refuses the whole manifest over one), the ship list is real, the manifest parses |
 | `updnote-e2e.js` | a new version reaches the person: one owner for the toolbar badge, the repo asked on a timer, an optional notification said once per version |
 | `menuimport-e2e.js` | Import lives on the list's right-click menu and really opens a file picker, landing rows in the list the menu was opened on |
