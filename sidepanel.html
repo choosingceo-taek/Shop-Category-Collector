@@ -275,7 +275,8 @@
      brand a foldable block carrying its own colour and count. The colour is
      derived from the brand name, so the same brand keeps the same mark
      everywhere without anything being stored. */
-  .lsearch { display:flex; gap:5px; align-items:center; margin:0 0 6px; }
+  .lsearch { display:flex; gap:6px; align-items:center; margin:0 0 6px; }
+  .lsearch .lsum { flex:none; margin:0; white-space:nowrap; }
   .lsearch input { flex:1; min-width:0; font-size:12px; padding:5px 10px;
     border-radius:var(--r-s); background:var(--card); border:1px solid var(--line2); }
   .lsearch button { font-size:11px; padding:4px 9px; border-radius:var(--r-s);
@@ -576,10 +577,21 @@
             </div>
           </div>
 
-          <!-- what is in it -->
+          <!-- What is in the list, and the two ways to see less of it.
+
+               Neither of these puts sites IN — that is the three buttons above.
+               Filter narrows to the rows whose brand, category or address
+               contain what is typed (and opens every folded brand while it is
+               typed, because a hidden match is a bug). Collapse folds every
+               brand at once; the brand headings already fold one at a time.
+
+               They used to be a line of their own, above a second line that
+               said "12 sites · 7 brands". One line now: the count is the thing
+               the two controls act on, so it sits between them. -->
           <div class="lsearch" id="lsearch" hidden>
+            <span class="lsum" id="lsum"></span>
             <input id="lq" type="search" placeholder="Filter sites">
-            <button id="lfold" title="Collapse or expand every brand">Collapse</button>
+            <button id="lfold" title="Fold every brand into its heading">Collapse</button>
           </div>
           <div id="listbody"></div>
 

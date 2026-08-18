@@ -352,8 +352,12 @@
     $("#runlist").dataset.n = scannableCount === entries.length ? "" : String(scannableCount);
     paintLive();     // the one run button reads list count + job + queue state
 
-    // The filter only earns its space once the list is long enough to scroll.
-    $("#lsearch").hidden = entries.length < 7;
+    /* The row carries the count, so it is there whenever there are sites. The
+       two controls on it appear only when they have work to do: the filter
+       once the list is longer than a screen, the fold once there is more than
+       one brand to fold. */
+    $("#lsearch").hidden = !entries.length;
+    $("#lq").hidden = entries.length < 7;
     if (entries.length < 7) { listQuery = ""; $("#lq").value = ""; }
 
     if (!entries.length) {
@@ -375,14 +379,18 @@
       groups.get(b).push({ e, i });
     });
     if (!groups.size) {
+      $("#lsum").textContent = `0 of ${entries.length}`;
+      $("#lfold").hidden = true;
       body.innerHTML = `<div class="lempty">Nothing matches “${esc(listQuery)}”.</div>`;
       return;
     }
     const shown = [...groups.values()].reduce((n, r) => n + r.length, 0);
-    const sum = q ? `${shown} of ${entries.length} · ${groups.size} brands`
+    $("#lsum").textContent = q ? `${shown} of ${entries.length}`
       : `${entries.length} sites · ${groups.size} brands`;
+    // nothing to fold when every site is one brand
+    $("#lfold").hidden = groups.size < 2;
 
-    body.innerHTML = `<div class="lsum">${esc(sum)}</div>` +
+    body.innerHTML =
       [...groups.entries()].map(([brand, rows]) => {
         // searching temporarily opens every group — a hidden match is a bug
         const fold = !q && folded.has(brand);
