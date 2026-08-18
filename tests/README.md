@@ -40,6 +40,7 @@ node tests/encoding-test.js
 | `menuimport-e2e.js` | Import lives on the list's right-click menu and really opens a file picker, landing rows in the list the menu was opened on |
 | `panelshot.js` | draws the panel (Collector and Products) to `shot-panel-*.png` — for looking, not asserting |
 | `panelgeo.js` | prints the geometry of the panel's controls |
+| `install-probe.js` | takes the PUBLISHED release asset, unzips it and loads it — the file a teammate actually downloads, not the repo |
 | `updnote-probe.js` | prints what the browser currently says about a new version |
 
 ## Rebuilding what was lost
