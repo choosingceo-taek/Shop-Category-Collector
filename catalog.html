@@ -130,6 +130,13 @@
   #v-lab h3 { font-size:13.5px; margin:0 0 8px; padding:0; border:0;
     font-weight:650; letter-spacing:-.01em; }
   #v-lab h3 .sub { font-weight:400; color:var(--muted); font-size:11.5px; margin-left:7px; }
+  /* The axis name is the biggest thing in its block — it is the question, and
+     the cards under it are the answer. */
+  #v-lab .sec.ax > h3 { font:700 19px/1.1 Helvetica,Arial,sans-serif; letter-spacing:.02em;
+    text-transform:uppercase; margin:0 0 12px; padding-bottom:9px;
+    border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:10px; }
+  #v-lab .sec.ax > h3 .sub { font:400 11px/1.4 Helvetica,Arial,sans-serif; letter-spacing:0;
+    text-transform:none; margin-left:auto; text-align:right; max-width:46%; }
   /* ---- the four axes, as cards --------------------------------------------
      One card per keyword, because a designer compares keywords side by side
      rather than reading down a column — and a card has room for the shape the
@@ -143,28 +150,31 @@
   .axcards { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
   .axc { border:1px solid var(--line); border-radius:var(--r-s); padding:10px 11px 8px;
     display:flex; flex-direction:column; gap:2px; min-width:0; }
-  .axch { display:flex; align-items:baseline; gap:8px; }
-  /* The place in the ranking — the cards are ordered by how many items carry
-     the keyword, and a reader should not have to count rows to see that. */
+  /* Reading order, largest first: the axis (FABRIC / COLOUR / FIT), then on a
+     card the rank, the keyword, the count. The count was the biggest thing on
+     the page at 26px, which put the answer to "how many" above the question
+     it answers. */
+  .axch { display:flex; align-items:baseline; gap:7px; }
   .axrank { font:650 11px/1 Helvetica,Arial,sans-serif; color:var(--muted);
-    flex:none; min-width:12px; }
-  .axk .sw { display:inline-block; width:11px; height:11px; border-radius:50%;
-    border:1px solid var(--line2); margin-right:5px; vertical-align:-1px; }
-  .axk { font:700 11px/1.2 Helvetica,Arial,sans-serif; letter-spacing:.11em;
-    text-transform:uppercase; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
-    white-space:nowrap; }
+    flex:none; min-width:11px; font-variant-numeric:tabular-nums; }
+  .axk .sw { display:inline-block; width:12px; height:12px; border-radius:50%;
+    border:1px solid var(--line2); margin-right:6px; vertical-align:-1px; }
+  .axk { font:700 14.5px/1.2 Helvetica,Arial,sans-serif; letter-spacing:.01em;
+    text-transform:uppercase; color:var(--ink); flex:1; min-width:0; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
   .axd { font:650 10.5px/1 Helvetica,Arial,sans-serif; color:var(--muted);
     font-variant-numeric:tabular-nums; }
   .axd.up { color:#1b7f4d; } .axd.down { color:var(--sale); }
-  .axnum { display:flex; align-items:baseline; gap:5px; margin-top:3px; }
-  .axnum b { font:650 26px/1 Helvetica,Arial,sans-serif; letter-spacing:-.03em;
+  .axnum { display:flex; align-items:baseline; gap:4px; margin-top:2px; }
+  .axnum b { font:650 13px/1.2 Helvetica,Arial,sans-serif;
     font-variant-numeric:tabular-nums; }
   .axnum i { font-style:normal; font-size:11.5px; color:var(--muted); }
   .axmeta { font-size:11.5px; color:var(--muted); line-height:1.45; min-height:15px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .axc svg.area { display:block; width:100%; height:46px; margin-top:6px; }
-  /* items per week, under the count it belongs to */
-  .axc svg.axbars { display:block; width:100%; height:40px; margin-top:7px; }
+  /* items per week, under the count it belongs to — one scale for the whole
+     axis, so the cards can be read against each other */
+  .axc svg.axline { display:block; width:100%; height:44px; margin-top:7px; }
   .axc .noarea { font-size:11px; color:var(--muted); margin-top:10px; height:46px; }
   /* the search lane — only drawn when a Trends CSV has actually been imported */
   /* the lane sits at the foot of the card, so cards with and without one line

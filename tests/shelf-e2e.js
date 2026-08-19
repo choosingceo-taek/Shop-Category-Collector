@@ -126,7 +126,8 @@ const items = Array.from({ length: 32 }, (_, n) => {
       key: (c.querySelector(".axk") || {}).textContent || "",
       num: (c.querySelector(".axnum b") || {}).textContent || "",
       unitWord: (c.querySelector(".axnum i") || {}).textContent || "",
-      bars: c.querySelectorAll("svg.axbars rect").length,
+      bars: c.querySelectorAll("svg.axline path").length,
+      blend: /\b\d{2,3}\b/.test(((c.querySelector(".axmeta") || {}).textContent || "")),
       slash: /\/\s*\d+\s*brands/.test((c.querySelector(".axnum") || {}).textContent || ""),
     }));
   });
@@ -140,8 +141,32 @@ const items = Array.from({ length: 32 }, (_, n) => {
     JSON.stringify(cards && cards.map(c => c.num)));
   ok("…with no figure-over-a-slash on the face", cards && !cards.some(c => c.slash),
     JSON.stringify(cards && cards.map(c => c.num + c.unitWord)));
-  ok("…and the weeks drawn under it", cards && cards.every(c => c.bars > 0),
+  ok("…and the weeks drawn under it as a line", cards && cards.every(c => c.bars > 0),
     JSON.stringify(cards && cards.map(c => c.bars)));
+  ok("…with no percentage line under the card",
+    cards && !cards.some(c => c.blend), JSON.stringify(cards && cards.map(c => c.blend)));
+
+  /* One scale for the whole axis. Scaled to its own row, a keyword with 42
+     items and one with 21 drew exactly the same shape — the designer asked
+     why the heights did not follow the numbers. */
+  const scale = await p.evaluate(() => {
+    const sec = [...document.querySelectorAll("section.sec.ax")]
+      .find(s => /Fabric/i.test((s.querySelector("h3") || {}).textContent || ""));
+    if (!sec) return null;
+    return [...sec.querySelectorAll(".axc")].map(c => {
+      const n = parseInt((c.querySelector(".axnum b") || {}).textContent || "0", 10);
+      const path = c.querySelector("svg.axline path");
+      const ys = (path ? (path.getAttribute("d") || "") : "")
+        .split(/[ML]/).slice(1).map(seg => parseFloat(seg.split(",")[1]));
+      return { n, lowestY: ys.length ? Math.min(...ys) : null };
+    });
+  });
+  const twoDifferent = scale && scale.filter(s => s.lowestY != null);
+  ok("a bigger count draws a higher line",
+    twoDifferent && twoDifferent.length > 1 &&
+    twoDifferent.every((s, i) => i === 0 || s.n === twoDifferent[i - 1].n ||
+      s.lowestY > twoDifferent[i - 1].lowestY - 0.6),
+    JSON.stringify(twoDifferent));
 
   // ---- the fibre blocks --------------------------------------------------
   const fibres = await p.evaluate(() => {

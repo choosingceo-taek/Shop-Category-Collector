@@ -389,10 +389,20 @@
     // can't run into the care instructions next to it.
     const liText = doc.querySelectorAll
       ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
+    /* …and last, the page's own source.
+
+       Some product pages are a shell: the visible text arrives from script,
+       so a fetch sees a heading and nothing under it, while the composition is
+       sitting in an embedded JSON blob a few kilobytes further down (Athleta's
+       "Fabric & care" is one of those). Reading the raw HTML last costs
+       nothing when the text answered, and it is safe because the reader wants
+       a percentage next to a fibre it knows — markup and JSON keys cannot
+       fake that, and "20% off" is already guarded against. */
     const composition = compositionFromText(material)
       || compositionFromText(descr)
       || compositionFromText(liText)
-      || compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
+      || compositionFromText((doc.body && doc.body.textContent) || "")
+      || compositionFromText(rawHtml || "");
     // og:image — the one photo nearly every PDP declares. Semantic markup,
     // not a CSS selector, so it survives redesigns; only used when both the
     // listing tile and JSON-LD gave nothing.

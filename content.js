@@ -1401,7 +1401,23 @@ async function runStep(j) {
       } catch (e) { /* the shop disabled it: the grid stands as scraped */ }
     }
 
+    /* The fullest view of the grid is the one that states the layout.
+
+       A lazy grid renders in waves, and some of them (Athleta's is one)
+       recycle the tiles as you scroll, so the order rows were FIRST seen in is
+       not the order the page lays them out in. Whichever sweep rendered the
+       most tiles is the best statement there is of that layout, so its order
+       is the one kept — restamped over what an earlier, thinner sweep said. */
     j.seen = j.seen || {};
+    if (scraped.length >= (j.bestPass || 0)) {
+      j.bestPass = scraped.length;
+      const at = new Map();
+      scraped.forEach((r, i) => { const k = itemKey(r); if (k && !at.has(k)) at.set(k, i + 1); });
+      (j.items || []).forEach(it => {
+        const p = at.get(itemKey(it));
+        if (p) it.pos = p;
+      });
+    }
     let added = 0, hitCap = false;
     for (const r of scraped) {
       const k = itemKey(r);
@@ -1418,7 +1434,11 @@ async function runStep(j) {
          Excel still show it after the rows have been through a database,
          where nothing has an order at all. Re-scanning restamps it, because
          the position that matters is the one the shop is showing today. */
-      j.seen[k] = 1; r.pos = j.items.length + 1; j.items.push(r); added++;
+      j.seen[k] = 1;
+      // its place in THIS sweep when this sweep is the fullest, else after
+      // everything already kept
+      r.pos = (scraped.length >= (j.bestPass || 0) ? scraped.indexOf(r) + 1 : 0) || j.items.length + 1;
+      j.items.push(r); added++;
     }
     j.pagesDone = page;
     j.totalPages = j.totalPages || a.totalPages(document) || 0;

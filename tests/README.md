@@ -36,6 +36,7 @@ node tests/encoding-test.js
 | `naming-test.js` | what a page is filed as: a house brand on its parent's domain is not the parent (Athleta ≠ GAP), and a category is a noun phrase, never an interstitial's question |
 | `tabs-e2e.js` | the panel's furniture, measured on screen: the ＋ never prints under a tab, no Filter sites box, PRODUCTS keeps its search and selects pinned, the grab button carries no count |
 | `matrix-probe.js` | 83 generated shop shapes; the reader's output checked against what the page actually says (explorer and contract in one file) |
+| `athleta-e2e.js` | Athleta's shape: a grid that renders in waves and recycles its tiles, and product pages that state the blend under Fabric & care — one rendered, one a shell with it only in the page source |
 | `varley-e2e.js` | a grid that previews its colourways: the swatch is not the garment and not its name, and the fifteen behind the Load more button still come back — in the shop's order |
 | `gymshark-e2e.js` | where Gymshark states the blend — MATERIALS & CARE in a tab panel the bulk JSON does not carry, with marketing prose above it and care text glued to it |
 | `weekbucket-e2e.js` | a week is Monday to Sunday and is named 2026-W34: three sittings land in one pile, one brand gets one heading, and a second pass duplicates nothing |

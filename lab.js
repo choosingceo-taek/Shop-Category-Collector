@@ -123,30 +123,41 @@
   }
 
   /* The count, week by week — the same figure the card shows, drawn over the
-     period. Bars rather than a line because it IS a count: a bar of nothing is
-     honestly nothing, where a line would slope through it. A week with no
-     products collected at all is a gap (null), not a zero, so a week nobody
-     scanned does not read as a week the keyword vanished. */
-  function weekBars(labels, counts, unit) {
+     period, as a LINE.
+
+     Two things were wrong with the bars. They were scaled to each card's own
+     maximum, so a keyword with 42 items and one with 21 drew exactly the same
+     shape and the designer asked, reasonably, why the heights did not follow
+     the numbers. And a bar chart of one populated week is a single black
+     rectangle: it says nothing about direction, which is the whole reason a
+     week-by-week reading is on the card.
+
+     So: one scale for the whole axis (`max` comes from the block, not the
+     row), which makes the cards comparable at a glance, and a line, which is
+     what a trend looks like. A period with nothing collected breaks the line
+     rather than dropping it to zero — "we did not look" is not "it vanished". */
+  function weekLine(labels, counts, max, unit) {
     const vals = counts || [];
     if (!vals.some(v => v != null)) return "";
-    const W = 220, H = 40, base = 30;              // 10px under the bars for the label
-    const max = Math.max(1, ...vals.filter(v => v != null));
-    const n = vals.length;
-    const bw = W / n;
-    const bars = vals.map((v, i) => {
-      const x = i * bw;
-      if (v == null) {
-        return `<rect x="${(x + 1).toFixed(1)}" y="${base - 2}" width="${Math.max(1, bw - 2).toFixed(1)}" height="2" fill="#e6e6e6"></rect>`;
-      }
-      const h = Math.max(1, base * (v / max));
-      const last = i === n - 1;
-      return `<rect x="${(x + 1).toFixed(1)}" y="${(base - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}" fill="#111" fill-opacity="${last ? ".85" : ".28"}"></rect>`;
-    }).join("");
+    const W = 220, H = 44, top = 5, base = 32;      // 12px under it for the labels
+    const hi = Math.max(1, max || Math.max(...vals.filter(v => v != null)));
+    const n = Math.max(1, vals.length - 1);
+    const x = i => (W - 6) * (i / n) + 3;
+    const y = v => base - (base - top) * (v / hi);
+    let d = "", last = null, started = false;
+    vals.forEach((v, i) => {
+      if (v == null) { started = false; return; }
+      d += `${started ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
+      started = true; last = { i, v };
+    });
     const first = labels && labels[0] ? labels[0] : "";
-    const lastLab = labels && labels[n - 1] ? labels[n - 1] : "";
-    return `<svg class="axbars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
-      role="img" aria-label="items per ${unit || "week"}">${bars}
+    const lastLab = labels && labels[vals.length - 1] ? labels[vals.length - 1] : "";
+    return `<svg class="axline" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+      role="img" aria-label="items per ${unit || "week"}">
+      <line x1="3" y1="${base}" x2="${W - 3}" y2="${base}" stroke="#ececec" stroke-width="1"></line>
+      <path d="${d.trim()}" fill="none" stroke="#111" stroke-width="1.6"
+        stroke-linejoin="round" stroke-linecap="round"></path>
+      ${last ? `<circle cx="${x(last.i).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="2.6" fill="#111"></circle>` : ""}
       <text x="0" y="${H - 1}" font-size="7" fill="#9a9a9a">${esc(first)}</text>
       <text x="${W}" y="${H - 1}" font-size="7" fill="#9a9a9a" text-anchor="end">${esc(lastLab)}</text>
     </svg>`;
@@ -551,7 +562,11 @@
          (`keyword` in trend.js, still under test) and the words themselves are
          in the product names, which is where they can be searched. */
     ];
-    const blendMap = T.blends ? T.blends(items, { dim: "fabric" }) : {};
+    /* The modal blend used to run under each fabric card ("cotton 100",
+       "nylon 72 · spandex 28"). It is off the card as asked: the axis already
+       says which fibre this is, and a second percentage under it was a
+       different reading of the same row in smaller type. blends() stays in
+       trend.js, under test, for whatever wants it next. */
 
     /* One card per keyword: what it is, how many shops carry it, what it is
        made of, and the shape it has traced. The card is the unit because a
@@ -598,6 +613,11 @@
     const axisBlock = (d, title) => {
       const a = T.axisRows(items, Object.assign({ dim: d, top: 10 }, base));
       const roster = a.roster;
+      /* One scale for the whole axis: the cards are meant to be read against
+         each other, and a chart scaled to its own row makes 42 and 21 draw
+         the same shape. */
+      const axisMax = a.rows.reduce((m, r) =>
+        Math.max(m, ...(r.counts || []).filter(v => v != null)), 1);
       const body = a.rows.length ? a.rows.map((r, i) => `<article class="axc">
           <div class="axch"><span class="axrank">${i + 1}</span><span class="axk">${
             d === "color" && INK[r.key] ? `<i class="sw" style="background:${INK[r.key]}"></i>` : ""
@@ -608,9 +628,7 @@
               r.delta == null ? "—" : r.delta > 0 ? "▲" + r.delta
                 : r.delta < 0 ? "▼" + Math.abs(r.delta) : "0"}</span></div>
           <div class="axnum" title="${r.products} of the products collected this ${unit} have ${esc(r.key)}, across ${r.n} of the ${roster} shops that put anything out — a shop that dropped sixty of them counts as one shop, which is what tells a market apart from one busy label"><b>${r.products}</b><i>items</i></div>
-          ${weekBars(a.labels, r.counts, unit)}
-          ${d === "fabric" && blendMap[r.key]
-            ? `<div class="axmeta" title="the blend these products state most often">${esc(blendMap[r.key])}</div>` : ""}
+          ${weekLine(a.labels, r.counts, axisMax, unit)}
           ${searchLane(r.key)}
         </article>`).join("")
         : `<div class="none">nothing collected on this axis yet</div>`;
@@ -626,7 +644,7 @@
 
       return `<section class="sec ax"><h3>${esc(title)}
         <span class="sub">top ${a.rows.length} by how many items carry it${
-          roster ? `, across the ${roster} shops that produced this ${unit}` : ""} · the bars are that count, ${unit} by ${unit}</span></h3>
+          roster ? `, across the ${roster} shops that produced this ${unit}` : ""} · the line is that count, ${unit} by ${unit}</span></h3>
         <div class="axcards">${body}</div>${cover}</section>`;
     };
 
