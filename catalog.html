@@ -633,12 +633,17 @@
           <!-- Filled from TrendCalc.GRANULARITIES so the page can only offer
                intervals the arithmetic can actually bucket. -->
           <select id="labgran"></select></div>
-        <!-- Garment type belongs with the other two things that decide what
-             the page is computed over. It was a row of chips below, which took
-             a whole band to say what a select says in one control — and it sat
-             between the reader and the first answer. -->
-        <div class="selwrap"><span class="cap">Category</span>
-          <select id="labcat"><option value="">All types</option></select></div>
+        <!-- Garment type is not a control here any more (asked for).
+
+             It narrowed the whole page to one kind of garment, and the cost was
+             quiet: the weekly records are frozen for the WHOLE population, so
+             the moment a type was chosen they had to be dropped and the window
+             silently read fewer weeks. HOME answers what the season is made of;
+             which garment it is, is a question the CLOTHING tab's rail asks
+             where it can be answered without throwing the history away.
+
+             The arithmetic stays (garmentOf / inGarment, with curGarment fixed
+             at "every type"), so putting the control back is markup. -->
         <!-- The file, at the end of the row that decides what goes in it.
              One press: the same builder the Products tab used to carry, on
              the dashboard template, embedding every photograph so the page

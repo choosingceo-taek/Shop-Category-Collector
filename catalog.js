@@ -1257,7 +1257,10 @@
   })();
   ["labmonths", "labgran"].forEach(id =>
     $("#" + id).addEventListener("change", renderLab));
-  $("#labcat").addEventListener("change", e => { curGarment = e.target.value; renderLab(); });
+  // The garment-type select is gone from this page; the code that read it is
+  // kept and simply has nothing to bind to.
+  const catSel = $("#labcat");
+  if (catSel) catSel.addEventListener("change", e => { curGarment = e.target.value; renderLab(); });
 
   /* ---- NEW ARRIVALS / BY BRAND --------------------------------------------
 
