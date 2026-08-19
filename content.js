@@ -1246,7 +1246,23 @@ async function runStep(j) {
 
            Only while we are short of the shop's own count, and only a bounded
            number of times, so this cannot become a crawl. */
-        if (stable >= 2 && short && pressed < MORE_PRESSES) {
+        /* …and press it even when the shop never said how many it has.
+
+           Gating this on the count made the rescue depend on the page printing
+           "66 items" somewhere, and plenty of themes print no such number at
+           all — Set Active's and Athleta's among them. On those the grid went
+           stable at the first screenful, there was nothing to be short OF, and
+           a button sitting right there saying "View More" was never pressed.
+           Four of sixty-six, eight of a whole New Arrivals page.
+
+           Pressing without a count is safe on its own terms: the vocabulary is
+           closed, so nothing else on the page gets clicked; the press count is
+           bounded; the 60 cap still ends it; and if a press yields nothing the
+           grid goes stable again and the loop finishes. What the count is for
+           is the opposite duty — knowing when to STOP, which is why a shop
+           that did state its number and has been fully read presses nothing. */
+        const mayPress = said ? short : true;
+        if (stable >= 2 && mayPress && pressed < MORE_PRESSES) {
           const btn = findLoadMore();
           if (btn) {
             /* A press is progress, not a probe, so it does not spend a round.
@@ -1316,6 +1332,23 @@ async function runStep(j) {
         await report(`The ${a.id} reader found nothing — recovered ${raw.length} products from the page itself`);
       }
     }
+    /* The grid is not always the whole collection, and it does not always say
+       so. Where the shop publishes its own list of what this address holds,
+       ask it — the rendered tiles keep their order at the front and whatever
+       never rendered follows. The adapter decides whether that is honest for
+       this address; it refuses whenever a filter is on it. */
+    if (a.completeList) {
+      try {
+        const before = scraped.length;
+        const full = await a.completeList(scraped, location.href, j.maxItems || 0);
+        if (Array.isArray(full) && full.length > before) {
+          j.topped = { grid: before, all: full.length };
+          scraped = full;
+          await report(`The grid rendered ${before} — the shop lists ${full.length} in this collection`);
+        }
+      } catch (e) { /* the shop disabled it: the grid stands as scraped */ }
+    }
+
     j.seen = j.seen || {};
     let added = 0, hitCap = false;
     for (const r of scraped) {

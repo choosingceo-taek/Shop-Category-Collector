@@ -1929,6 +1929,82 @@
       return map;
     }
 
+    /* ---- when the grid keeps most of the collection ------------------------
+
+       Set Active's /collections/new rendered four tiles and the scan graded
+       itself complete. The rescue that exists for exactly this — press the
+       shop's "load more", sweep the grid again — is gated on the page PRINTING
+       how many it is showing ("66 items"), and plenty of themes print no such
+       number anywhere. With nothing to be short OF, nothing was pressed,
+       nothing was swept, and four of sixty-six looked like success. That is
+       the one failure this tool must not have: a half scan that reports itself
+       whole, because the spreadsheet then looks perfectly fine.
+
+       A Shopify shop does not have to print it. The collection's own JSON
+       lists exactly what the collection holds, needs no key, and we already
+       fetch it for the composition. So when the address carries no filter —
+       when there is nothing of the designer's choosing to preserve — the
+       shop's list of the collection IS the collection. Whatever the grid never
+       rendered is appended AFTER what it did, so the merchandiser's order
+       still leads, which is what the ranking in that order is for.
+
+       With a filter on the address the rendered page keeps deciding, because
+       products.json knows nothing about the facets that were chosen. */
+    function collectionFiltered(u) {
+      try {
+        const x = new URL(u);
+        if (x.hash && /[=&]/.test(x.hash)) return true;
+        for (const k of x.searchParams.keys()) {
+          if (/^(filter\.|pf_|_pf)/i.test(k) || /^(q|constraint|tag)$/i.test(k)) return true;
+        }
+        /* /collections/<handle>/<tag> — the tag narrows the collection, and it
+           is a name the shop wrote, so both halves are kept elsewhere; here it
+           means the JSON for <handle> would be a wider set than the page. */
+        const segs = x.pathname.split("/").filter(Boolean);
+        const i = segs.indexOf("collections");
+        if (i >= 0 && segs.length > i + 2 && segs[i + 2] !== "products") return true;
+      } catch (e) { return true; }
+      return false;
+    }
+
+    async function completeList(rows, listUrl, cap) {
+      rows = rows || [];
+      if (collectionFiltered(listUrl)) return rows;
+      let origin = "";
+      try { origin = new URL(listUrl).origin; } catch (e) { return rows; }
+      const map = await loadBulk(listUrl);
+      if (!map || !map.size) return rows;
+      const have = new Set(rows.map(r => handleOf(r.product_url)).filter(Boolean));
+      if (have.size >= map.size) return rows;
+      /* products.json carries the amount but not the currency. The symbol the
+         shop writes on this very page is the shop's own text, so it is taken
+         from a tile that did render rather than guessed at; with no tile to
+         read, the bare amount stands on its own. */
+      let symbol = "";
+      for (const r of rows) {
+        const m = String(r.price || "").match(/^\s*([^\d\s.,]{1,3})/);
+        if (m) { symbol = m[1]; break; }
+      }
+      const category = categoryFromUrl(listUrl);
+      const limit = cap && cap > 0 ? cap : 60;
+      const out = rows.slice();
+      for (const p of map.values()) {
+        if (out.length >= limit) break;
+        const h = String((p && p.handle) || "").toLowerCase();
+        if (!h || have.has(h)) continue;
+        have.add(h);
+        const v = (p.variants && p.variants[0]) || null;
+        const amount = v && v.price != null ? String(v.price) : "";
+        const url = `${origin}/products/${h}`;
+        out.push({
+          brand: "", category, department: "",
+          name: p.title || "", price: amount ? symbol + amount : "",
+          product_url: url, image_url: shopifyImage(p) || "", id: url,
+        });
+      }
+      return out;
+    }
+
     // products.json shape: prices are decimal strings, options carry every value.
     /* Shopify's "vendor" is a free-text field, and plenty of own-brand shops
        put the style code in it — Edikted filled a whole spreadsheet's brand
@@ -2138,7 +2214,7 @@
          Every other infinite-grid adapter already scrolls first; shopify was
          the one that didn't. */
       lazyScroll: true,
-      match, context, scrapeList,
+      match, context, scrapeList, completeList,
       totalPages: generic.totalPages,
       resultCount: generic.resultCount,
       nextPageUrl: generic.nextPageUrl,       // Shopify collections use ?page=N and keep filter params
@@ -2147,6 +2223,7 @@
       templateUrl: null,
       _parseProductJson: parseProductJson, _categoryFromUrl: categoryFromUrl,
       _parseCollectionProduct: parseCollectionProduct, _handleOf: handleOf,
+      _collectionFiltered: collectionFiltered,
     };
   })();
 
