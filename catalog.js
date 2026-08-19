@@ -98,19 +98,20 @@
     // With no list saved there is nothing to choose between — the rail would
     // be a control with one option, which is just noise.
     rail.hidden = lists.length < 1;
+    /* The name, and no figure. Which list is open is the question these chips
+       answer; how much is in it is what the page below is for. The tally is
+       still a hover away, where it costs nothing. */
     box.innerHTML =
-      `<button data-id="" class="${scopeId ? "" : "on"}" title="${allBrands} brands · ${allItems.length} products">All lists` +
-      `<span class="n">${allBrands}</span></button>` +
+      `<button data-id="" class="${scopeId ? "" : "on"}" title="${allBrands} brands · ${allItems.length} products">All lists</button>` +
       lists.map(l => `<button data-id="${esc(l.id)}" class="${scopeId === l.id ? "on" : ""}" ` +
         `title="${counts.get(l.id) || 0} brands in ${esc(l.name)}">` +
-        `<span class="dot" style="background:${listColor(l.name)}"></span>${esc(l.name)}` +
-        `<span class="n">${counts.get(l.id) || 0}</span></button>`).join("");
+        `<span class="dot" style="background:${listColor(l.name)}"></span>${esc(l.name)}</button>`).join("");
     box.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
       if (b.dataset.id === scopeId) return;
       scopeId = b.dataset.id;
       try { chrome.storage.local.set({ [SCOPE_KEY]: scopeId }); } catch (e) {}
       applyScope();
-      curWeekStart = null; curBrand = ""; curCat = ""; curFeedBrand = "";
+      curWeekStart = null; curBrand = "";
       renderScope(); fillFilters(); redrawAll();
       // this list's weeks are its own record — write them the first time it is opened
       rollup().then(redrawAll);
@@ -1108,7 +1109,7 @@
     const shown = fresh.filter(inGarment);
     fillLabCat(fresh);
     window.LabView.render($("#labbody"), shown, {
-      tierChips: tierChips(new Map(tierList().map(t => [t, items.filter(i => i.tier === t).length]))),
+      tierChips: tierChips(),
       garmentChips: "",
       months: parseInt($("#labmonths").value, 10) || 6,
       granularity: $("#labgran").value,
@@ -1152,7 +1153,7 @@
      honest for every shop; a shop-stated launch date exists only on Shopify
      and is shown on the card when we have it. Clips are excluded, as in LAB:
      hand-picked items are not arrivals. */
-  let curWeekStart = null, curBrand = "", curCat = "", curFeedBrand = "";
+  let curWeekStart = null, curBrand = "";
 
   const tierList = () => [...new Set(items.map(i => i.tier).filter(Boolean))].sort();
   const inTier = i => !curTier || i.tier === curTier;
@@ -1322,8 +1323,11 @@
     if (!anyPicked()) return "";
     const bits = FACETS.filter(f => chosenIn(f[0]).size)
       .map(f => `<b>${esc([...chosenIn(f[0])].join(", "))}</b>`);
-    return `<div class="railnote">Showing ${shown.toLocaleString()} of ${total.toLocaleString()} ·
-      ${bits.join(" · ")} <button id="railclear">Clear all</button></div>`;
+    /* No tally here either — but the sentence stays. A screen that has been
+       narrowed must say so, or a part is read as the whole; it says it with
+       the names that are narrowing it, which is the more useful half. */
+    return `<div class="railnote">Filtered to ${bits.join(" · ")}
+      <button id="railclear">Clear all</button></div>`;
   }
   function wireRailNote(el, rerender) {
     const b = el.querySelector("#railclear");
@@ -1335,15 +1339,14 @@
   /* One chip row, reused by every view that can be narrowed to a tier. Counts
      are shown so a chip can never lead to an empty screen, and the row is
      omitted entirely when no tier data has been imported. */
-  function tierChips(counts) {
+  function tierChips() {
     const list = tierList();
     if (!list.length) return "";
-    const n = t => (counts ? (counts.get(t) || 0) : null);
-    const all = counts ? [...counts.values()].reduce((a, b) => a + b, 0) : null;
+    // the tier, not how many are in it — counting is the LAB's job
     return `<div class="catchips tierchips">
-      <button data-t="" class="${curTier ? "" : "on"}">All tiers${all != null ? ` · ${all}` : ""}</button>` +
-      list.map(t => `<button data-t="${esc(t)}" class="${t === curTier ? "on" : ""}">${esc(t)}${
-        n(t) != null ? ` · ${n(t)}` : ""}</button>`).join("") + `</div>`;
+      <button data-t="" class="${curTier ? "" : "on"}">All tiers</button>` +
+      list.map(t => `<button data-t="${esc(t)}" class="${t === curTier ? "on" : ""}">${esc(t)}</button>`).join("") +
+      `</div>`;
   }
   function wireTierChips(el, rerender) {
     el.querySelectorAll(".tierchips button").forEach(b =>
@@ -1490,8 +1493,11 @@
     if (!weeks.some(w => w.start === curWeekStart)) curWeekStart = weeks[0].start;
     const wk = weeks.find(w => w.start === curWeekStart);
 
+    /* The weeks, and nothing else — no tally on the chip. Counting what came
+       in is the LAB's job and it does it properly, by brand; here the figure
+       was decoration on a control whose whole meaning is "which week". */
     const chips = weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}">
-      <b>${esc(w.label)}</b> · ${w.count}</button>`).join("");
+      <b>${esc(w.label)}</b></button>`).join("");
 
     // search first, so the brand chips' counts describe what is on screen
     const q = currentQ();
@@ -1502,26 +1508,12 @@
     wireRail(renderNew);
     const wkItems = searched.filter(i => railMatch(i));
 
-    // Brand filter for the week — counts shown per brand so an empty pick
-    // can't happen. The filter narrows THIS view only; it never touches what
-    // was collected (charter: attribute filters are post-scan, display-side).
-    const brandCount = new Map();
-    wkItems.forEach(i => {
-      const b = i.brand || "Other";
-      brandCount.set(b, (brandCount.get(b) || 0) + 1);
-    });
-    const feedBrands = [...brandCount.entries()].sort((a, b) => b[1] - a[1]);
-    if (curFeedBrand && !brandCount.has(curFeedBrand)) curFeedBrand = "";
-    const brandChips = feedBrands.length > 1
-      ? `<div class="catchips">
-           <button data-b="" class="${curFeedBrand ? "" : "on"}">All · ${wkItems.length}</button>` +
-        feedBrands.map(([b, n]) =>
-          `<button data-b="${esc(b)}" class="${b === curFeedBrand ? "on" : ""}">${esc(b)} · ${n}</button>`).join("") +
-        `</div>`
-      : "";
-    const shownItems = curFeedBrand
-      ? wkItems.filter(i => (i.brand || "Other") === curFeedBrand)
-      : wkItems;
+    /* No brand row across the middle any more. The rail on the left asks that
+       question — with counts, a search box and tiers — and a second brand
+       filter three inches away is two controls for one thing: they drift,
+       and the screen stops saying which one is narrowing it. The only chips
+       left over the feed are the weeks, which is what this tab is FOR. */
+    const shownItems = wkItems;
 
     /* Day (newest first) → brand (biggest first) → cards. A week of scans is
        usually several sittings, and "what came in on Tuesday" is how the team
@@ -1545,32 +1537,28 @@
       });
       const inner = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
         .map(([brand, ii]) =>
-          `<div class="brandsec"><b>${esc(brand)}</b><span>${ii.length}</span></div>
+          `<div class="brandsec"><b>${esc(brand)}</b></div>
            <div class="grid">${ii.slice().sort(bySitePos).map(feedCard).join("")}</div>`).join("");
-      return `<div class="dayhead"><b>${d.getMonth() + 1}/${d.getDate()} (${DOW[d.getDay()]})</b>
-        <span>${rows.length}</span></div>${inner}`;
+      return `<div class="dayhead"><b>${d.getMonth() + 1}/${d.getDate()} (${DOW[d.getDay()]})</b></div>${inner}`;
     }).join("");
 
     el.innerHTML = `
       <div class="edhead">
-        <div><span class="kicker">${wk.count} new arrivals · first collected this week</span>
+        <div><span class="kicker">first collected this week</span>
           <h2>New In</h2></div>
         <span class="weektag">WEEK ${esc(window.TrendCalc.weekId(wk.start))}</span>
       </div>
       <div class="weekchips">${chips}</div>
-      ${tierChips(new Map(tierList().map(t => [t, wk.items.filter(i => i.tier === t).length])))}
+      ${tierChips()}
       ${railNote(wkItems.length, searched.length)}
-      ${brandChips}
       ${sections || `<div class="none">${q ? `Nothing matches "${esc(q)}" in this week.`
         : anyPicked() ? "Nothing in this week matches the filters on the left."
         : "No products in this week."}</div>`}`;
     armImgFallback(el);
     wireRailNote(el, renderNew);
-    wireTierChips(el, () => { curFeedBrand = ""; renderNew(); });
+    wireTierChips(el, () => renderNew());
     el.querySelectorAll(".weekchips button").forEach(b =>
-      b.addEventListener("click", () => { curWeekStart = +b.dataset.w; curFeedBrand = ""; renderNew(); }));
-    el.querySelectorAll(".catchips button").forEach(b =>
-      b.addEventListener("click", () => { curFeedBrand = b.dataset.b; renderNew(); }));
+      b.addEventListener("click", () => { curWeekStart = +b.dataset.w; renderNew(); }));
   }
 
   function renderBrands() {
@@ -1600,7 +1588,7 @@
       byBrand.get(b).push(i);
     });
     const brands = [...byBrand.keys()].sort((a, b) => byBrand.get(b).length - byBrand.get(a).length);
-    if (!byBrand.has(curBrand)) { curBrand = brands[0]; curCat = ""; }
+    if (!byBrand.has(curBrand)) curBrand = brands[0];
 
     const weeks = weekBuckets();
     const latest = weeks[weeks.length - 1];
@@ -1611,7 +1599,7 @@
        brands makes that question unanswerable. Untiered brands sit under a
        plain heading rather than being hidden. */
     const btn = b => `<button data-b="${esc(b)}" class="${b === curBrand ? "on" : ""}">
-      <span>${esc(b)}</span><span class="n">${byBrand.get(b).length}</span></button>`;
+      <span>${esc(b)}</span></button>`;
     const railTiers = [...new Set(brands.map(b => (byBrand.get(b)[0] || {}).tier || ""))]
       .sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || String(a).localeCompare(String(b)));
     const rail = railTiers.length > 1 || railTiers[0]
@@ -1623,14 +1611,10 @@
       : brands.map(btn).join("");
 
     const mine = byBrand.get(curBrand) || [];
-    const cats = [...new Set(mine.map(i => i.category).filter(Boolean))];
-    if (curCat && !cats.includes(curCat)) curCat = "";
-    const catChips = cats.length > 1
-      ? `<div class="catchips"><button data-c="" class="${curCat ? "" : "on"}">All</button>` +
-        cats.map(c => `<button data-c="${esc(c)}" class="${c === curCat ? "on" : ""}">${esc(c)}</button>`).join("") + `</div>`
-      : "";
+    /* No category row here either — same reason as the brand row on New In.
+       The rail asks what kind of garment it is, and it asks it once. */
     const q = currentQ();
-    const shown = (curCat ? mine.filter(i => i.category === curCat) : mine)
+    const shown = mine
       .filter(i => matchesQ(i, q))
       // in the shop's own order — the page a designer would have opened
       .slice().sort(bySitePos);
@@ -1638,32 +1622,28 @@
 
     el.innerHTML = `
       <div class="edhead">
-        <div><span class="kicker">${brands.length} brand profiles · counted from scans</span>
+        <div><span class="kicker">counted from scans</span>
           <h2>By Brand</h2></div>
         ${latest ? `<span class="weektag">WEEK ${esc(window.TrendCalc.weekId(latest.start))}</span>` : ""}
       </div>
-      ${tierChips(new Map(tierList().map(t => [t, rows.filter(i => i.tier === t).length])))}
+      ${tierChips()}
       ${railNote(rows.length, all.length)}
       <div class="brandwrap">
         <div class="brail">${rail}</div>
         <div>
           <div class="bhero">
             <h2>${esc(curBrand)}${(mine[0] || {}).tier ? `<em class="tierbadge">${esc(mine[0].tier)}</em>` : ""}</h2>
-            <div class="bmeta">${mine.length} products · ${cats.length || 1} categories${
-              nw ? ` · <span class="bnew">${nw} new this week</span>` : ""}</div>
+            <div class="bmeta">${nw ? `<span class="bnew">New this week</span>` : ""}</div>
           </div>
-          ${catChips}
           ${shown.length ? `<div class="grid">${shown.map(feedCard).join("")}</div>`
             : `<div class="none">${q ? `Nothing matches "${esc(q)}".` : "No products."}</div>`}
         </div>
       </div>`;
     armImgFallback(el);
-    wireTierChips(el, () => { curBrand = ""; curCat = ""; renderBrands(); });
+    wireTierChips(el, () => { curBrand = ""; renderBrands(); });
     wireRailNote(el, renderBrands);
     el.querySelectorAll(".brail button").forEach(b =>
-      b.addEventListener("click", () => { curBrand = b.dataset.b; curCat = ""; renderBrands(); }));
-    el.querySelectorAll(".catchips button").forEach(b =>
-      b.addEventListener("click", () => { curCat = b.dataset.c; renderBrands(); }));
+      b.addEventListener("click", () => { curBrand = b.dataset.b; renderBrands(); }));
   }
   document.querySelectorAll(".tab").forEach(b =>
     b.addEventListener("click", () => tabTo(b.dataset.view)));

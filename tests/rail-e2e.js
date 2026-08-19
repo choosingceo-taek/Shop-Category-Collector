@@ -156,6 +156,61 @@ const items = Array.from({ length: 60 }, (_, n) => ({
   ok("choosing a value still narrows the screen",
     narrowed.after > 0 && narrowed.after < narrowed.before, JSON.stringify(narrowed));
 
+  /* ---- 4. one filter per question, and no tallies ------------------------
+
+     The middle of the feed carried a second brand filter, three inches from
+     the one on the left: two controls for one question drift apart, and the
+     screen stops saying which of them is narrowing it. What is left over the
+     feed is the weeks, which is what this tab is for.
+
+     And the counts are off the browsing chrome (the designer asked): the week
+     chips, the day and brand headings, the brand column, the list chips. What
+     came in and how much of it is the LAB's question and the LAB answers it
+     properly, by brand; here the figures were decoration on controls whose
+     meaning is which week, which brand, which list. */
+  await p.click('.tab[data-view="new"]');
+  await p.waitForTimeout(1200);
+  const feed = await p.evaluate(() => {
+    const el = document.querySelector("#v-new");
+    const txt = s => [...el.querySelectorAll(s)].map(e => (e.textContent || "").replace(/\s+/g, " ").trim());
+    return {
+      brandChipRow: [...el.querySelectorAll(".catchips")].filter(c => c.querySelector("[data-b]")).length,
+      weekChips: txt(".weekchips button"),
+      days: txt(".dayhead"),
+      brandHeads: txt(".brandsec"),
+      kicker: txt(".kicker")[0] || "",
+    };
+  });
+  ok("no brand row across the middle — the rail asks that", feed.brandChipRow === 0,
+    String(feed.brandChipRow));
+  ok("the weeks are still there", feed.weekChips.length > 0, JSON.stringify(feed.weekChips));
+  ok("…as dates, without a tally", feed.weekChips.every(t => !/\d+\s*$/.test(t.replace(/^\d+\/\d+/, ""))),
+    JSON.stringify(feed.weekChips));
+  ok("a day heading is a day", feed.days.every(t => !/\d+$/.test(t.replace(/\)$/, ""))),
+    JSON.stringify(feed.days));
+  ok("a brand heading is a brand", feed.brandHeads.every(t => !/\d/.test(t)),
+    JSON.stringify(feed.brandHeads));
+  ok("and the line above says what it is, not how many", !/\d/.test(feed.kicker), feed.kicker);
+
+  const chips = await p.evaluate(() =>
+    [...document.querySelectorAll("#scopechips button")].map(b => (b.textContent || "").trim()));
+  ok("the list chips carry no figure", chips.length > 0 && chips.every(t => !/\d/.test(t)),
+    JSON.stringify(chips));
+
+  await p.click('.tab[data-view="brands"]');
+  await p.waitForTimeout(1200);
+  const bybrand = await p.evaluate(() => {
+    const el = document.querySelector("#v-brands");
+    return {
+      catChipRow: [...el.querySelectorAll(".catchips")].filter(c => c.querySelector("[data-c]")).length,
+      column: [...el.querySelectorAll(".brail button")].map(b => (b.textContent || "").trim()),
+    };
+  });
+  ok("no category row on By Brand either", bybrand.catChipRow === 0, String(bybrand.catChipRow));
+  ok("…and the brand column is names only",
+    bybrand.column.length > 0 && bybrand.column.every(t => !/\d/.test(t)),
+    JSON.stringify(bybrand.column));
+
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();
