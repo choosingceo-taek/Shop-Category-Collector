@@ -24,8 +24,15 @@ execSync(`rm -rf ${COPY} && mkdir -p ${COPY}`);
 execSync(`cd ${REPO} && git ls-files | tar -cf - -T - | tar -x -C ${COPY}`);
 execSync(`rm -rf ${COPY}/tests`);
 const bg = fs.readFileSync(`${COPY}/background.js`, "utf8");
+/* Deleting the property is not enough on its own: Chrome defines its API
+   namespaces lazily, so the next access can put chrome.sidePanel back and the
+   premise of this whole run quietly stops holding — every assertion after it
+   is then measuring a browser that HAS a side panel. Define it away instead. */
 fs.writeFileSync(`${COPY}/background.js`,
-  "try { delete self.chrome.sidePanel; } catch (e) {}\n" + bg);
+  "try { delete self.chrome.sidePanel;\n" +
+  "  Object.defineProperty(self.chrome, 'sidePanel',\n" +
+  "    { configurable: true, get() { return undefined; } });\n" +
+  "} catch (e) {}\n" + bg);
 
 (async () => {
   const ctx = await chromium.launchPersistentContext("/tmp/pw-edge", {

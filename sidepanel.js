@@ -20,7 +20,19 @@
   let tab = null, read = null, job = null, queue = null;
   let lists = [], curList = null;
   let products = [], picked = new Set();
-  let listFilter = "";          // when set, PRODUCTS shows only that list's results
+  /* PRODUCTS shows the list that is open in COLLECTOR.
+
+     The scoping already existed and there was almost no way to reach it: the
+     only thing that set it was a "View" button in the box a finished run
+     leaves behind, so in practice the product wall was the whole catalog and
+     a designer looking at one research question saw every other one mixed in.
+
+     The tab strip above already chooses the list, so nothing new is needed to
+     say which — PRODUCTS just follows it. Seeing everything is a deliberate
+     step out of that, which is what the bar's control does, and it says which
+     of the two it is in either case. */
+  let listFilter = "";          // derived from the open list; see syncScope
+  let scopeAll = false;         // …unless the person asked for every list
 
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -843,6 +855,9 @@
     fill($("#pbrand"), "brand", "brand", b);
     fill($("#pcat"), "cat", "category", c);
   }
+  function syncScope() {
+    listFilter = scopeAll ? "" : ((curList && curList.id) || "");
+  }
   const priceN = v => { const m = String(v || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : null; };
   function visibleProducts() {
     const q = $("#psearch").value.trim().toLowerCase();
@@ -857,9 +872,19 @@
   }
   function renderProducts() {
     const scoped = listFilter && lists.find(l => l.id === listFilter);
-    $("#scopebar").hidden = !scoped;
-    if (scoped) $("#scopetext").textContent = "List · " + scoped.name;
     const rows = visibleProducts(), grid = $("#pgrid");
+    /* Always drawn, because "which list am I looking at" is the first thing
+       to know about a wall of photographs — and a bar that appears only
+       sometimes is a state nobody learns to read. */
+    const bar = $("#scopebar"), clear = $("#scopeclear");
+    bar.hidden = !lists.length;
+    $("#scopetext").textContent = scoped
+      ? `${scoped.name} · ${rows.length}`
+      : `All lists · ${rows.length}`;
+    clear.textContent = scoped ? "Show all" : "↩";
+    clear.title = scoped
+      ? "Show every list"
+      : (curList ? `Back to ${curList.name}` : "Back to the open list");
     if (!products.length) {
       grid.innerHTML = '<div class="pempty">Nothing collected yet.<br>Add sites in COLLECTOR, then press ▶ Scan all.</div>';
     } else if (!rows.length) {
@@ -887,7 +912,7 @@
     $("#v-collector").classList.toggle("on", v === "collector");
     $("#v-products").classList.toggle("on", v === "products");
     $("#selbar").classList.toggle("on", v === "products");
-    if (v === "products") refreshProducts();
+    if (v === "products") { syncScope(); refreshProducts(); }
   }));
 
   /* Bring the on-page grab button back (or send it away).
@@ -1527,7 +1552,10 @@
   $("#listsel").addEventListener("change", e => {
     curList = lists.find(l => l.id === e.target.value) || curList;
     listQuery = ""; $("#lq").value = "";
+    // the products belong to the list that is open, so they move with it
+    syncScope();
     fillListSelect(); renderList(); paintNow(); paintListResult();
+    if ($("#v-products").classList.contains("on")) { paintProductFilters(); renderProducts(); }
   });
   // Bound to the chip rail, which is rebuilt whenever the lists change.
   async function newList() {
@@ -1742,7 +1770,7 @@
   });
   // jump to PRODUCTS showing only this list's results
   $("#listview").addEventListener("click", () => {
-    listFilter = curList && curList.id;
+    scopeAll = false; syncScope();
     paintProductFilters();
     document.querySelector('.tab[data-view="products"]').click();
   });
@@ -1765,7 +1793,10 @@
     renderProducts();
   });
   $("#selreset").addEventListener("click", () => { picked.clear(); renderProducts(); });
-  $("#scopeclear").addEventListener("click", () => { listFilter = ""; paintProductFilters(); renderProducts(); });
+  $("#scopeclear").addEventListener("click", () => {
+    scopeAll = !scopeAll;
+    syncScope(); paintProductFilters(); renderProducts();
+  });
   $("#selexport").addEventListener("click", async () => {
     const rows = products.filter(p => picked.has(p.key));
     if (!rows.length) return toast("Nothing selected");

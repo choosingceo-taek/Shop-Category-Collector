@@ -150,6 +150,57 @@ const products = Array.from({ length: 24 }, (_, i) => ({
   ok("it is opaque, so photographs do not show through",
     stuck.opaque !== "rgba(0, 0, 0, 0)" && stuck.opaque !== "transparent", stuck.opaque);
 
+  /* ---- 3b. PRODUCTS shows the list that is open in COLLECTOR --------------
+
+     The scoping existed and had almost no way in: only a "View" button in the
+     box a finished run leaves behind. So the product wall was the whole
+     catalog, and someone looking at one research question saw every other one
+     mixed into it. */
+  const scope = await p.evaluate(() => {
+    const b = document.querySelector("#scopebar");
+    return {
+      shown: !!b && !b.hidden,
+      text: (document.querySelector("#scopetext").textContent || "").trim(),
+      cards: document.querySelectorAll("#pgrid .pc").length,
+    };
+  });
+  ok("the wall says which list it is showing", scope.shown && /FABRIC/.test(scope.text),
+    scope.text);
+  ok("…and that is the list the products belong to", scope.cards >= 10,
+    `${scope.cards} cards`);
+
+  // switching the list in COLLECTOR moves the wall with it
+  await p.click('.tab[data-view="collector"]');
+  await p.waitForTimeout(400);
+  await p.evaluate(() => {
+    const sel = document.querySelector("#listsel");
+    sel.value = "l1";                              // ACTIVE — nothing collected
+    sel.dispatchEvent(new Event("change"));
+  });
+  await p.click('.tab[data-view="products"]');
+  await p.waitForTimeout(700);
+  const moved = await p.evaluate(() => ({
+    text: (document.querySelector("#scopetext").textContent || "").trim(),
+    cards: document.querySelectorAll("#pgrid .pc").length,
+  }));
+  ok("choosing another list moves the wall to it", /ACTIVE/.test(moved.text), moved.text);
+  ok("…and an empty list really is empty", moved.cards === 0, `${moved.cards} cards`);
+
+  // and there is a way to see everything
+  await p.click("#scopeclear");
+  await p.waitForTimeout(600);
+  const all = await p.evaluate(() => ({
+    text: (document.querySelector("#scopetext").textContent || "").trim(),
+    cards: document.querySelectorAll("#pgrid .pc").length,
+  }));
+  ok("one press steps out to every list", /All lists/i.test(all.text), all.text);
+  ok("…which brings the other list's products back", all.cards >= 10, `${all.cards} cards`);
+  await p.click("#scopeclear");
+  await p.waitForTimeout(600);
+  ok("and one press goes back to the open list",
+    /ACTIVE/.test((await p.locator("#scopetext").innerText()).trim()),
+    (await p.locator("#scopetext").innerText()).trim());
+
   /* ---- 4. the run bar is marks only, and every mark carries its weight ----
 
      A bare glyph has to say the whole thing, so the floor is measured rather
