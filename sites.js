@@ -1353,6 +1353,27 @@
       return !!(w && h && w <= 100 && h <= 100);
     }
 
+    /* …and the other structural evidence: the shop's own words.
+
+       Varley's grid puts a row of colour swatches under each photograph, and
+       labels each one "Color swatch for Mid Tan" — the accessibility text a
+       swatch has to carry to be operable at all. Those swatches are not
+       declared at 40px anywhere, so the size guard above cannot see them, and
+       the reader came back with a flat block of colour as the garment and
+       "Color swatch for Mid Tan" as its name. Measured on a fixture built from
+       that page: thirty rows, thirty swatches.
+
+       This is the shop stating what the picture IS, in the one place the
+       markup gives it — the same kind of fact as a declared width, and not a
+       class name or a selector. */
+    const SWATCH_TEXT = /\bcolou?r\s*swatch\b|\bswatch\s+for\b|^\s*swatch\b/i;
+    function isSwatch(el) {
+      if (!el || !el.getAttribute) return false;
+      const said = (el.getAttribute("alt") || "") + " " +
+        (el.getAttribute("aria-label") || "") + " " + (el.getAttribute("title") || "");
+      return SWATCH_TEXT.test(said);
+    }
+
     /* url() out of a background declaration, image-set() included: a shop may
        list several densities there, and the densest is the one worth keeping. */
     function bgUrl(style) {
@@ -1380,7 +1401,7 @@
          picture, in which case a small declared size is a dense grid's layout
          rather than a swatch, and dropping it would trade a real photograph
          for a blank card. */
-      const all = [...(el.querySelectorAll("img") || [])];
+      const all = [...(el.querySelectorAll("img") || [])].filter(i => !isSwatch(i));
       const imgs = all.length > 1 ? all.filter(i => !tinyPicture(i)) : all;
       imgs.forEach(img => {
         // widest first, then the plain attributes lazy loaders populate
@@ -1450,10 +1471,12 @@
          invisible: the row looks complete. Same rule, same reason: a picture
          the markup itself declares as 100px square is not the garment, and an
          image with no declared size is never skipped. */
-      const imgs = [...((el.querySelectorAll && el.querySelectorAll("img")) || [])];
+      const imgs = [...((el.querySelectorAll && el.querySelectorAll("img")) || [])]
+        .filter(i => !isSwatch(i));
       const img = imgs.length > 1 ? (imgs.find(i => !tinyPicture(i)) || imgs[0]) : imgs[0];
       const alt = img && (img.getAttribute("alt") || "").trim();
       if (alt && alt.length >= 3 && alt.length <= 150 && !isUiText(alt) &&
+          !SWATCH_TEXT.test(alt) &&
           !/^(image|photo|thumbnail|product|products|img|picture)$/i.test(alt)) return alt;
 
       /* A picture drawn as a CSS background still has the shop's own words on
