@@ -242,14 +242,25 @@ const serverReady = new Promise(r => server.listen(PORT, "127.0.0.1", r));
     const html2 = window.ReportGen.build(items, {}, { title: "Material Intelligence",
       scope: "FABRIC", generatedAt: "2026-08-18" });
     const d = document.createElement("div"); d.innerHTML = html2;
+    /* "References nothing outside itself" is about what LOADS when the file
+       opens. A card now links to the shop's own page — an anchor fetches
+       nothing until it is pressed, and it is where the full-size photograph
+       is — so the count is of src and of the stylesheet kind of href. */
     return { len: html2.length,
-      ext: (html2.match(/(src|href)="(?!data:|#)[a-z]+:/gi) || []).length,
+      ext: (html2.match(/src="(?!data:|#)[a-z]+:/gi) || []).length +
+        (html2.match(/<link[^>]+href="(?!data:|#)[a-z]+:/gi) || []).length,
+      links: d.querySelectorAll("a.plink[href^='http']").length,
       hero: !!d.querySelector(".hero h1"), tiles: d.querySelectorAll(".dtiles .dt").length,
       rank: d.querySelectorAll(".rank .rrow").length, sigs: d.querySelectorAll(".sig").length };
   });
   ok("the report builds from the real catalog", report.len > 5000, JSON.stringify(report));
-  ok("…as the dashboard, with hero, tiles, rankings and signals",
-    report.hero && report.tiles >= 5 && report.rank > 0 && report.sigs === 3, JSON.stringify(report));
+  /* Decision signals are not drawn any more (asked for) — what the overview
+     keeps answers what the season is made of. */
+  ok("…as the dashboard, with hero, tiles and rankings",
+    report.hero && report.tiles >= 5 && report.rank > 0 && report.sigs === 0,
+    JSON.stringify(report));
+  ok("…and every card is a door back to the shop's own page",
+    report.links > 0, JSON.stringify(report));
   ok("…and still references nothing outside itself", report.ext === 0, String(report.ext));
 
   /* Written out and photographed, because the last question a designer asks
