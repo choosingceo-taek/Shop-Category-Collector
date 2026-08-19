@@ -94,6 +94,16 @@
   .labbar .cap { font-size:10px; text-transform:uppercase; letter-spacing:.1em;
     color:var(--muted); }
   .labbar select { font-size:12px; padding:4px 8px; }
+  /* Pushed to the far end of the bar: the three selects to its left decide
+     what the file will contain, and this is what happens after they are set. */
+  .labhtml { margin-left:auto; display:inline-flex; align-items:center; gap:7px;
+    padding:6px 12px; border:1px solid var(--ink); background:var(--ink); color:#fff;
+    border-radius:var(--r-s); font:700 11px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.1em; cursor:pointer; }
+  .labhtml svg { width:16px; height:16px; fill:currentColor; }
+  .labhtml em { font-style:normal; }
+  .labhtml:hover { background:#000; border-color:#000; }
+  .labhtml:disabled { opacity:.45; cursor:default; }
   /* Each analysis is its own card on the grey ground — the heading belongs to
      the card, so nothing needs a rule under it to say where a section ends. */
   .sec { background:var(--card); border-radius:var(--r); padding:11px 14px 12px;
@@ -534,7 +544,16 @@
         </select>
         <button id="reset">Clear filters</button>
       </div>
-      <div class="fs"><span class="lg">Take away</span>
+      <!-- The file is made from the LAB, not from the product wall.
+
+           These three sat over a grid of photographs, which is the one place
+           in here nobody is deciding to publish anything — they are browsing.
+           The report is a picture of the week's analysis, so the control for
+           it belongs beside the controls that decide what that analysis
+           covers: the HTML button on the LAB's own bar presses this one.
+           Kept in the DOM, drawn nothing: duplicating the handler would leave
+           two of them and one would go stale. -->
+      <div class="fs" hidden><span class="lg">Take away</span>
         <select id="tmpl" title="Report template">
           <option value="standard">Dashboard</option>
           <option value="lookbook">Lookbook</option>
@@ -585,6 +604,14 @@
              between the reader and the first answer. -->
         <div class="selwrap"><span class="cap">Category</span>
           <select id="labcat"><option value="">All types</option></select></div>
+        <!-- The file, at the end of the row that decides what goes in it.
+             One press: the same builder the Products tab used to carry, on
+             the dashboard template, embedding every photograph so the page
+             opens with no internet. -->
+        <button id="labhtml" class="labhtml" title="Build the dashboard as one HTML file — photographs included, opens without internet">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.6h7.2L19 8.4v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4.6a2 2 0 0 1 2-2zm6.4 2H6v16.8h11V9.4h-4.6z"/><path d="M7.6 12.2h1.5v1.7h1.3v-1.7h1.5v5h-1.5v-1.9H9.1v1.9H7.6zM13 12.2h3.9v1.4h-1.2v3.6h-1.5v-3.6H13z"/></svg>
+          <em>HTML</em>
+        </button>
         <!-- No measure picker: the axes are the four a designer asks of a
              season — FABRIC / COLOUR / FIT / DETAIL — and they are all on
              screen at once. Choosing one at a time meant holding the other
@@ -599,9 +626,9 @@
          designer's question is compound: midi dresses, in satin, at the
          contemporary brands. Each group is one question, several answers
          inside a group are an "or", and the groups are an "and" — the shape
-         every filter rail in the trade already has. The counts beside each
-         value are computed against the OTHER groups, so nothing on the rail
-         can lead to an empty screen. -->
+         every filter rail in the trade already has. Each group is counted
+         against the OTHER groups, so a value that would empty the screen is
+         not listed at all — which is why no number is printed beside one. -->
     <div class="withrail" id="railwrap" hidden>
       <aside class="rail" id="rail"></aside>
       <div class="railmain">

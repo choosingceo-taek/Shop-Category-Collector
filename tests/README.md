@@ -38,6 +38,7 @@ node tests/encoding-test.js
 | `matrix-probe.js` | 83 generated shop shapes; the reader's output checked against what the page actually says (explorer and contract in one file) |
 | `shortgrid-e2e.js` | a grid that hands over 4 of 14 and says nothing about it, and one with a View More and no count — the two shapes that graded a half scan as complete |
 | `assetfetch-e2e.js` | the download through the redirect GitHub really serves — nothing routed, so host_permissions apply at every hop the way they do for a teammate |
+| `labtools-e2e.js` | the file is built from the LAB (HTML button at the end of its bar), the take-away controls are off the product wall, and the rail lists values without counts |
 | `dashboard-e2e.js` | the exported HTML is the dashboard, is self-contained, and its figures agree with each other |
 | `encoding-test.js` | no shipped file carries a Unicode noncharacter (Chrome refuses the whole manifest over one), the ship list is real, the manifest parses |
 | `updnote-e2e.js` | a new version reaches the person: one owner for the toolbar badge, the repo asked on a timer, an optional notification said once per version |

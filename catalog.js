@@ -824,6 +824,28 @@
   }
   $("#report").addEventListener("click", makeReport);
 
+  /* The LAB's own button. It presses the one above rather than calling the
+     builder again — a second caller is a second thing to keep in step, and
+     this is the same file either way. The progress the builder writes goes on
+     the hidden button, so this one carries its own. */
+  const labHtmlBtn = $("#labhtml");
+  if (labHtmlBtn) {
+    labHtmlBtn.addEventListener("click", async () => {
+      const em = labHtmlBtn.querySelector("em");
+      const was = em ? em.textContent : "";
+      labHtmlBtn.disabled = true;
+      if (em) em.textContent = "Building…";
+      try {
+        const t = $("#tmpl");
+        if (t) t.value = "standard";          // the dashboard, which is the LAB
+        await makeReport();
+      } finally {
+        labHtmlBtn.disabled = false;
+        if (em) em.textContent = was || "HTML";
+      }
+    });
+  }
+
   // ---- Excel export ---------------------------------------------------------
   // The storyline ends in a spreadsheet, and a scan's own xlsx only ever covers
   // that one scan. This exports whatever the catalog is currently showing — many
@@ -1156,9 +1178,14 @@
       const open = railOpen[g.key] || chosen.size > 0;
       const showAll = railAll[g.key] || list.length <= RAIL_CUT;
       const head = list.slice(0, showAll ? list.length : RAIL_CUT);
-      const row = ([v, n]) => `<label class="${chosen.has(v) ? "picked" : ""}">
+      /* No number beside each value. It was there so a value that leads
+         nowhere is not offered — but that job is done by the list itself:
+         these counts are faceted, so a value with nothing behind it is not
+         listed at all. The figure was only ever restating that, once per row,
+         down a rail of forty. */
+      const row = ([v]) => `<label class="${chosen.has(v) ? "picked" : ""}">
         <input type="checkbox" data-k="${esc(g.key)}" data-v="${esc(v)}"${chosen.has(v) ? " checked" : ""}>
-        <span class="rv" title="${esc(v)}">${esc(v)}</span><span class="rc">${n}</span></label>`;
+        <span class="rv" title="${esc(v)}">${esc(v)}</span></label>`;
       /* Brands sit under their tier — that is how the team names them, and a
          flat alphabetical list of thirty-two is not readable. */
       let body;

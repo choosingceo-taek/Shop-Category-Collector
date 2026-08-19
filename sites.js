@@ -1950,12 +1950,24 @@
 
        With a filter on the address the rendered page keeps deciding, because
        products.json knows nothing about the facets that were chosen. */
+    /* A parameter we do not recognise is still a filter.
+
+       Listing the ones that narrow a collection is the wrong way round: every
+       theme invents its own. Varley writes ?o_cat=Tops&o_cat=Sweatshirts,
+       Gymshark writes ?collections=t-shirts-tops, and neither looks like
+       Shopify's own filter.*; both read as "no filter at all" against a list
+       of known filters, and topping those up would put back precisely the
+       products the designer excluded. So the list is the other one — the
+       parameters that are known NOT to change which products are shown — and
+       anything else means the rendered page decides. */
+    const HARMLESS_PARAM =
+      /^(page|sort_by|view|utm_[a-z]+|gclid|fbclid|srsltid|gad_source|ref|_pos|_sid|_ss|_fd|_psq)$/i;
     function collectionFiltered(u) {
       try {
         const x = new URL(u);
         if (x.hash && /[=&]/.test(x.hash)) return true;
         for (const k of x.searchParams.keys()) {
-          if (/^(filter\.|pf_|_pf)/i.test(k) || /^(q|constraint|tag)$/i.test(k)) return true;
+          if (!HARMLESS_PARAM.test(k)) return true;
         }
         /* /collections/<handle>/<tag> — the tag narrows the collection, and it
            is a name the shop wrote, so both halves are kept elsewhere; here it

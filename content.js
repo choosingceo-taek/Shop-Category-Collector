@@ -496,7 +496,7 @@ function healthMark(rec) {
   if (rec.repair) return "⚠️";
   /* Half a grid that calls itself finished is worse than a grid that fails —
      the spreadsheet looks whole. */
-  if (rec.more || rec.shortOf) return "⚠️";
+  if (rec.more || rec.shortOf || rec.stoppedWith) return "⚠️";
   return "✅";
 }
 /* An empty fabric column has three quite different causes and they are fixed
@@ -626,6 +626,15 @@ function healthWhy(rec) {
   if (rec.more) {
     parts.push(`the grid was still loading more when the scan stopped — ` +
       `${rec.count} were taken, and this page has more`);
+  }
+  if (rec.stoppedWith) {
+    /* The shop stated no total, so there is no "N of M" to report — what there
+       is, is what the page still had on it when we stopped. That is the whole
+       difference between "that was all of them" and "we stopped early", and
+       without it this scan grades itself clean either way. */
+    parts.push(`${rec.stoppedWith.got} came through and the page still had ` +
+      `${rec.stoppedWith.leftover} on it — it never said how many it holds, ` +
+      `so this may be part of the listing`);
   }
   if (rec.shortOf) {
     parts.push(`the page says it is showing ${rec.shortOf.said} items and ` +
@@ -774,6 +783,8 @@ async function recordHealth(j, a, ent) {
     if (j.moreWaiting) rec.more = true;
     // the page said it was showing more than we could get out of it
     if (j.shortOf) rec.shortOf = j.shortOf;
+    if (j.stoppedWith) rec.stoppedWith = j.stoppedWith;
+    if (j.topped) rec.topped = j.topped;
     rec.mark = healthMark(rec);
     // Photograph the page only when something is wrong AND we are still looking
     // at the scanned collection (single-page scans stay on it; a paginated run
@@ -1193,9 +1204,26 @@ async function runStep(j) {
       const startedAt = Date.now();
       /* Some grids hand out the rest on a press rather than on a scroll, and
          nothing here had ever pressed anything. */
-      let pressed = 0;
+      /* A press that WORKED is not spending the budget.
+
+         Eight presses was a fixed allowance, so a grid that opens ten at a
+         time stopped at eighty however much it had left, and one that opens
+         five stopped at forty. The allowance is there to stop us hammering a
+         button that does nothing — so it is only spent when a press changes
+         nothing. Growth is progress and gets refunded, and the run is still
+         ended by the 60 cap, by the round budget, and by a hard ceiling. */
+      let pressed = 0, presses = 0, lastPressN = -1;
+      const MORE_PRESSES_HARD = 40;
+      /* Rounds are a budget for LOOKING, and a press that works is not
+         looking. Each productive press hands back the rounds its cycle spent
+         proving the grid had stalled — otherwise a grid that opens four at a
+         time runs out of rounds at 46 of 58, which is the same half scan by a
+         different route. Everything that ends the loop still ends it: the 60
+         cap, the hard press ceiling, and this bonus's own ceiling. */
+      let bonus = 0;
+      const BONUS_MAX = 60;
       let i = 0;
-      for (; i < rounds && stable < 2; i++) {
+      for (; i < rounds + bonus && stable < 2; i++) {
         /* Step down a screen at a time rather than jumping to the bottom.
            A grid loads more when its sentinel enters the viewport, and jumping
            straight to the end of the document skips past that sentinel
@@ -1216,6 +1244,11 @@ async function runStep(j) {
         // never open, leaving the rescue below one viewport of tiles to work with.
         if (!n && a.id !== "generic") n = genericRead(document, location.href).length;
         const h = document.body.scrollHeight;
+        // the press on the previous look: refund it if the grid answered
+        if (lastPressN >= 0) {
+          if (n > lastPressN) { pressed = Math.max(0, pressed - 1); bonus = Math.min(BONUS_MAX, bonus + 3); }
+          lastPressN = -1;
+        }
         if (n === lastN && h === lastH) stable++; else { stable = 0; if (lastN >= 0 && n > lastN) grew = true; }
         lastN = n; lastH = h;
         /* Still nothing, and there is time left: keep looking instead of
@@ -1262,13 +1295,13 @@ async function runStep(j) {
            is the opposite duty — knowing when to STOP, which is why a shop
            that did state its number and has been fully read presses nothing. */
         const mayPress = said ? short : true;
-        if (stable >= 2 && mayPress && pressed < MORE_PRESSES) {
+        if (stable >= 2 && mayPress && pressed < MORE_PRESSES && presses < MORE_PRESSES_HARD) {
           const btn = findLoadMore();
           if (btn) {
             /* A press is progress, not a probe, so it does not spend a round.
                A grid that opens twelve at a time would otherwise run out of
                budget long before it ran out of products. */
-            pressed++; stable = 0; grew = true; i--;
+            pressed++; presses++; lastPressN = n; stable = 0; grew = true; i--;
             btn.click();
             await report(`Loading all items… ${n} rendered, asked for more`);
             await sleep(1200);
@@ -1302,13 +1335,30 @@ async function runStep(j) {
          mark on a shop that behaved perfectly — the same crying-wolf that
          made the drop-name warning worthless. */
       const gotItAll = said && lastN >= said;
-      if (!capped && !gotItAll && stable < 2 && grew && i >= rounds) j.moreWaiting = true;
+      if (!capped && !gotItAll && stable < 2 && grew && i >= rounds + bonus) j.moreWaiting = true;
       /* Still fewer than the shop said it was showing, and not because of our
          own cap: the grid kept the rest. Said on the page, with both numbers,
          because a half grid that grades itself complete is the one failure
          that looks exactly like success. */
       if (said && lastN < said && (!j.maxItems || lastN < j.maxItems))
         j.shortOf = { said, got: lastN };
+      /* And when the shop states no count at all, say what we could still see
+         when we stopped. A "Load more" still sitting on the page, or a link to
+         the next page, is the page telling us it was holding something back —
+         and without this the run has no way to distinguish "that was all of
+         them" from "we ran out of budget", so it grades itself clean either
+         way. Named here so the next round is not another guess. */
+      if (!capped && !said && (!j.maxItems || lastN < j.maxItems)) {
+        let leftover = "";
+        try { if (findLoadMore()) leftover = "a Load more button"; } catch (e) {}
+        if (!leftover) {
+          try {
+            const nx = document.querySelector('link[rel="next"], a[rel="next"], .pagination a[href*="page="]');
+            if (nx) leftover = "a link to the next page";
+          } catch (e) {}
+        }
+        if (leftover) j.stoppedWith = { got: lastN, leftover };
+      }
       window.scrollTo(0, 0);
     }
     let scraped = [];
