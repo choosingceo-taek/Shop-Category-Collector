@@ -170,7 +170,7 @@ const serverReady = new Promise(r => server.listen(PORT, "127.0.0.1", r));
     rows = await sw.evaluate(() => self.CatalogStore.allProducts().then(p => p.map(x => ({
       brand: x.brand, name: x.name, image: x.image_url || x.image || "",
       fabric: x.fabric || "", spec: x.fabric_composition || x.spec || "",
-      cat: x.category, url: x.product_url })))).catch(() => []);
+      cat: x.category, pos: x.pos || 0, url: x.product_url })))).catch(() => []);
     const q = await panel.evaluate(() => new Promise(r =>
       chrome.storage.local.get("wpb_queue", o => r((o || {}).wpb_queue || {}))));
     if (rows.length >= WANT && !q.active) break;
@@ -186,6 +186,17 @@ const serverReady = new Promise(r => server.listen(PORT, "127.0.0.1", r));
   ok("every row has a photo", !missing("image").length, JSON.stringify(missing("image")));
   ok("every row has a composition — the column this tool exists for",
     !missing("spec").length, JSON.stringify(missing("spec")));
+
+  /* Where the shop had it. The order a category page is laid out in is the
+     merchandiser's ranking — the first thing a designer reads on the page —
+     and it has to survive the trip through the database, which has no order
+     of its own. The Everlane fixture lists tee-0 … tee-4 in that order. */
+  const ever = rows.filter(r => /everlane/.test(r.url))
+    .sort((a, b) => a.pos - b.pos).map(r => r.url.split("/").pop());
+  ok("the scan records where the shop had each product",
+    rows.every(r => r.pos > 0), JSON.stringify(rows.filter(r => !r.pos).map(r => r.url)));
+  ok("…in the order the page listed them",
+    ever.join(",") === "tee-0,tee-1,tee-2,tee-3,tee-4", ever.join(" "));
 
   const brands = [...new Set(rows.map(r => r.brand))].sort();
   ok("the brand is the name the designer gave, never a drop code",

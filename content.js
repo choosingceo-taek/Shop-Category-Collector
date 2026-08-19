@@ -196,6 +196,8 @@ async function catalogSave(j, a, kept, total, queue) {
       size_range: it.size_range || "", fabric_composition: it.fabric_composition || "",
       design: it.design || "", product_url: it.product_url || "", image_url: it.image_url || "",
       product_type: it.product_type || "",
+      // where the shop had it on the page — the merchandiser's own ranking
+      pos: it.pos || 0,
       // when the shop itself published the product, where the shop tells us
       launched_at: it.launched_at || "",
     })),
@@ -1409,7 +1411,14 @@ async function runStep(j) {
       // every one of them. Keeping the FIRST n preserves the shop's own order,
       // which is the merchandiser's ranking.
       if (j.maxItems && j.items.length >= j.maxItems) { hitCap = true; break; }
-      j.seen[k] = 1; j.items.push(r); added++;
+      /* Where the shop put it. The order a category page is laid out in IS a
+         statement — it is the merchandiser's ranking, the thing a designer
+         reads first when they open the page themselves. The run has always
+         kept it in this array; recording it is what lets the catalog and the
+         Excel still show it after the rows have been through a database,
+         where nothing has an order at all. Re-scanning restamps it, because
+         the position that matters is the one the shop is showing today. */
+      j.seen[k] = 1; r.pos = j.items.length + 1; j.items.push(r); added++;
     }
     j.pagesDone = page;
     j.totalPages = j.totalPages || a.totalPages(document) || 0;

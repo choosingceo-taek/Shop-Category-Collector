@@ -360,8 +360,15 @@
       dropped.push(...(r.dropped || []));
       return {
         name: sheetName(g.name),
+        /* Brand, then page, then WHERE THE SHOP HAD IT on that page. The sort
+           has always been stable, so a workbook built straight off a run kept
+           the shop's order for free; one built later out of the catalog could
+           not, because a database hands rows back in no order at all. `pos` is
+           what the run recorded, and rows collected before it was recorded
+           fall to the end of their group rather than to the front. */
         rows: r.kept.slice().sort((a, b) =>
-          cmp(low(a.brand), low(b.brand)) || cmp(low(a.category), low(b.category))),
+          cmp(low(a.brand), low(b.brand)) || cmp(low(a.category), low(b.category))
+          || ((a.pos || 1e9) - (b.pos || 1e9))),
       };
     }).filter(s => s.rows.length);
     if (!sheets.length) sheets.push({ name: sheetName("Products"), rows: [] });

@@ -332,7 +332,15 @@
       </tr>`).join("") + `</tbody></table>`;
   }
 
-  /* Price and discount pressure — a different question from the share charts:
+  /* NOT on the LAB any more (the designer asked for it off this page): what a
+     season is made of and what it costs are two different questions, and the
+     table for the second one sat between the axes and the record. The
+     arithmetic stays in trend.js under test, and the exported dashboard still
+     draws its own price distribution — this renderer is kept beside them so
+     putting it back is wiring rather than rewriting, which is the lesson of
+     v3.35.0.
+
+     Price and discount pressure — a different question from the share charts:
      not "what is in the assortment" but "what does it cost and how hard is it
      being marked down". Periods with no prices say so instead of showing 0. */
   function priceBoard(rows, unit) {
@@ -611,9 +619,6 @@
               o.deltaVsPrev != null ? ` · vs previous ${unit} ${o.deltaVsPrev >= 0 ? "+" : ""}${o.deltaVsPrev}` : ""}</div></div>
         </div>
       </div>
-
-      <section class="sec"><h3>Price &amp; markdown pressure <span class="sub">where the season stands</span></h3>
-      ${priceBoard(T.priceByPeriod(items, base), unit)}</section>
 
       <section class="sec"><h3>Record by ${unit} <span class="sub">at a glance</span></h3>
       ${ledgerTable(led)}</section>

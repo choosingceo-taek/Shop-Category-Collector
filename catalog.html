@@ -522,6 +522,9 @@
       </div>
       <div class="fs"><span class="lg">Order</span>
         <select id="sort">
+          <!-- The shop's own order first, and the default: a category page is
+               laid out, and that layout is the merchandiser's ranking. -->
+          <option value="site">Site order</option>
           <option value="new">Newest collected</option>
           <option value="priceUp">Price low to high</option>
           <option value="priceDown">Price high to low</option>

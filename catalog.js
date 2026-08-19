@@ -557,6 +557,22 @@
      and everything on screen dates by first collection instead — one measure,
      the same for every shop. */
 
+  /* The shop's own order.
+
+     A category page is laid out, not listed: the first tile is the one the
+     merchandiser put first, and reading that order is half of what a designer
+     does on the page itself. It survives the scan (`pos`) but not the database
+     — rows come back in whatever order the store hands them over — so it has
+     to be sorted back in. Brand, then the page within that brand, then the
+     shop's position on it, which is the same shape the Excel has always had.
+     A row collected before positions were recorded sorts after the ones that
+     have them rather than jumping to the front. */
+  const bySitePos = (x, y) =>
+    byBrand(x, y) ||
+    String(x.category || "").localeCompare(String(y.category || "")) ||
+    ((x.pos || 1e9) - (y.pos || 1e9)) ||
+    ((y.addedAt || 0) - (x.addedAt || 0));
+
   const byBrand = (x, y) => {
     const a = String(x.brand || ""), b = String(y.brand || "");
     if (!a || !b) return (!a && !b) ? 0 : (a ? -1 : 1);
@@ -605,7 +621,8 @@
     });
     const sort = $("#sort").value;
     out.sort((x, y) =>
-      sort === "priceUp" ? (priceNum(x.price) ?? 1e12) - (priceNum(y.price) ?? 1e12)
+      sort === "site" ? bySitePos(x, y)
+      : sort === "priceUp" ? (priceNum(x.price) ?? 1e12) - (priceNum(y.price) ?? 1e12)
       : sort === "priceDown" ? (priceNum(y.price) ?? -1) - (priceNum(x.price) ?? -1)
       : sort === "name" ? String(x.name).localeCompare(String(y.name))
       // newest upload first; rows with no upload date go last, never guessed at
@@ -935,7 +952,7 @@
     }));
   $("#reset").addEventListener("click", () => {
     ["q", "brand", "cat", "src", "period", "projf"].forEach(id => { $("#" + id).value = ""; });
-    $("#sort").value = "new"; render();
+    $("#sort").value = "site"; render();
   });
 
   // ---- scan lists tab -------------------------------------------------------
@@ -1515,7 +1532,7 @@
       const inner = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
         .map(([brand, ii]) =>
           `<div class="brandsec"><b>${esc(brand)}</b><span>${ii.length}</span></div>
-           <div class="grid">${ii.map(feedCard).join("")}</div>`).join("");
+           <div class="grid">${ii.slice().sort(bySitePos).map(feedCard).join("")}</div>`).join("");
       return `<div class="dayhead"><b>${d.getMonth() + 1}/${d.getDate()} (${DOW[d.getDay()]})</b>
         <span>${rows.length}</span></div>${inner}`;
     }).join("");
@@ -1601,7 +1618,8 @@
     const q = currentQ();
     const shown = (curCat ? mine.filter(i => i.category === curCat) : mine)
       .filter(i => matchesQ(i, q))
-      .slice().sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));   // newest first
+      // in the shop's own order — the page a designer would have opened
+      .slice().sort(bySitePos);
     const nw = newOf(curBrand);
 
     el.innerHTML = `
