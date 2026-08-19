@@ -2105,6 +2105,25 @@
        though the words are right there for a shopper. Structured data first
        (JSON-LD material/description), then the page text, both through the
        fiber-validated parser, so nothing that isn't a real blend passes. */
+    /* The product page itself, when the shop's own JSON did not say.
+
+       It reads it with the SAME reader every other engine uses
+       (shared.readProductPage), and that is the point of the change that put
+       it here: this function had grown its own copy, and the copy had drifted.
+       It ended on `doc.body.textContent`, where every tag is already gone — so
+       a spec list came back as one unbroken string and the item after the
+       composition was glued to it:
+
+         <li>100% Nylon</li><li>Machine wash cold</li>
+           → "100% NylonMachine wash cold"
+
+       "NylonMachine" is not the word nylon, so the fibre was never named and
+       the cell came back empty. Measured on a fixture built from Gymshark's
+       Everyday Seamless page: 100% Nylon and 100% Cotton read as nothing, and
+       92% Nylon, 8% Elastane lost the elastane. The shared reader puts the
+       list items on their own lines first, which is exactly the boundary that
+       was missing. Same failure as "New In48 items" in v2.8.0, and the same
+       answer: read it from the smallest thing that states it. */
     async function compFromPdp(url) {
       try {
         const ctrl = new AbortController();
@@ -2115,6 +2134,12 @@
         if (!res.ok) return { composition: "", image: "" };
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, "text/html");
+        try {
+          const read = readProductPage(doc, html, "", url);
+          if (read && (read.composition || read.image_url)) {
+            return { composition: read.composition || "", image: read.image_url || "" };
+          }
+        } catch (e) { /* fall through to the pass below */ }
         let comp = "";
         doc.querySelectorAll('script[type="application/ld+json"]').forEach(sc => {
           if (comp) return;
@@ -2656,7 +2681,14 @@
         const og = doc.querySelector('meta[property="og:brand"], meta[name="brand"], meta[property="product:brand"]');
         brand = (og && og.getAttribute("content")) || "Cotton On";
       } else if (!brand) { brand = "Cotton On"; }
-      const composition = compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
+      /* List items on their own lines BEFORE the whole page, the same order
+         the shared reader uses. Flattened body text glues a spec item to the
+         one after it — "100% NylonMachine wash cold" — and the fibre stops
+         being a word, so the cell comes back empty. */
+      const liText = doc.querySelectorAll
+        ? [...doc.querySelectorAll("li")].map(li => li.textContent || "").join("\n") : "";
+      const composition = compositionFromText(liText)
+        || compositionFromText((doc.body && doc.body.textContent) || rawHtml || "");
       const productName = name || nameFromUrl(url || "");
       const design = featuresFromDoc(doc).slice(0, 3).join("\n");   // first 3 Features bullets, one per line
       const category = breadcrumbCategory(doc, productName);

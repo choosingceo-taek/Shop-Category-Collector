@@ -206,6 +206,9 @@ const run = async (panel, sw, entries, want, waitMs) => {
 
 (async () => {
   const MAP = HOSTS.map(h => `MAP ${h} 127.0.0.1:${PORT}`).join(",");
+  /* A fresh profile: a run record left in the last one keeps the panel's
+     ▶ asleep, and the click below then waits on a disabled button. */
+  execSync("rm -rf /tmp/pw-shortgrid");
   const ctx = await chromium.launchPersistentContext("/tmp/pw-shortgrid", {
     executablePath: "/opt/pw-browsers/chromium", headless: false, ignoreHTTPSErrors: true,
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--no-sandbox",

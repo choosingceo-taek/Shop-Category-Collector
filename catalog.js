@@ -1186,7 +1186,13 @@
   const FACETS = [
     ["brand", "Brand", i => [(i && i.brand) || ""].filter(Boolean)],
     ["category", "Category", i => [garmentOf(i)]],
-    ["fabric", "Fabric", i => T().DIMS.fabricfam.keysOf(i)],
+    /* The fifteen fibres the designer named, read from the composition — not
+       the cloth NAME the shop uses. fabricfam answers with the weave when the
+       shop writes one into the title, so the rail was offering Bonded,
+       Brushed, Heather and Waffle beside Cotton and Nylon: two vocabularies in
+       one filter. The weave reading is still on the LAB's own FABRIC axis,
+       where it belongs. */
+    ["fabric", "Fabric", i => window.ReportCalc.fibreFamilies(i && i.fabric_composition)],
     // the twelve-colour shelf, not the shop's sales names — a rail of two
     // hundred colourways seen once each is not a filter
     ["color", "Colour", i => window.ReportCalc.colourFamilies(i && i.colorways)],
@@ -1316,19 +1322,16 @@
     }
   }
 
-  /* What is narrowing the screen, said above the results. The rail scrolls
-     and can be collapsed; a filtered screen that does not say so is a screen
-     reporting a part as if it were the whole. */
-  function railNote(shown, total) {
-    if (!anyPicked()) return "";
-    const bits = FACETS.filter(f => chosenIn(f[0]).size)
-      .map(f => `<b>${esc([...chosenIn(f[0])].join(", "))}</b>`);
-    /* No tally here either — but the sentence stays. A screen that has been
-       narrowed must say so, or a part is read as the whole; it says it with
-       the names that are narrowing it, which is the more useful half. */
-    return `<div class="railnote">Filtered to ${bits.join(" · ")}
-      <button id="railclear">Clear all</button></div>`;
-  }
+  /* Nothing across the middle any more (the designer asked): choosing a value
+     ticks its box on the rail and does nothing else.
+
+     The rule that put a line here — v3.3.0, a screen that has been narrowed
+     must say so, or a part reads as the whole — is kept by the rail itself. It
+     stands beside the results rather than scrolling with them, every group
+     that is narrowing anything carries "clear N", and the ticks ARE the state.
+     A second copy of that answer in the feed was one more thing to keep in
+     step with the first. */
+  function railNote() { return ""; }
   function wireRailNote(el, rerender) {
     const b = el.querySelector("#railclear");
     if (b) b.addEventListener("click", () => {
@@ -1540,21 +1543,24 @@
         `<div class="brandsec"><b>${esc(brand)}</b></div>
          <div class="grid">${ii.slice().sort(bySitePos).map(feedCard).join("")}</div>`).join("");
 
-    /* Monday to Sunday, said in dates as well as in a week number — the record
-       speaks in W34 and a person does not. */
+    /* The week id first, then the days it covers: 2026-W34 : 8/17-8/23. The
+       record speaks in W34 and a person does not, so both are on the line —
+       and the dates are written plainly rather than in the browser's locale,
+       which turned them into Korean month names on a screen that is otherwise
+       English. */
     const span = (a, b) => {
-      const f = t => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-      return `${f(a)} – ${f(b - 1)}`;
+      const f = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
+      return `${f(a)}-${f(b - 1)}`;
     };
     el.innerHTML = `
       <div class="edhead">
-        <div><span class="kicker">first collected in ${esc(span(wk.start, wk.end))} · Mon–Sun</span>
+        <div><span class="kicker">${esc(window.TrendCalc.weekId(wk.start))} : ${esc(span(wk.start, wk.end))}</span>
           <h2>New In</h2></div>
         <span class="weektag">WEEK ${esc(window.TrendCalc.weekId(wk.start))}</span>
       </div>
       <div class="weekchips">${chips}</div>
       ${tierChips()}
-      ${railNote(wkItems.length, searched.length)}
+      ${railNote()}
       ${sections || `<div class="none">${q ? `Nothing matches "${esc(q)}" in this week.`
         : anyPicked() ? "Nothing in this week matches the filters on the left."
         : "No products in this week."}</div>`}`;
@@ -1579,7 +1585,7 @@
     const rows = all.filter(i => railMatch(i));
     if (!rows.length) {
       el.innerHTML = `<div class="edhead"><div><h2>By Brand</h2></div></div>
-        ${railNote(0, all.length)}
+        ${railNote()}
         <div class="none">No products match the filters on the left.</div>`;
       wireRailNote(el, renderBrands);
       return;
@@ -1631,7 +1637,7 @@
         ${latest ? `<span class="weektag">WEEK ${esc(window.TrendCalc.weekId(latest.start))}</span>` : ""}
       </div>
       ${tierChips()}
-      ${railNote(rows.length, all.length)}
+      ${railNote()}
       <div class="brandwrap">
         <div class="brail">${rail}</div>
         <div>

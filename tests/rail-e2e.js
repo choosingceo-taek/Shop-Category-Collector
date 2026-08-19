@@ -142,18 +142,46 @@ const items = Array.from({ length: 60 }, (_, n) => ({
   ok("By Brand asks the other three", onBrands.join(",") === "Category,Fabric,Colour",
     JSON.stringify(onBrands));
 
+  /* FABRIC filters on the fifteen fibres the designer named — read from the
+     composition, not from the cloth name a shop writes into a title. It was
+     offering Bonded, Brushed, Heather and Waffle beside Cotton and Nylon:
+     two vocabularies in one filter. */
+  const FIBRES = ["Polyester", "Cotton", "Elastane/Spandex", "Nylon", "Viscose",
+    "Polyamide", "Silk", "Linen", "Acrylic", "Rayon", "Wool", "Tencel",
+    "Polyurethane", "Cupro", "Acetate"];
+  const fabVals = await p.evaluate(() => {
+    const g = [...document.querySelectorAll("#rail .rgrp")]
+      .find(d => /Fabric/i.test((d.querySelector("summary") || {}).textContent || ""));
+    if (!g) return null;
+    g.open = true;
+    const more = g.querySelector(".rmore"); if (more) more.click();
+    return [...g.querySelectorAll(".rv")].map(e => (e.textContent || "").trim());
+  });
+  ok("the fabric group offers fibres, and only fibres",
+    Array.isArray(fabVals) && fabVals.length > 0 && fabVals.every(v => FIBRES.includes(v)),
+    JSON.stringify(fabVals));
+  ok("…so a weave the shop wrote into a title is not among them",
+    fabVals && !fabVals.some(v => /bonded|brushed|heather|waffle|ribbed|jersey|satin|poplin/i.test(v)),
+    JSON.stringify(fabVals));
+
   /* And it still filters. */
+  /* On By Brand the wall always shows ONE brand, so "fewer cards" is not the
+     measure — the brand column is. Picking a fabric has to leave only the
+     shops that use it. */
   const narrowed = await p.evaluate(async () => {
-    const shown = () => document.querySelectorAll("#v-brands .grid .c").length;
+    const shown = () => document.querySelectorAll("#v-brands .brail button").length;
     const before = shown();
-    const box2 = [...document.querySelectorAll('.rail input[data-k="fabric"]')][0];
+    const boxes = [...document.querySelectorAll('.rail input[data-k="fabric"]')];
+    // Linen is on one of the three compositions in the fixture, so choosing it
+    // has to leave fewer than everything
+    const box2 = boxes.find(b => b.dataset.v === "Linen") || boxes[0];
     if (!box2) return { before, after: -1 };
     const value = box2.dataset.v;
     box2.click();
     await new Promise(r => setTimeout(r, 800));
     return { before, after: shown(), value };
   });
-  ok("choosing a value still narrows the screen",
+  ok("choosing a value still narrows the screen — to the shops that use it",
     narrowed.after > 0 && narrowed.after < narrowed.before, JSON.stringify(narrowed));
 
   /* ---- 4. one filter per question, and no tallies ------------------------
@@ -179,10 +207,13 @@ const items = Array.from({ length: 60 }, (_, n) => ({
       days: txt(".dayhead"),
       brandHeads: txt(".brandsec"),
       kicker: txt(".kicker")[0] || "",
+      note: el.querySelectorAll(".railnote").length,
     };
   });
   ok("no brand row across the middle — the rail asks that", feed.brandChipRow === 0,
     String(feed.brandChipRow));
+  ok("…and no second copy of the filters across it either", feed.note === 0,
+    String(feed.note));
   ok("the weeks are still there", feed.weekChips.length > 0, JSON.stringify(feed.weekChips));
   ok("…named the way the record names them, with no tally",
     feed.weekChips.every(t => /^\d{4}-W\d{2}$/.test(t)), JSON.stringify(feed.weekChips));
@@ -190,10 +221,11 @@ const items = Array.from({ length: 60 }, (_, n) => ({
     JSON.stringify(feed.days));
   ok("a brand heading is a brand", feed.brandHeads.every(t => !/\d/.test(t)),
     JSON.stringify(feed.brandHeads));
-  /* The line above names the days the week covers — Monday to Sunday — which
-     is a date, not a tally. */
-  ok("and the line above says which days, not how many",
-    /Mon–Sun/.test(feed.kicker) && !/\b\d+\s*(new|arrival|product)/i.test(feed.kicker),
+  /* The line above names the week and the days it covers — 2026-W34 :
+     8/17-8/23 — which is a date, not a tally, and is written plainly rather
+     than in whatever locale the browser happens to be set to. */
+  ok("and the line above names the week and its days",
+    /^\d{4}-W\d{2} : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}$/.test(feed.kicker.trim()),
     feed.kicker);
 
   const chips = await p.evaluate(() =>
