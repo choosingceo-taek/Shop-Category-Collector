@@ -249,6 +249,58 @@ const items = Array.from({ length: 32 }, (_, n) => {
     home.heads.some(h => /^fabric$/i.test(h)) && home.heads.some(h => /^colour$/i.test(h)),
     home.heads.join(" | "));
 
+  /* The axis heading carries the name and nothing else — the paragraph beside
+     it explained what the cards below already show. */
+  const subs = await p.evaluate(() =>
+    [...document.querySelectorAll("#v-lab .sec.ax > h3")].map(h => ({
+      text: h.textContent.trim(), sub: h.querySelectorAll(".sub").length })));
+  ok("an axis heading is just its name", subs.length > 0 && subs.every(h => h.sub === 0),
+    JSON.stringify(subs));
+
+  /* Every badge on the page is drawn the same way: a rule in ink, black on
+     white, filled when it is the open one. */
+  const inked = await p.evaluate(() => {
+    const px = el => getComputedStyle(el);
+    const ink = px(document.body).getPropertyValue("--ink").trim();
+    const rgbOf = hex => { const d = document.createElement("i"); d.style.color = hex;
+      document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; };
+    const want = rgbOf(ink || "#151515");
+    const check = sel => [...document.querySelectorAll(sel)].map(b => ({
+      border: px(b).borderTopColor, width: px(b).borderTopWidth }));
+    return { want, tabs: check(".tab"), scope: check("#scopechips button") };
+  });
+  ok("the tabs are outlined in ink",
+    inked.tabs.length === 3 && inked.tabs.every(t => t.border === inked.want && t.width === "1px"),
+    JSON.stringify(inked));
+  ok("…and so are the list chips",
+    inked.scope.length > 0 && inked.scope.every(t => t.border === inked.want),
+    JSON.stringify(inked.scope));
+
+  /* Where a keyword stands in the search data — from the CSV a person
+     imported, because there is no public Trends API and a rank cannot be
+     collected after the fact. No import, no badge. */
+  const before = await p.evaluate(() => document.querySelectorAll("#v-lab .axgtr").length);
+  ok("with no Trends file imported, no rank is claimed", before === 0, String(before));
+  await p.evaluate(async () => {
+    const wk = window.TrendCalc.weekId(Date.now());
+    const rows = [];
+    const terms = ["cotton dress", "linen shirt", "polyester jacket"];
+    terms.forEach((t, i) => rows.push({ term: t, week: wk, value: 90 - i * 10 }));
+    // …and fifteen more that all sit below them
+    for (let i = 0; i < 16; i++) rows.push({ term: "filler " + i, week: wk, value: 5 });
+    await CatalogStore.putTrends(rows);
+  });
+  await p.reload();
+  await p.waitForTimeout(2600);
+  const ranked = await p.evaluate(() =>
+    [...document.querySelectorAll("#v-lab .sec.ax .axc")].map(c => ({
+      key: (c.querySelector(".axk") || {}).textContent.trim(),
+      rank: (c.querySelector(".axgtr") || {}).textContent || "" })).filter(x => x.rank));
+  ok("a keyword in the imported top fifteen is marked",
+    ranked.some(r => /^cotton$/i.test(r.key) && r.rank === "#1"), JSON.stringify(ranked));
+  ok("…and the badge is a rank, not a score",
+    ranked.every(r => /^#\d{1,2}$/.test(r.rank)), JSON.stringify(ranked));
+
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();

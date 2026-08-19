@@ -574,6 +574,34 @@
        column — and because it leaves room for the search lane below, which a
        row never had. */
     const trendRows = opts.trends || [];
+    /* Where a keyword stands in the search data that was imported.
+
+       There is no public Google Trends API and a rank cannot be collected
+       retroactively (v3.1.0), so the only honest source is the CSV a person
+       exports from trends.google.com — LAB → Data → Add Google Trends. This
+       ranks the terms in THAT file by their most recent interest and marks the
+       top fifteen. No import, no badge: a rank nobody gave us is not a fact. */
+    const TOP_N = 15;
+    const searchRank = (() => {
+      const latest = new Map();
+      trendRows.forEach(r => {
+        const cur = latest.get(r.term);
+        if (!cur || String(r.week) > String(cur.week)) latest.set(r.term, { week: r.week, value: r.value });
+      });
+      const m = new Map();
+      [...latest.entries()].sort((a, b) => b[1].value - a[1].value)
+        .slice(0, TOP_N).forEach(([term], i) => m.set(term, i + 1));
+      return m;
+    })();
+    const rankOf = key => {
+      const mine = T.trendsForKey ? T.trendsForKey(key, trendRows) : [];
+      let best = 0;
+      mine.forEach(r => {
+        const rk = searchRank.get(r.term);
+        if (rk && (!best || rk < best)) best = rk;
+      });
+      return best;
+    };
     const searchLane = (key) => {
       /* Google Trends, imported by hand from a CSV — there is no public API and
          a rank cannot be collected retroactively. No import, no lane: an empty
@@ -622,6 +650,8 @@
           <div class="axch"><span class="axrank">${i + 1}</span><span class="axk">${
             d === "color" && INK[r.key] ? `<i class="sw" style="background:${INK[r.key]}"></i>` : ""
             }${esc(r.key)}</span>
+            ${(() => { const rk = rankOf(r.key); return rk
+              ? `<span class="axgtr" title="#${rk} of the terms in the Google Trends file you imported, by their most recent interest">#${rk}</span>` : ""; })()}
             <span class="axd ${r.delta > 0 ? "up" : r.delta < 0 ? "down" : ""}"
               title="${r.delta == null ? "no earlier " + unit + " to compare with"
                 : "against the " + a.shared + " shops that produced in both " + unit + "s"}">${
@@ -642,9 +672,11 @@
         a.left.length ? `−${a.left.length} not read this ${unit} (${esc(a.left.slice(0, 3).join(", "))}${a.left.length > 3 ? "…" : ""})` : ""}
         — the change column reads only the ${a.shared} shops in both</div>` : "";
 
-      return `<section class="sec ax"><h3>${esc(title)}
-        <span class="sub">top ${a.rows.length} by how many items carry it${
-          roster ? `, across the ${roster} shops that produced this ${unit}` : ""} · the line is that count, ${unit} by ${unit}</span></h3>
+      /* No explanation beside the name. The cards say what they are — a rank, a
+         keyword, a count, a line — and a paragraph repeating that in grey was
+         read once and skipped every day after. What it used to say lives on
+         the figures themselves, on hover. */
+      return `<section class="sec ax"><h3>${esc(title)}</h3>
         <div class="axcards">${body}</div>${cover}</section>`;
     };
 
