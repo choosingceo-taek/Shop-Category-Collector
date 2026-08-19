@@ -7,11 +7,16 @@
    does not offer. So the box must not leave the worry hanging, and must name
    what really does take it. */
 const { chromium } = require("playwright");
+const { execSync } = require("child_process");
 const EXT = require("path").resolve(__dirname, "..");
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log("  ok  " + n); } else { fail++; console.log("FAIL  " + n + (x ? "\n      " + x : "")); } };
 
 (async () => {
+  /* A fresh profile: this box reports when the last backup was taken, and a
+     previous run in the same profile leaves one behind — so "never" would be
+     measuring the last run rather than this one. */
+  execSync("rm -rf /tmp/pw-databox");
   const ctx = await chromium.launchPersistentContext("/tmp/pw-databox", {
     executablePath: "/opt/pw-browsers/chromium", headless: false,
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--no-sandbox"] });

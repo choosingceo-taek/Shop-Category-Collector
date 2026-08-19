@@ -849,7 +849,13 @@
       spark: per.map(p => (p.count
         ? Math.round(((p.byKey.get(k) ? p.byKey.get(k).size : 0) / (p.brands.size || 1)) * 1000) / 10
         : null)),
-    })).sort((a, b) => b.n - a.n || b.products - a.products)
+      /* How many items carried it in each period — the count itself, not a
+         share. A share moves when the week's total moves, which is the wrong
+         shape to put beside "16 products"; this is the figure on the card,
+         drawn over the weeks. Null for a period with nothing collected, so a
+         week nobody scanned reads as a gap and not as a collapse. */
+      counts: per.map(p => (p.count ? (p.nKey.get(k) || 0) : null)),
+    })).sort((a, b) => b.products - a.products || b.n - a.n)
       .slice(0, opts.top || 10);
 
     return {

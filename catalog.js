@@ -73,7 +73,25 @@
      a filter on data we already hold — nothing needs re-scanning. Everything
      downstream reads `items`, so the charts, the arrivals feed, the brand rail
      and the product grid all narrow together. */
-  const inScope = i => !scopeId || [].concat((i && i.listIds) || []).includes(scopeId);
+  /* …and one chip for what belongs to no list at all.
+
+     With "All lists" gone, a row outside every list would have no screen it
+     could appear on — a page scanned before any list existed, or a merged-in
+     backup from someone whose lists are their own. The Excel already keeps
+     that drawer and calls it Unfiled (v3.32.0); this is the same drawer, and
+     it is only offered when something is actually in it. */
+  const UNFILED = "__unfiled";
+  const listsOf = i => [].concat((i && i.listIds) || []).filter(Boolean);
+  const inScope = i => (scopeId === UNFILED
+    ? !listsOf(i).length
+    : (!scopeId || listsOf(i).includes(scopeId)));
+  function firstScope() {
+    const has = id => allItems.some(i => listsOf(i).includes(id));
+    const l = lists.find(x => has(x.id));
+    if (l) return l.id;
+    if (allItems.some(i => !listsOf(i).length)) return UNFILED;
+    return (lists[0] && lists[0].id) || "";
+  }
   function applyScope() {
     items = allItems.filter(inScope);
     // Only this list's frozen weeks — the catalog-wide ones describe a
@@ -96,7 +114,7 @@
       [l.id, brandsIn(allItems.filter(i => [].concat(i.listIds || []).includes(l.id)))]));
     // With no list saved there is nothing to choose between — the rail would
     // be a control with one option, which is just noise.
-    rail.hidden = lists.length < 1;
+    rail.hidden = lists.length < 1 && !allItems.some(i => !listsOf(i).length);
     /* Lists only. "All lists" pooled research questions that were never asked
        together — a week of FABRIC and a week of WMN averaged into one line —
        and it was the default, so that pooled screen is what most people saw.
@@ -105,10 +123,13 @@
        The name, and no figure: which list is open is what these chips answer,
        and how much is in it is what the page below is for. The tally is still
        a hover away, where it costs nothing. */
+    const unfiled = allItems.filter(i => !listsOf(i).length).length;
     box.innerHTML =
       lists.map(l => `<button data-id="${esc(l.id)}" class="${scopeId === l.id ? "on" : ""}" ` +
         `title="${counts.get(l.id) || 0} brands in ${esc(l.name)}">` +
-        `<span class="dot" style="background:${listColor(l.name)}"></span>${esc(l.name)}</button>`).join("");
+        `<span class="dot" style="background:${listColor(l.name)}"></span>${esc(l.name)}</button>`).join("") +
+      (unfiled ? `<button data-id="${UNFILED}" class="${scopeId === UNFILED ? "on" : ""}" ` +
+        `title="${unfiled} products that belong to no list — collected before there was one, or merged in from someone else's backup">Unfiled</button>` : "");
     box.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
       if (b.dataset.id === scopeId) return;
       scopeId = b.dataset.id;
@@ -499,10 +520,11 @@
       const o = await new Promise(r => chrome.storage.local.get(SCOPE_KEY, x => r(x || {})));
       scopeId = o[SCOPE_KEY] || "";
     } catch (e) { scopeId = ""; }
-    /* A scope is always one of the lists. A deleted list leaves it pointing at
-       nothing, and a first run has never chosen — both land on the first list,
-       because there is no "everything" to fall back to any more. */
-    if (!lists.some(l => l.id === scopeId)) scopeId = (lists[0] && lists[0].id) || "";
+    /* A scope is always one chip. A deleted list leaves it pointing at nothing
+       and a first run has never chosen — both land on the first chip that has
+       products behind it, because there is no "everything" to fall back to and
+       opening on an empty screen looks like a tool that lost the data. */
+    if (!lists.some(l => l.id === scopeId) && scopeId !== UNFILED) scopeId = firstScope();
     projects = await S.allProjects();
     try { snapshots = await S.allSnapshots(); } catch (e) { snapshots = []; }
     applyScope();
@@ -1675,8 +1697,8 @@
     }
     curList = lists.find(x => x.id === (curList && curList.id)) || lists[0];
     // a list renamed, added or deleted here changes what the scope rail offers
-    if (!lists.some(l => l.id === scopeId)) {
-      scopeId = (lists[0] && lists[0].id) || ""; applyScope();
+    if (!lists.some(l => l.id === scopeId) && scopeId !== UNFILED) {
+      scopeId = firstScope(); applyScope();
     }
     renderScope();
   }

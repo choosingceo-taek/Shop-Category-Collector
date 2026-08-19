@@ -301,7 +301,7 @@ const items = Array.from({ length: 60 }, (_, n) => ({
   const scope = await p.evaluate(() =>
     [...document.querySelectorAll("#scopechips button")].map(b => ({
       text: (b.textContent || "").trim(), on: b.classList.contains("on") })));
-  ok("the scope rail offers the lists", scope.length === 1, JSON.stringify(scope));
+  ok("the scope rail offers the lists", scope.length >= 1, JSON.stringify(scope));
   ok("…and no All lists", !scope.some(c => /all lists/i.test(c.text)), JSON.stringify(scope));
   ok("…with one of them open", scope.some(c => c.on), JSON.stringify(scope));
 

@@ -113,6 +113,36 @@ const items = Array.from({ length: 32 }, (_, n) => {
     fabAxis && !fabAxis.some(k => /ribbed|terry|\brib\b|heather|jersey|satin|poplin/i.test(k)),
     JSON.stringify(fabAxis));
 
+  /* What a card shows: its place in the ranking, the count of items that
+     really carry it, and that count drawn week by week. "2 /6 brands" over a
+     slash was the honest adoption unit but not readable at a glance, and the
+     figure that says how much there IS of it was the small grey one. */
+  const cards = await p.evaluate(() => {
+    const sec = [...document.querySelectorAll("section.sec.ax")]
+      .find(s => /Fabric/i.test((s.querySelector("h3") || {}).textContent || ""));
+    if (!sec) return null;
+    return [...sec.querySelectorAll(".axc")].map(c => ({
+      rank: (c.querySelector(".axrank") || {}).textContent || "",
+      key: (c.querySelector(".axk") || {}).textContent || "",
+      num: (c.querySelector(".axnum b") || {}).textContent || "",
+      unitWord: (c.querySelector(".axnum i") || {}).textContent || "",
+      bars: c.querySelectorAll("svg.axbars rect").length,
+      slash: /\/\s*\d+\s*brands/.test((c.querySelector(".axnum") || {}).textContent || ""),
+    }));
+  });
+  ok("every card is numbered by its place in the ranking",
+    cards && cards.length > 0 && cards.every((c, i) => c.rank === String(i + 1)),
+    JSON.stringify(cards && cards.map(c => c.rank)));
+  ok("…the big figure is the item count", cards && cards.every(c => /^\d+$/.test(c.num) &&
+    /item/i.test(c.unitWord)), JSON.stringify(cards && cards.map(c => c.num + " " + c.unitWord)));
+  ok("…and it is ordered by that count, most first",
+    cards && cards.every((c, i) => i === 0 || +c.num <= +cards[i - 1].num),
+    JSON.stringify(cards && cards.map(c => c.num)));
+  ok("…with no figure-over-a-slash on the face", cards && !cards.some(c => c.slash),
+    JSON.stringify(cards && cards.map(c => c.num + c.unitWord)));
+  ok("…and the weeks drawn under it", cards && cards.every(c => c.bars > 0),
+    JSON.stringify(cards && cards.map(c => c.bars)));
+
   // ---- the fibre blocks --------------------------------------------------
   const fibres = await p.evaluate(() => {
     const sec = [...document.querySelectorAll("section.sec")]
