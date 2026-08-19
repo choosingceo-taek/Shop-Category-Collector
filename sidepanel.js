@@ -476,6 +476,8 @@
           ${e.scannable === false ? '<span class="tag">Ref</span>'
             : e.scannable ? '<span class="tag on">Scan</span>'
             : '<span class="tag q" title="A shop we have not been given access to yet. It IS included in the run — Chrome asks for access when the run starts.">Scan?</span>'}
+          ${e.scannable === false ? ""
+            : `<button class="act run" title="Scan this site again — just this one">↻</button>`}
           <button class="act go" title="Open">↗</button>
           <button class="act ren" title="Rename">✎</button>
           <button class="act del" title="Remove">✕</button>
@@ -493,6 +495,11 @@
 
     body.querySelectorAll(".ent").forEach(el => {
       const i = +el.dataset.i;
+      const rerun = el.querySelector(".run");
+      if (rerun) rerun.addEventListener("click", () => {
+        const e = curList.entries[i];
+        startRun([e], { one: e.label || e.brand || hostOf(e.url) });
+      });
       el.querySelector(".go").addEventListener("click", () =>
         chrome.tabs.create({ url: curList.entries[i].url }));
       el.querySelector(".del").addEventListener("click", async () => {
@@ -1727,10 +1734,28 @@
     sendEngine("reset", () => toast("Stopped"));
   });
 
-  $("#runlist").addEventListener("click", async () => {
-    const entries = ((curList && curList.entries) || []).filter(e => e.scannable !== false);
-    if (!entries.length) return toast("No scannable sites in this list");
-    if (!await confirmIn(`Scan ${entries.length} sites one after another. Start?`)) return;
+  /* One site, or all of them, through the same machinery.
+
+     A run has always been "walk this array of entries", and the list was the
+     only thing that ever filled the array. But a designer re-scans for a
+     reason — one shop changed, one shop came back short, one shop was fixed —
+     and re-walking twelve to see one of them is the whole afternoon.
+
+     So the row carries its own ↻ and hands over an array of one. Everything
+     downstream is untouched: the run still belongs to the LIST, so its rows
+     land under the same listIds and the Excel, the scope and the LAB do not
+     know the difference. */
+  async function startRun(entries, opts) {
+    opts = opts || {};
+    entries = (entries || []).filter(e => e && e.scannable !== false);
+    if (!entries.length) return toast("Nothing scannable here");
+    const q = await load(QUEUE);
+    if (q && q.active) return toast("A scan is already running — stop it first");
+    /* Asked once, for the whole run, while the click is still ours. One site
+       needs no confirming: it is a small, named, obvious thing, and skipping
+       the box also keeps the gesture fresh for the permission prompt. */
+    if (entries.length > 1 &&
+      !await confirmIn(`Scan ${entries.length} sites one after another. Start?`)) return;
     // Ask for every origin the run will visit, in one prompt, while we still
     // have the click. Without the permission the worker cannot inject the
     // engine into a site the manifest doesn't cover, and that URL collects
@@ -1759,10 +1784,14 @@
           if (++tries < 14) return setTimeout(send, 900);
           return toast(`Could not start on ${hostOf(entries[0].url)} — open that page and allow access, then try again`);
         }
-        toast("Scan started");
+        toast(opts.one ? `Scanning ${opts.one} again` : "Scan started");
       });
     setTimeout(send, 1500);
-  });
+  }
+
+  $("#runlist").addEventListener("click", () =>
+    startRun((curList && curList.entries) || []));
+
   $("#listxlsx").addEventListener("click", () => {
     const rows = productsOfList(curList && curList.id);
     const tag = (curList.name || "list").replace(/[^\w가-힣]+/g, "_");

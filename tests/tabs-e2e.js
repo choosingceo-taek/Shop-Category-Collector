@@ -250,6 +250,70 @@ const products = Array.from({ length: 24 }, (_, i) => ({
     ok(`${b.id}: the mark actually paints`, b.ink >= 12, `${b.ink.toFixed(1)}% of its box`);
   });
 
+  /* ---- 4b. one site can be scanned again on its own ----------------------
+
+     ▶ walks the whole list, and a designer re-scans for a reason: one shop
+     changed, one came back short, one was fixed. Re-walking twelve to see one
+     of them is the afternoon. The row carries its own ↻ and hands the same
+     machinery an array of one — the run still belongs to the LIST, so the rows
+     land under the same listIds and nothing downstream knows the difference. */
+  await p.click('.tab[data-view="collector"]');
+  await p.waitForTimeout(500);
+  await p.evaluate(() => {
+    const sel = document.querySelector("#listsel");
+    sel.value = "l0";
+    sel.dispatchEvent(new Event("change"));
+  });
+  await p.waitForTimeout(600);
+
+  const tools = await p.evaluate(() => {
+    const rows = [...document.querySelectorAll("#listbody .ent")];
+    return {
+      rows: rows.length,
+      withRerun: rows.filter(r => r.querySelector(".run")).length,
+      order: rows[0] ? [...rows[0].querySelectorAll(".act")].map(b => b.textContent.trim()) : [],
+      overflows: rows.some(r => r.scrollWidth > r.clientWidth + 1),
+    };
+  });
+  ok("every site in the list carries a rerun", tools.rows > 0 && tools.withRerun === tools.rows,
+    `${tools.withRerun} of ${tools.rows}`);
+  ok("it leads the row's tools", tools.order[0] === "↻", tools.order.join(" "));
+  ok("and the row still fits at panel width", !tools.overflows);
+
+  /* What it actually sends. The tab and the message are stubbed because the
+     fixture shops are not reachable from here — what is under test is that
+     the run is given ONE entry and still belongs to the list. */
+  await p.evaluate(() => {
+    window.__sent = [];
+    window.__opened = "";
+    chrome.tabs.create = async o => { window.__opened = o.url; return { id: 4242 }; };
+    chrome.tabs.sendMessage = (id, msg, cb) => { window.__sent.push(msg); if (cb) cb({ ok: true }); };
+    chrome.permissions.request = (o, cb) => { if (cb) cb(true); };
+  });
+  await p.click("#listbody .ent .run");
+  await p.waitForTimeout(3000);
+  const sent = await p.evaluate(() => ({
+    opened: window.__opened,
+    msgs: window.__sent.map(m => ({ type: m.type, listId: m.listId, n: (m.list || []).length,
+      urls: (m.list || []).map(e => e.url) })),
+  }));
+  const run = sent.msgs.find(m => m.type === "runList");
+  ok("pressing it starts a run", !!run, JSON.stringify(sent.msgs));
+  ok("…of exactly one site", run && run.n === 1, run && String(run.n));
+  ok("…the one that was pressed", run && /example0\.com/.test(run.urls[0] || ""), run && run.urls[0]);
+  ok("…opened at that site", /example0\.com/.test(sent.opened), sent.opened);
+  ok("…and it still belongs to the list", run && run.listId === "l0", run && run.listId);
+
+  /* Two runs share one queue, so the second one would scramble the first. */
+  await p.evaluate(() => new Promise(r =>
+    chrome.storage.local.set({ wpb_queue: { active: true, idx: 0, listId: "l0" } }, r)));
+  await p.evaluate(() => { window.__sent = []; });
+  await p.click("#listbody .ent .run");
+  await p.waitForTimeout(2500);
+  const during = await p.evaluate(() => window.__sent.length);
+  ok("it refuses while a scan is already running", during === 0, `${during} messages`);
+  await p.evaluate(() => new Promise(r => chrome.storage.local.remove("wpb_queue", r)));
+
   /* ---- 5. the grab button carries no count ---- */
   const fab = await p.evaluate(async () => {
     // A <script src> of the extension's own file — the page's CSP allows
