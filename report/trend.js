@@ -17,18 +17,42 @@
   // ---- time buckets --------------------------------------------------------
   // Monday-start weeks; months are calendar months. `now` is injectable so the
   // tests are deterministic.
+  /* Four intervals, because the question changes with the season's tempo: a
+     month for "what is this quarter made of", a fortnight for the drop cycle
+     most of these shops actually run on, a week for the scanning routine, a
+     day when something is moving fast enough to watch daily.
+
+     A FORTNIGHT has to land on the same Mondays whatever today is. Pairing
+     weeks off "now" would re-cut every bucket each time the page opened, and
+     two screens on two days would disagree about which fortnight a product
+     fell in. So the pairing counts from a fixed Monday (1 Jan 2024) and keeps
+     the even one — the same fortnight for everybody, for ever. */
+  const FORTNIGHT_ANCHOR = new Date(2024, 0, 1).getTime();   // a Monday, local
+  const backDays = (ts, n) => {
+    const d = new Date(ts);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - n).getTime();
+  };
   function bucketStart(ts, granularity) {
     const d = new Date(ts);
     if (granularity === "month") return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
     const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if (granularity === "day") return day.getTime();
     const dow = (day.getDay() + 6) % 7;                 // Mon = 0
-    return day.getTime() - dow * DAY;
+    const week = day.getTime() - dow * DAY;
+    if (granularity !== "fortnight") return week;
+    // whole weeks between this Monday and the anchor; odd means we are in the
+    // second half of a fortnight, so step back to its first Monday
+    const weeks = Math.round((week - FORTNIGHT_ANCHOR) / (7 * DAY));
+    return weeks % 2 === 0 ? week : backDays(week, 7);
   }
   function nextBucket(ts, granularity) {
     const d = new Date(ts);
-    return granularity === "month"
-      ? new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime()
-      : ts + 7 * DAY;
+    if (granularity === "month") return new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
+    // calendar arithmetic rather than milliseconds, so an hour lost or gained
+    // to daylight saving cannot slide a boundary onto the wrong date
+    if (granularity === "day") return backDays(ts, -1);
+    if (granularity === "fortnight") return backDays(ts, -14);
+    return ts + 7 * DAY;
   }
   function labelOf(ts, granularity) {
     const d = new Date(ts);
@@ -37,9 +61,22 @@
       ? `${String(d.getFullYear()).slice(2)}.${mm}`
       : `${mm}/${String(d.getDate()).padStart(2, "0")}`;
   }
+  // what one bucket IS, for the axis and for prose. Every interval that is not
+  // a calendar month is counted in days, so the word follows the choice.
+  const UNIT_NAME = { month: "month", fortnight: "fortnight", week: "week", day: "day" };
+  const unitName = g => UNIT_NAME[g] || "week";
+  /* The intervals themselves, named here rather than in the markup: the page
+     offering a choice the maths cannot bucket is a control that does nothing,
+     and that is worse than not offering it. */
+  const GRANULARITIES = [
+    { value: "month", label: "Monthly" },
+    { value: "fortnight", label: "Biweekly" },
+    { value: "week", label: "Weekly" },
+    { value: "day", label: "Daily" },
+  ];
 
   /* Group products into consecutive time buckets by first-seen date.
-     opts: { months = 6, granularity = 'month'|'week', now = Date.now() }
+     opts: { months = 6, granularity = 'month'|'fortnight'|'week'|'day', now }
      Empty periods are kept so a gap reads as a gap rather than being closed up. */
   function timeline(items, opts) {
     opts = opts || {};
@@ -49,16 +86,22 @@
     const rows = (items || []).filter(i => i && i.addedAt);
     const from = (() => {
       const d = new Date(now);
+      // the window's first bucket has to start where THIS interval's buckets
+      // start — cutting a fortnight or a day window on week boundaries would
+      // put the first period half outside the window it claims to show
       return granularity === "month"
         ? new Date(d.getFullYear(), d.getMonth() - (months - 1), 1).getTime()
-        : bucketStart(now - (months * 30 * DAY), "week");
+        : bucketStart(now - (months * 30 * DAY), granularity);
     })();
 
     const buckets = [];
     for (let t = from; t <= now; t = nextBucket(t, granularity)) {
       buckets.push({ start: t, end: nextBucket(t, granularity),
         label: labelOf(t, granularity), items: [] });
-      if (buckets.length > 200) break;                  // guard
+      // a backstop against a runaway loop, not a display limit: a year of days
+      // is 365 buckets and has to fit, or the longest window would silently
+      // show three quarters of itself
+      if (buckets.length > 400) break;
     }
     rows.forEach(i => {
       const b = buckets.find(x => i.addedAt >= x.start && i.addedAt < x.end);
@@ -282,7 +325,7 @@
     opts = Object.assign({ granularity: "week" }, opts || {});
     const dim = opts.dim || "fabric";
     const minCount = opts.minCount == null ? 2 : opts.minCount;
-    const unit = opts.granularity === "month" ? "month" : "week";
+    const unit = unitName(opts.granularity);
     const buckets = timeline(items, opts).filter(b => b.count);
     if (buckets.length < 2) {
       return { ok: false, dim, unit, periods: buckets.length,
@@ -916,7 +959,7 @@
     parseTrendsCsv, trendsForKey,
     emerging, ledger, ranked, priceByPeriod, overview, weeklySnapshots, weekId,
     weekCompare, pulse, collectionsOf, collectionKey,
-    DIMS, bucketStart };
+    DIMS, bucketStart, unitName, GRANULARITIES };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.TrendCalc = API;
 })(typeof self !== "undefined" ? self : this);

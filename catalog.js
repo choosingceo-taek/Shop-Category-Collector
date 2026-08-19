@@ -1244,6 +1244,17 @@
     });
     wireTierChips($("#labbody"), renderLab);
   }
+  /* The interval options come from the arithmetic that buckets them, so the
+     two can never drift into offering a choice that does nothing. Weekly is
+     the opening reading — it is the tempo the scanning routine runs on. */
+  (function fillIntervals() {
+    const sel = $("#labgran");
+    if (!sel) return;
+    const list = (window.TrendCalc && window.TrendCalc.GRANULARITIES) ||
+      [{ value: "week", label: "Weekly" }];
+    sel.innerHTML = list.map(g =>
+      `<option value="${esc(g.value)}"${g.value === "week" ? " selected" : ""}>${esc(g.label)}</option>`).join("");
+  })();
   ["labmonths", "labgran"].forEach(id =>
     $("#" + id).addEventListener("change", renderLab));
   $("#labcat").addEventListener("change", e => { curGarment = e.target.value; renderLab(); });

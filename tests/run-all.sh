@@ -9,7 +9,7 @@ set -e
 cd "$(dirname "$0")"
 export NODE_PATH=/opt/node22/lib/node_modules
 
-PLAIN="encoding-test price-test naming-test colour-test shelf-test matrix-probe dashboard-e2e"
+PLAIN="encoding-test price-test naming-test colour-test shelf-test interval-test matrix-probe dashboard-e2e"
 BROWSER="goal-e2e fibreblocks-e2e rescan-e2e shortgrid-e2e assetfetch-e2e edge-e2e panelread-e2e tabs-e2e updnote-e2e menuimport-e2e databox-e2e labtools-e2e shelf-e2e siteorder-e2e rail-e2e weekbucket-e2e gymshark-e2e gymgrid-e2e nikegrid-e2e unfile-e2e orphan-e2e swatchtile-e2e varley-e2e athleta-e2e selfupd-e2e"
 
 fails=""

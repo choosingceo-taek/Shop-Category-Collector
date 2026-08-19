@@ -76,14 +76,21 @@
     if (!labels.length) return "";
     const max = Math.max(1, ...counts);
     const bw = (W - padL - padR) / labels.length;
+    /* The figure over each bar only when there is room for it. Six months of
+       DAILY buckets is 180 bars in 660px — under four pixels each — and a
+       number printed over every one of them is a grey smear that hides the
+       shape it was meant to annotate. The bar heights still carry the reading,
+       and the exact counts are in the record below. */
+    const room = bw >= 15;
+    const gap = Math.min(4, bw * 0.34);
     const bars = counts.map((c, i) => {
       const h = Math.max(1, (H - padT - padB) * (c / max));
       const cx = padL + i * bw + bw / 2;
       // label above the bar, or inside it when the bar reaches the top
       const inside = (H - padB - h) < padT + 12;
       const ty = inside ? (H - padB - h) + 12 : (H - padB - h) - 4;
-      return `<rect x="${padL + i * bw + 2}" y="${H - padB - h}" width="${Math.max(1, bw - 4)}" height="${h}" rx="3" fill="${SERIES[0]}" opacity=".85"/>` +
-        `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="9.5" fill="${inside ? "#fff" : MUTED}">${c || ""}</text>`;
+      return `<rect x="${padL + i * bw + gap / 2}" y="${H - padB - h}" width="${Math.max(1, bw - gap)}" height="${h}" rx="${bw < 6 ? 0 : 3}" fill="${SERIES[0]}" opacity=".85"/>` +
+        (room ? `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="9.5" fill="${inside ? "#fff" : MUTED}">${c || ""}</text>` : "");
     }).join("");
     return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="New arrivals per period">
       ${bars}<line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="${GRID}"/></svg>`;
@@ -487,7 +494,7 @@
     }
 
     const led = T.ledger(items, Object.assign({ dim, top: 4 }, base));
-    const unit = granularity === "week" ? "week" : "month";
+    const unit = T.unitName(granularity);
 
     /* ---- the fibre read of the window ---------------------------------------
 

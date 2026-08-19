@@ -630,7 +630,9 @@
             <option value="12">Last 12 months</option>
           </select></div>
         <div class="selwrap"><span class="cap">Interval</span>
-          <select id="labgran"><option value="week" selected>Weekly</option><option value="month">Monthly</option></select></div>
+          <!-- Filled from TrendCalc.GRANULARITIES so the page can only offer
+               intervals the arithmetic can actually bucket. -->
+          <select id="labgran"></select></div>
         <!-- Garment type belongs with the other two things that decide what
              the page is computed over. It was a row of chips below, which took
              a whole band to say what a select says in one control — and it sat
