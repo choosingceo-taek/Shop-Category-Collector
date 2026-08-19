@@ -83,6 +83,19 @@ function makeZip(version, shape) {
   };
   await disarm();
 
+  /* The worker is recycled freely during a long run, and a fresh one answers
+     from the real network rather than the seam. Anything that needs "a newer
+     version exists" to still be true re-plants it first. */
+  const restub = async () => {
+    const w = ctx.serviceWorkers()[0];
+    if (!w) return;
+    await w.evaluate(v => {
+      self.LensUpdate.check = async () => ({ ok: true,
+        current: chrome.runtime.getManifest().version, latest: v, newer: true });
+    }, "99.9.0").catch(() => {});
+    await w.evaluate(() => refreshUpdate(true)).catch(() => {});
+  };
+
   const panel = await ctx.newPage();
   await panel.setViewportSize({ width: 380, height: 900 });
   const errs = []; panel.on("pageerror", e => errs.push(e.message));
@@ -162,9 +175,36 @@ function makeZip(version, shape) {
     ok(label, t === "", t || "(it went ahead)");
   };
 
+  /* A run that is MOVING is never interrupted — the heartbeat says so. */
   await refuses("a running scan is never interrupted", () => panel.evaluate(() =>
     new Promise(r => chrome.storage.local.set({ wpb_queue: { active: true, idx: 0, listId: "L",
+      at: Date.now(),
       list: [{ brand: "ALO YOGA", label: "New In", url: "https://aloyoga.com/c/new" }] } }, r))));
+  await panel.evaluate(() => new Promise(r => chrome.storage.local.remove("wpb_queue", r)));
+
+  /* …but a run that stopped without saying so is not a running scan.
+
+     Reported: the files were written — 24 of them — and the panel said "a scan
+     is running, so the restart is left until it finishes" and went on offering
+     to install again. The queue's active flag survives a closed tab, a quit
+     browser, a shop that hung, and from then on it blocks every restart there
+     will ever be. The worker's own watchdog already treats four quiet minutes
+     as stuck rather than busy; the same reading belongs here. */
+  await panel.evaluate(() => new Promise(r => chrome.storage.local.set({
+    wpb_autoupdate: true,
+    wpb_queue: { active: true, idx: 0, listId: "L", at: Date.now() - 30 * 60 * 1000,
+      list: [{ brand: "ALO YOGA", label: "New In", url: "https://aloyoga.com/c/new" }] },
+  }, r)));
+  await panel.evaluate(() => new Promise(r =>
+    chrome.storage.local.remove("wpb_autotried", r)));
+  await restub();
+  await disarm();
+  await panel.reload();
+  await panel.waitForTimeout(5000);
+  const afterStale = await panel.evaluate(() => new Promise(r =>
+    chrome.storage.local.get("wpb_autotried", o => r((o || {}).wpb_autotried || ""))));
+  ok("a run that has not moved for half an hour does not block the update",
+    afterStale === "99.9.0", afterStale || "(nothing was attempted)");
   await panel.evaluate(() => new Promise(r => chrome.storage.local.remove("wpb_queue", r)));
 
   await refuses("a browser that lost the extension once is never asked again", () =>
@@ -226,15 +266,6 @@ function makeZip(version, shape) {
   // the switch was left off by the test above it, and the worker may have been
   // recycled since the stub was planted — a fresh one would answer from the
   // real network, which is not what is under test here
-  const restub = async () => {
-    const w = ctx.serviceWorkers()[0];
-    if (!w) return;
-    await w.evaluate(v => {
-      self.LensUpdate.check = async () => ({ ok: true,
-        current: chrome.runtime.getManifest().version, latest: v, newer: true });
-    }, "99.9.0").catch(() => {});
-    await w.evaluate(() => refreshUpdate(true)).catch(() => {});
-  };
   await restub();
   await panel.evaluate(() => new Promise(r =>
     chrome.storage.local.set({ wpb_autoupdate: true }, r)));

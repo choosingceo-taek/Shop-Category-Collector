@@ -1133,8 +1133,7 @@
       if (tried === latest) return false;             // already had a go at this one
       const st = await reloadVerdict();
       if (st[RELOAD_OK] === false) return false;
-      const q = await load(QUEUE);
-      if (q && q.active) return false;
+      if (await runningNow()) return false;
       /* No prompt here — Chrome grants only inside a gesture, and there is no
          gesture in "the panel opened". But silence was the whole complaint:
          the grant lapses on every browser restart, so from the second session
@@ -1399,6 +1398,15 @@
       toast(`v${out.version} is in your folder`);
       await paintReload(true);
       refreshUpdBox();
+      /* Tell the worker to look at the folder NOW rather than at its next
+         five-minute tick, so the banner below flips from "install it" to
+         "restart on it" while the person is still looking at the box. */
+      try {
+        chrome.runtime.sendMessage({ type: "checkFiles" }, () => {
+          void chrome.runtime.lastError;
+          paintUpdateBanner();
+        });
+      } catch (e) {}
       await maybeAutoReload(out.version);
     } catch (e) {
       const m = (e && e.message) || String(e);
@@ -1460,6 +1468,33 @@
     return (stale ? false : v[RELOAD_OK]) !== false;
   }
 
+  /* Which of the two update states this is. They are a different distance
+     from done: "a newer version exists" is a download away, "the files are in
+     your folder" is one restart away — and offering the download again when
+     the files are already there is how someone presses Update now four times
+     and watches nothing change. */
+  function paintUpdateBanner() {
+    chrome.storage.local.get("wpb_filesready", o => {
+      const ready = (o || {}).wpb_filesready;
+      if (ready && ready.onDisk) {
+        $("#rdver").textContent = ready.onDisk;
+        $("#upready").hidden = false;
+        $("#upnote").hidden = true;
+        return;
+      }
+      /* A new version has to be visible without going looking for it. The
+         banner is the whole update: one button, the same one the version chip
+         carries, so nobody has to know where GitHub is. */
+      chrome.runtime.sendMessage({ type: "updateStatus", force: true }, r => {
+        void chrome.runtime.lastError;
+        if (!r || !r.newer) return;
+        $("#upver").textContent = "v" + r.latest;
+        $("#upcur").textContent = "v" + r.current;
+        $("#upnote").hidden = false;
+      });
+    });
+  }
+
   /* The safety net opens chrome://extensions BEHIND what the designer is
      looking at, and the worker closes it as soon as the extension comes back.
      So on a browser that survives the reload — which is every desktop Chrome
@@ -1500,6 +1535,29 @@
 
      A run in progress is never interrupted — reloading mid-scan would lose the
      spreadsheet, and the update is not urgent enough to cost a morning. */
+  /* Is a scan actually running, or is this a leftover?
+
+     The restart is withheld while a run is in progress — reloading mid-scan
+     loses that morning's spreadsheet — and the test for it was the queue's
+     `active` flag alone. A run that never finished leaves that flag set: the
+     tab was closed, the browser quit, a shop hung. From then on the flag says
+     "a scan is running" forever, and the update can never restart. Reported
+     exactly that way: the files were written, 24 of them, and the panel said
+     a scan was running and kept offering to install again.
+
+     Every write to the run stamps a heartbeat (v1.93.0), and the worker's own
+     watchdog treats four quiet minutes as stuck rather than busy. The same
+     number is the right one here: quiet that long is a leftover, and holding
+     a restart for it protects nothing. */
+  const STALL_MS = 4 * 60 * 1000;
+  async function runningNow() {
+    const q = await load(QUEUE);
+    if (!q || !q.active) return null;
+    const beat = Math.max(q.at || q.startedAt || 0, 0);
+    if (beat && Date.now() - beat > STALL_MS) return null;   // stopped, not running
+    return q;
+  }
+
   async function maybeAutoReload(v) {
     const st = await reloadVerdict();
     if (st[RELOAD_OK] === false) {               // this browser lost it once — never again
@@ -1507,8 +1565,7 @@
         "automatic reload, so press ↻ on chrome://extensions.";
       return;
     }
-    const q = await load(QUEUE);
-    if (q && q.active) {
+    if (await runningNow()) {
       $("#uautonote").textContent += " A scan is running, so the restart is left " +
         "until it finishes — press ↻ Reload now then.";
       return;
@@ -1887,23 +1944,14 @@
        saying, because one click finishes it. Otherwise fall back to "a newer
        version exists", which is a longer road. */
     try {
-      chrome.storage.local.get("wpb_filesready", o => {
-        const ready = (o || {}).wpb_filesready;
-        if (ready && ready.onDisk) {
-          $("#rdver").textContent = ready.onDisk;
-          $("#upready").hidden = false;
-          return;
-        }
-        /* A new version has to be visible without going looking for it. The
-           banner is the whole update: one button, the same one the version
-           chip carries, so nobody has to know where GitHub is. */
-        chrome.runtime.sendMessage({ type: "updateStatus", force: true }, r => {
-          void chrome.runtime.lastError;
-          if (!r || !r.newer) return;
-          $("#upver").textContent = "v" + r.latest;
-          $("#upcur").textContent = "v" + r.current;
-          $("#upnote").hidden = false;
-        });
+      paintUpdateBanner();
+      /* …and again whenever the folder changes under it. Painted once at
+         startup, the banner went on saying "a newer version is available —
+         one click installs it" for the whole session AFTER the install had
+         already written the files, so the only thing left to do (restart) was
+         the one thing it never offered. */
+      chrome.storage.onChanged.addListener((ch, area) => {
+        if (area === "local" && ch.wpb_filesready) paintUpdateBanner();
       });
       // ask the worker to look at the folder right now, so opening the panel
       // is the fast path rather than waiting for the five-minute check
