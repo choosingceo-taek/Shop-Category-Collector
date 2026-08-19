@@ -184,13 +184,17 @@ const items = Array.from({ length: 60 }, (_, n) => ({
   ok("no brand row across the middle — the rail asks that", feed.brandChipRow === 0,
     String(feed.brandChipRow));
   ok("the weeks are still there", feed.weekChips.length > 0, JSON.stringify(feed.weekChips));
-  ok("…as dates, without a tally", feed.weekChips.every(t => !/\d+\s*$/.test(t.replace(/^\d+\/\d+/, ""))),
-    JSON.stringify(feed.weekChips));
+  ok("…named the way the record names them, with no tally",
+    feed.weekChips.every(t => /^\d{4}-W\d{2}$/.test(t)), JSON.stringify(feed.weekChips));
   ok("a day heading is a day", feed.days.every(t => !/\d+$/.test(t.replace(/\)$/, ""))),
     JSON.stringify(feed.days));
   ok("a brand heading is a brand", feed.brandHeads.every(t => !/\d/.test(t)),
     JSON.stringify(feed.brandHeads));
-  ok("and the line above says what it is, not how many", !/\d/.test(feed.kicker), feed.kicker);
+  /* The line above names the days the week covers — Monday to Sunday — which
+     is a date, not a tally. */
+  ok("and the line above says which days, not how many",
+    /Mon–Sun/.test(feed.kicker) && !/\b\d+\s*(new|arrival|product)/i.test(feed.kicker),
+    feed.kicker);
 
   const chips = await p.evaluate(() =>
     [...document.querySelectorAll("#scopechips button")].map(b => (b.textContent || "").trim()));

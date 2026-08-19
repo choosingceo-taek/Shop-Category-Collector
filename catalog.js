@@ -1497,7 +1497,7 @@
        in is the LAB's job and it does it properly, by brand; here the figure
        was decoration on a control whose whole meaning is "which week". */
     const chips = weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}">
-      <b>${esc(w.label)}</b></button>`).join("");
+      <b>${esc(window.TrendCalc.weekId(w.start))}</b></button>`).join("");
 
     // search first, so the brand chips' counts describe what is on screen
     const q = currentQ();
@@ -1515,36 +1515,40 @@
        left over the feed are the weeks, which is what this tab is FOR. */
     const shownItems = wkItems;
 
-    /* Day (newest first) → brand (biggest first) → cards. A week of scans is
-       usually several sittings, and "what came in on Tuesday" is how the team
-       talks about it — one undifferentiated week-pile hides that. The shop's
-       own order survives inside each brand group. */
-    const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const byDay = new Map();
-    shownItems.forEach(i => {
-      const d = new Date(i.addedAt);
-      const k = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-      if (!byDay.has(k)) byDay.set(k, []);
-      byDay.get(k).push(i);
-    });
-    const sections = [...byDay.entries()].sort((a, b) => b[0] - a[0]).map(([k, rows]) => {
-      const d = new Date(k);
-      const groups = new Map();
-      rows.forEach(i => {
-        const b = i.brand || "Other";
-        if (!groups.has(b)) groups.set(b, []);
-        groups.get(b).push(i);
-      });
-      const inner = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
-        .map(([brand, ii]) =>
-          `<div class="brandsec"><b>${esc(brand)}</b></div>
-           <div class="grid">${ii.slice().sort(bySitePos).map(feedCard).join("")}</div>`).join("");
-      return `<div class="dayhead"><b>${d.getMonth() + 1}/${d.getDate()} (${DOW[d.getDay()]})</b></div>${inner}`;
-    }).join("");
+    /* One week, one pile — brand (biggest first) → cards, and no day inside it.
 
+       A week is worked in sittings: Monday's scan, another on Wednesday when a
+       shop is added or one comes back. Split by the day it happened to be
+       collected, the same brand appeared under two headings and the week read
+       as two half-weeks of work rather than one week of a season. The week
+       here is Monday to Sunday (bucketStart already starts weeks on Monday)
+       and it is named the way the record names it — 2026-W34.
+
+       Nothing is counted twice: a product is one row keyed by its address, so
+       Wednesday's pass over Monday's page updates that row rather than adding
+       another, and `addedAt` stays the first sighting — which is what puts it
+       in this week and no other. The shop's own order survives inside each
+       brand group. */
+    const groups = new Map();
+    shownItems.forEach(i => {
+      const b = i.brand || "Other";
+      if (!groups.has(b)) groups.set(b, []);
+      groups.get(b).push(i);
+    });
+    const sections = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
+      .map(([brand, ii]) =>
+        `<div class="brandsec"><b>${esc(brand)}</b></div>
+         <div class="grid">${ii.slice().sort(bySitePos).map(feedCard).join("")}</div>`).join("");
+
+    /* Monday to Sunday, said in dates as well as in a week number — the record
+       speaks in W34 and a person does not. */
+    const span = (a, b) => {
+      const f = t => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      return `${f(a)} – ${f(b - 1)}`;
+    };
     el.innerHTML = `
       <div class="edhead">
-        <div><span class="kicker">first collected this week</span>
+        <div><span class="kicker">first collected in ${esc(span(wk.start, wk.end))} · Mon–Sun</span>
           <h2>New In</h2></div>
         <span class="weektag">WEEK ${esc(window.TrendCalc.weekId(wk.start))}</span>
       </div>

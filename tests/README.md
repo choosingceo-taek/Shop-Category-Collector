@@ -36,6 +36,7 @@ node tests/encoding-test.js
 | `naming-test.js` | what a page is filed as: a house brand on its parent's domain is not the parent (Athleta ≠ GAP), and a category is a noun phrase, never an interstitial's question |
 | `tabs-e2e.js` | the panel's furniture, measured on screen: the ＋ never prints under a tab, no Filter sites box, PRODUCTS keeps its search and selects pinned, the grab button carries no count |
 | `matrix-probe.js` | 83 generated shop shapes; the reader's output checked against what the page actually says (explorer and contract in one file) |
+| `weekbucket-e2e.js` | a week is Monday to Sunday and is named 2026-W34: three sittings land in one pile, one brand gets one heading, and a second pass duplicates nothing |
 | `rail-e2e.js` | three tabs, not five; the backup door and the site grades at the foot of the LAB; and a filter rail drawn like a shop's own — brand, category, fabric, colour, no counts, no box |
 | `siteorder-e2e.js` | the shop's own order kept from the page to the wall, the feeds and the workbook — and no price table on the LAB |
 | `shelf-test.js` | the two closed vocabularies the analysis counts on: twelve colours and fifteen fibres, what folds into each, and what is deliberately left off |

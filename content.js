@@ -1549,7 +1549,15 @@ async function runStep(j) {
        And it only holds for a while. Beyond a month the page is read again, so
        a shop's edits and — more to the point — every improvement to our own
        parsers reach rows collected before them. Anything without a
-       composition is always re-read: that is the case the fetch exists for. */
+       composition is always re-read: that is the case the fetch exists for.
+
+       Reuse only ever applies to a row that is WHOLE. Getting everything is
+       the point of the tool and saving time is not worth a column: a stored
+       row with a composition but no photograph used to be reused as it was,
+       the product page was never opened, and the photograph stayed missing
+       for as long as the row kept being reused. So the last week's answer
+       stands in only when it can answer both of the things this step is for —
+       what the garment is made of, and what it looks like. */
     const FRESH_MS = 30 * 24 * 3600e3;
     let known = {};
     try {
@@ -1577,7 +1585,10 @@ async function runStep(j) {
       await Promise.all(slice.map(async it => {
         if (it._specDone) return;
         const seen = known[it.product_url];
-        if (seen && seen.fabric_composition &&
+        // whole means both columns this step exists for: composition and photo
+        const wholeEnough = !!(seen && seen.fabric_composition &&
+          String(it.image_url || seen.image_url || "").trim());
+        if (wholeEnough &&
             Date.now() - (seen.updatedAt || 0) < FRESH_MS) {
           it.fabric_composition = seen.fabric_composition;
           if (!it.colorways && seen.colorways) it.colorways = seen.colorways;

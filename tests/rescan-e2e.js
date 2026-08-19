@@ -33,10 +33,14 @@ const N = 8;   // adanola.com: a host the manifest declares, so the run is not
 let price = "$60.00";           // the shop's price, changed between the runs
 let pdpHits = 0;
 
+/* The last pass drops the photograph from the tile as well, which is the shape
+   a lazy grid really has (VUORI): the tile hands over no picture, and the only
+   place a photograph can come from is the product page. */
+let tilePhoto = true;
 const grid = () => `<!doctype html><meta charset="utf-8"><title>New | Rescan</title>
 <h1>New arrivals</h1><ul>${Array.from({ length: N }, (_, i) => `
   <li class="card"><a href="https://adanola.com/p/item-${i}">
-    <img src="${IMG}?i=${i}" alt="Ribbed Tank ${i}" width="800" height="1067">
+    <img src="${tilePhoto ? `${IMG}?i=${i}` : "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="}" alt="Ribbed Tank ${i}" width="800" height="1067">
     <span class="t">Ribbed Tank ${i}</span> <span class="pr">${price}</span></a></li>`).join("")}</ul>`;
 const pdp = i => `<!doctype html><meta charset="utf-8"><title>Ribbed Tank ${i}</title>
 <meta property="og:image" content="${IMG}?i=${i}">
@@ -78,7 +82,7 @@ const runScan = async (panel, sw, want) => {
     rows = await sw.evaluate(() => self.CatalogStore.allProducts().then(p =>
       p.map(x => ({ url: x.product_url, name: x.name, price: x.price,
         fabric: x.fabric_composition || "", addedAt: x.addedAt,
-        seenCount: x.seenCount || 0 })))).catch(() => []);
+        image: x.image_url || "", seenCount: x.seenCount || 0 })))).catch(() => []);
     const q = await panel.evaluate(() => new Promise(r =>
       chrome.storage.local.get("wpb_queue", o => r((o || {}).wpb_queue || {}))));
     if (!q.active && rows.length >= want) break;
@@ -88,6 +92,10 @@ const runScan = async (panel, sw, want) => {
 
 (async () => {
   const MAP = HOSTS.map(h => `MAP ${h} 127.0.0.1:${PORT}`).join(",");
+  /* A fresh profile, or the first scan is measuring the last run: the catalog
+     survives in the profile directory, and rows that are still fresh would be
+     reused before the first product page is ever asked for. */
+  execSync("rm -rf /tmp/pw-rescan");
   const ctx = await chromium.launchPersistentContext("/tmp/pw-rescan", {
     executablePath: "/opt/pw-browsers/chromium", headless: false, ignoreHTTPSErrors: true,
     args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--no-sandbox",
@@ -165,6 +173,37 @@ const runScan = async (panel, sw, want) => {
   ok("a row older than a month is read again", pdpHits >= N, `${pdpHits} requests`);
   ok("…and still comes back complete", third.length === N && third.every(r => /%/.test(r.fabric)),
     `${third.length} rows`);
+
+  /* ---- reuse only stands in for a WHOLE row -------------------------------
+
+     Getting everything is the point of the tool and saving time is not worth
+     a column. A stored row with a composition but no photograph used to be
+     reused exactly as it was: the product page was never opened and the
+     photograph stayed missing for as long as the row kept being reused. */
+  await sw.evaluate(async () => {
+    const db = await self.CatalogStore.open();
+    await new Promise(res => {
+      const t = db.transaction("products", "readwrite");
+      const P = t.objectStore("products");
+      const q = P.getAll();
+      q.onsuccess = () => {
+        q.result.forEach(r => {
+          r.updatedAt = Date.now();      // fresh, so only wholeness decides
+          r.image_url = "";              // …but missing the photograph
+          P.put(r);
+        });
+      };
+      t.oncomplete = res; t.onerror = res;
+    });
+  });
+  tilePhoto = false;               // …and the tile has none to offer either
+  pdpHits = 0;
+  const fourth = await runScan(panel, sw, N);
+  ok("a row with no photograph is read again, however fresh it is",
+    pdpHits >= 1, `${pdpHits} requests`);
+  ok("…and comes back with both columns",
+    fourth.length === N && fourth.every(r => /%/.test(r.fabric) && /https?:/.test(r.image || "")),
+    `${fourth.filter(r => !/https?:/.test(r.image || "")).length} still without a photo`);
 
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
