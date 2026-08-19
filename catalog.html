@@ -117,6 +117,12 @@
   .labhtml.ghost { margin-left:auto; background:none; color:var(--ink); border-color:var(--line2); }
   .labhtml.ghost + .labhtml { margin-left:8px; }
   .labhtml.ghost:hover { background:var(--wash); border-color:var(--ink); color:var(--ink); }
+  /* Rising and falling are one reading, so they sit side by side: what the
+     season is picking up and what it is putting down, and neither of them is
+     legible without the other. Stacks on a narrow window. */
+  .labcols { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start; }
+  .labcols > .sec { margin-bottom:10px; }
+  @media (max-width:900px) { .labcols { grid-template-columns:1fr; } }
   /* Each analysis is its own card on the grey ground — the heading belongs to
      the card, so nothing needs a rule under it to say where a section ends. */
   .sec { background:var(--card); border-radius:var(--r); padding:11px 14px 12px;

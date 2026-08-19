@@ -275,6 +275,32 @@
       · by ${esc(label)}</div>${rows}`;
   }
 
+  /* Rising and falling over the WINDOW — the two halves of it compared,
+     rather than this period against last. A single period is noisy; a
+     designer wants "this is trending", not "one odd week".
+
+     The calculation never left (trend.js movers, under test the whole time);
+     what left was the thing that drew it. Two panels side by side because
+     they are one reading: what the season is picking up and what it is
+     putting down, and neither is legible without the other. */
+  function moversBoard(m, unitLabel) {
+    const row = r => `<div class="mv">
+      <span class="mk">${esc(r.key)}${r.isNew ? '<em class="new">NEW</em>' : ""}</span>
+      <span class="mb">${r.before}% → ${r.after}%</span>
+      <span class="md" style="color:${r.delta > 0 ? UP : DOWN}">${
+        r.delta > 0 ? "▲" : "▼"} ${Math.abs(r.delta)}p</span></div>`;
+    const side = (title, rows, empty) => `<section class="sec"><h3>${esc(title)}
+        <span class="sub">${esc(unitLabel || "")}</span></h3>${
+      rows.length ? rows.map(row).join("") : `<div class="none">${esc(empty)}</div>`}</section>`;
+    if (!m || (!(m.risers || []).length && !(m.fallers || []).length)) {
+      return `<div class="none">Not enough periods yet to say what is rising — it appears once a second scan has been recorded.</div>`;
+    }
+    return `<div class="labcols">
+      ${side("Rising over the window", m.risers || [], "nothing gaining ground")}
+      ${side("Falling over the window", m.fallers || [], "nothing losing ground")}
+    </div>`;
+  }
+
   /* Keywords worth watching, with the reason spelled out next to each one.
      Everything here is counted, never inferred — the charter's zero-hallucination
      rule applies to this screen as much as to the spreadsheet. */
@@ -411,12 +437,41 @@
       return;
     }
 
-    /* Only what the page below actually draws. The pulse table, the watch
-       list, the frequency ranking and the movers pair all answered questions
-       the four axis blocks now answer in one place, and each of them was a
-       full pass over every product. */
     const led = T.ledger(items, Object.assign({ dim, top: 4 }, base));
     const unit = granularity === "week" ? "week" : "month";
+
+    /* ---- the fibre read of the window ---------------------------------------
+
+       The four axis blocks answer "what is the season made of" in brands. This
+       answers a different question and is why it is back: what the FIBRES are
+       doing over the whole window — which one is most seen, which are rising,
+       which are falling, and the shape each has traced.
+
+       The axes count fabricfam, the cloth a shop names (satin, poplin,
+       jersey). These count `fabric`, every fibre the compositions state, which
+       is the measured half — a shop can call a thing what it likes and the
+       percentages still say cotton. Both are true and they are not the same
+       question, which is exactly why one did not replace the other.
+
+       Nothing here is new arithmetic: every one of these was computed all
+       along in trend.js and kept under test; only the wiring that drew them
+       had been taken out. */
+    const FIB = Object.assign({ dim: "fabric" }, base);
+    const fibSeries = T.series(items, Object.assign({ top: 6 }, FIB));
+    const fibBlocks = `
+      <section class="sec"><h3>Fabric to watch now <span class="sub">reason always shown</span></h3>
+      ${emergingBoard(T.emerging(items, Object.assign({ top: 5 }, FIB)))}</section>
+
+      <section class="sec"><h3>Most seen fabric <span class="sub">whole window, by frequency</span></h3>
+      ${rankedList(T.ranked(items, Object.assign({ top: 9 }, FIB)))}</section>
+
+      <section class="sec"><h3>New arrivals per ${unit} <span class="sub">how much came in</span></h3>
+      ${volumeChart(fibSeries.labels || [], fibSeries.counts || [])}</section>
+
+      <section class="sec"><h3>Fabric share over time <span class="sub">% of each ${unit}'s new arrivals</span></h3>
+      ${lineChart(fibSeries)}</section>
+
+      ${moversBoard(T.movers(items, FIB), "by fibre, over the whole window")}`;
 
     /* ---- the four axes ------------------------------------------------------
 
@@ -537,6 +592,7 @@
     el.innerHTML = `
       ${ctxBand}
       ${AXES.map(a => axisBlock(a[0], a[1])).join("")}
+      ${fibBlocks}
 
       <div class="labhead">
         <div class="tiles">
@@ -568,5 +624,5 @@
         clipped ? ` ${clipped} hand-picked products are excluded here because that sample is biased (they remain in the product list and in Excel).` : ""}</p>`;
   }
 
-  root.LabView = { render, lineChart, volumeChart, sparkline, pulseTable, changeBoard, compareBoard, emergingBoard, ledgerTable, priceBoard, rankedList };
+  root.LabView = { render, lineChart, volumeChart, sparkline, pulseTable, changeBoard, moversBoard, compareBoard, emergingBoard, ledgerTable, priceBoard, rankedList };
 })(typeof self !== "undefined" ? self : this);

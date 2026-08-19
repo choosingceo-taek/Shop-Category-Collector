@@ -36,6 +36,7 @@ node tests/encoding-test.js
 | `naming-test.js` | what a page is filed as: a house brand on its parent's domain is not the parent (Athleta ≠ GAP), and a category is a noun phrase, never an interstitial's question |
 | `tabs-e2e.js` | the panel's furniture, measured on screen: the ＋ never prints under a tab, no Filter sites box, PRODUCTS keeps its search and selects pinned, the grab button carries no count |
 | `matrix-probe.js` | 83 generated shop shapes; the reader's output checked against what the page actually says (explorer and contract in one file) |
+| `fibreblocks-e2e.js` | the fibre read of the window on the LAB — watch list, ranking, volume, share lines and the rising/falling pair — over eight weeks that actually move |
 | `rescan-e2e.js` | scanning the same page again: nothing wiped, first-seen kept, today's price wins, and the product pages are not opened a second time (8 requests → 0) |
 | `shortgrid-e2e.js` | a grid that hands over 4 of 14 and says nothing about it, and one with a View More and no count — the two shapes that graded a half scan as complete |
 | `assetfetch-e2e.js` | the download through the redirect GitHub really serves — nothing routed, so host_permissions apply at every hop the way they do for a teammate |
