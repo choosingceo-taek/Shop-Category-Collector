@@ -37,7 +37,7 @@
        redrawn in three of them without one new rule.
 
        The ground stays ACHROMATIC on purpose. v1.98.0 took out a warm greige
-       for a reason that has not changed — PRODUCTS is a wall of garment
+       for a reason that has not changed — DROPS is a wall of garment
        photographs, and a tool whose job is judging their colour must put no
        colour of its own beside them. */
     --bg:#f7f7f7; --card:#fff; --ink:#151515; --ink2:#2a2a2a; --muted:#6f6f6f;
@@ -190,7 +190,7 @@
   /* a hold in effect is a state, so it is the one thing here that takes colour */
   .rbtn.held { background:var(--accent); border-color:var(--accent); color:#fff; opacity:1; }
 
-  /* ---------- COLLECTOR: add the page you're on, curate the list ---------- */
+  /* ---------- RADAR: add the page you're on, curate the list ---------- */
   /* The capture card: what is about to be filed, spelled out. Brand and
      category are what the spreadsheet groups by, so they are the two lines
      the user reads before pressing Add — not the raw address. */
@@ -385,7 +385,7 @@
   /* A search field says what it is with a lens, not with a sentence: the glyph
      sits inside the box and the placeholder is a micro-label like every other
      label on the panel. Used by both fields — the list filter here and the
-     product search in PRODUCTS — so a box you type into looks the same in both
+     product search in DROPS — so a box you type into looks the same in both
      places. */
   .srch { position:relative; display:flex; align-items:center; flex:1; min-width:0; }
   .srch svg { position:absolute; left:9px; width:14px; height:14px;
@@ -477,7 +477,7 @@
     animation:slide 1.3s ease-in-out infinite; }
   @keyframes slide { 0%{margin-left:-30%} 100%{margin-left:100%} }
 
-  /* ---------- PRODUCTS: what the scans collected ---------- */
+  /* ---------- DROPS: what the scans collected ---------- */
   /* Pinned to the top of the scroll. Which brand and which category you are
      looking at is not a thing you set once and forget — it is read back while
      scrolling a wall of photographs, and it used to scroll away with the
@@ -555,8 +555,8 @@
     <h1 class="sronly">Market Lens</h1>
     <div class="runline" id="runline" hidden><i></i></div>
     <div class="tabs">
-      <button class="tab on" data-view="collector">Collector</button>
-      <button class="tab" data-view="products">Products</button>
+      <button class="tab on" data-view="collector">Radar</button>
+      <button class="tab" data-view="products">Drops</button>
     </div>
     <!-- The version, and the way to replace it. It rides the header row that
          already exists, so it costs no height until it is opened. Chrome never
@@ -623,7 +623,7 @@
   </div>
 
   <main>
-    <!-- COLLECTOR — add whatever page you're on, then curate the list -->
+    <!-- RADAR — add whatever page you're on, then curate the list -->
     <section class="view on" id="v-collector">
       <!-- Order follows the work, not the chronology of building it:
            LAB first (where the collected work turns into an answer), then the
@@ -793,12 +793,17 @@
            brands above is the only thing that moves. -->
       <div class="runbar">
         <div class="qstate" id="qstate" hidden></div>
+        <!-- What the list holds, and nothing to press.
+
+             There were two buttons here and both said something the screen
+             already offers: the transport bar directly below makes the
+             spreadsheet, and the tab above opens this list's products (that
+             is what DROPS shows — the list open in RADAR, v3.31.0). Two ways
+             to the same place drift apart and neither ends up being the one
+             people learn. The sentence stays because it is a fact, not a
+             control. -->
         <div class="result" id="listresult" hidden>
           <span id="resulttext"></span>
-          <div class="row" style="margin-top:7px">
-            <button id="listxlsx" class="grow">⬇ Excel</button>
-            <button id="listview" class="grow">View</button>
-          </div>
         </div>
         <!-- Three round controls, nothing else: run, hold, stop. Icons
              because the bar is a transport, not a form — and because at this
@@ -829,7 +834,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
           </button>
           <!-- The file, only when it is asked for. A run fills the catalog —
-               PRODUCTS and the LAB have the products the moment each shop
+               DROPS and the LAB have the products the moment each shop
                finishes — and building the spreadsheet costs a download of
                every photo in the run, so it waits for this. Asleep until a
                finished run has rows to put in it. -->
@@ -840,7 +845,7 @@
       </div>
     </section>
 
-    <!-- PRODUCTS — what the scans collected -->
+    <!-- DROPS — what the scans collected -->
     <section class="view" id="v-products">
       <div class="filters">
         <div class="scopebar" id="scopebar" hidden>

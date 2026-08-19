@@ -211,6 +211,7 @@ const items = Array.from({ length: 60 }, (_, n) => ({
     return {
       brandChipRow: [...el.querySelectorAll(".catchips")].filter(c => c.querySelector("[data-b]")).length,
       weekChips: txt(".weekchips button"),
+      weekHeads: txt(".wkhead"),
       days: txt(".dayhead"),
       brandHeads: txt(".brandsec"),
       kicker: txt(".kicker")[0] || "",
@@ -222,16 +223,16 @@ const items = Array.from({ length: 60 }, (_, n) => ({
     String(feed.brandChipRow));
   ok("…and no second copy of the filters across it either", feed.note === 0,
     String(feed.note));
-  ok("the weeks are still there", feed.weekChips.length > 0, JSON.stringify(feed.weekChips));
-  ok("…named the way the record names them, with no tally",
-    feed.weekChips.every(t => /^\d{4}-W\d{2}( : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2})?$/.test(t)),
-    JSON.stringify(feed.weekChips));
-  /* The open one carries the days it covers — and it is the ONLY place the
-     week is said. It used to be on the line above the title, on a tag at the
-     far right and on the chip: three copies of one date. */
-  ok("…and the open week says which days it covers",
-    feed.weekChips.some(t => / : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}$/.test(t)),
-    JSON.stringify(feed.weekChips));
+  /* The week picker is gone (asked for) and nothing replaced it: the feed runs
+     down every week it has, each pile introduced by the days it covers. No
+     chip, no W-number, and — the part that matters — nothing behind a control
+     that a control could hide. */
+  ok("no week chips are drawn", feed.weekChips.length === 0, JSON.stringify(feed.weekChips));
+  ok("the weeks are still there, as headings", feed.weekHeads.length > 0,
+    JSON.stringify(feed.weekHeads));
+  ok("…each saying which days it covers, and not a W-number",
+    feed.weekHeads.every(t => /^[A-Z][a-z]{2} \d{1,2} – [A-Z][a-z]{2} \d{1,2}$/.test(t)),
+    JSON.stringify(feed.weekHeads));
   ok("a day heading is a day", feed.days.every(t => !/\d+$/.test(t.replace(/\)$/, ""))),
     JSON.stringify(feed.days));
   ok("a brand heading is a brand", feed.brandHeads.every(t => !/\d/.test(t)),
@@ -305,67 +306,54 @@ const items = Array.from({ length: 60 }, (_, n) => ({
   ok("…and no All lists", !scope.some(c => /all lists/i.test(c.text)), JSON.stringify(scope));
   ok("…with one of them open", scope.some(c => c.on), JSON.stringify(scope));
 
-  /* ---- 7. the week picker, on the header ---------------------------------
+  /* No week control anywhere on the screen (asked for).
 
-     "Which week am I looking at" is a question about the screen, not about one
-     of its tabs, so the weeks sit under the list chips: a scrubber, because a
-     year is fifty-two of them, with ALL as the first stop and the open week
-     named at the end. It is not drawn on the analysis tab — narrowing a trend
-     to one week leaves nothing to compare with, and a control that cannot act
-     is worse than no control. */
+     It had been a scrubber on the header — ALL, W26 … W34, arrows, and the
+     open week named at the end. What replaced it is not a smaller control but
+     none at all, so the check is that the whole apparatus is gone AND that
+     nothing went behind it: the feed still shows every week. */
   await p.click('.tab[data-view="new"]');
   await p.waitForTimeout(900);
-  const bar = await p.evaluate(() => {
-    const b = document.querySelector("#weekbar");
-    if (!b || b.hidden) return { shown: false };
-    const chips = [...b.querySelectorAll("#wkstrip button")].map(x => (x.textContent || "").trim());
-    const head = document.querySelector("header");
-    const tabs = document.querySelector(".tabs");
-    return {
-      shown: true, chips,
-      now: (b.querySelector("#wknow") || {}).textContent || "",
-      arrows: b.querySelectorAll(".wkarrow").length,
-      underHeader: !!(head && head.contains(b)),
-      aboveTabs: !!(tabs && b.getBoundingClientRect().bottom <= tabs.getBoundingClientRect().top + 1),
-      on: [...b.querySelectorAll("#wkstrip button.on")].map(x => (x.textContent || "").trim()),
-    };
-  });
-  ok("the week picker is on screen", bar.shown, JSON.stringify(bar));
-  ok("…on the header, above the tabs", bar.underHeader && bar.aboveTabs, JSON.stringify(bar));
-  const wkChips = bar.chips || [];
-  ok("…with ALL first and then the weeks",
-    wkChips[0] === "ALL" && wkChips.slice(1).every(t => /^W\d{2}$/.test(t)),
-    JSON.stringify(wkChips));
-  ok("…arrows to step through them", bar.arrows === 2, String(bar.arrows));
-  ok("…and the open week named at the end",
-    /^\d{4}-W\d{2}$/.test((bar.now || "").trim()) && (bar.on || []).length === 1,
-    JSON.stringify(bar));
+  const gone = await p.evaluate(() => ({
+    bar: document.querySelectorAll("#weekbar, #wkstrip, #wknow, .wkarrow").length,
+    chips: document.querySelectorAll(".weekchips").length,
+    heads: [...document.querySelectorAll("#v-new .wkhead")].map(e => (e.textContent || "").trim()),
+    cards: document.querySelectorAll("#v-new .grid .c").length,
+  }));
+  ok("the week scrubber is not on the screen", gone.bar === 0, JSON.stringify(gone));
+  ok("…nor a row of week chips in the feed", gone.chips === 0, JSON.stringify(gone));
+  /* This fixture is one week's work, so one heading is the whole feed. That
+     every week is shown rather than one chosen is held by weekbucket-e2e,
+     which has two. */
+  ok("…and the week is named by the days it covers",
+    gone.heads.length >= 1 &&
+    gone.heads.every(t => /^[A-Z][a-z]{2} \d{1,2} – [A-Z][a-z]{2} \d{1,2}$/.test(t)),
+    JSON.stringify(gone.heads));
+  ok("…with the products of all of them on screen", gone.cards > 0, JSON.stringify(gone));
 
-  /* It acts on the browsing tabs — including Clothing, which had no week of
-     its own before. */
-  const acted = await p.evaluate(async () => {
-    const before = document.querySelectorAll("#v-new .grid .c").length;
-    const all = [...document.querySelectorAll("#wkstrip button")].find(b => b.dataset.w === "all");
-    if (!all) return { before, after: -1, now: "(no picker)" };
-    all.click();
-    await new Promise(r => setTimeout(r, 800));
-    return { before, after: document.querySelectorAll("#v-new .grid .c").length,
-      now: (document.querySelector("#wknow") || {}).textContent || "" };
+  /* The search box goes with it. The rail on the left already asks every
+     question that narrows this screen — but the controls it stood next to
+     stay in the document, because the export and the report read them to
+     decide which rows go in the file. */
+  const find = await p.evaluate(() => {
+    const f = document.querySelector(".filters");
+    const q = document.querySelector("#q");
+    return { rowShown: !!f && !f.hidden,
+      boxDrawn: !!(q && q.getClientRects().length),
+      stillInDoc: !!q && !!document.querySelector("#brand") && !!document.querySelector("#sort") };
   });
-  ok("choosing ALL widens the feed to every week",
-    acted.after >= acted.before && /ALL/i.test(acted.now), JSON.stringify(acted));
+  ok("the Find box is not drawn", !find.rowShown && !find.boxDrawn, JSON.stringify(find));
+  ok("…but the controls the spreadsheet reads are still there", find.stillInDoc,
+    JSON.stringify(find));
 
   await p.click('.tab[data-view="brands"]');
   await p.waitForTimeout(1000);
-  ok("the picker is on the Clothing tab too",
-    await p.evaluate(() => { const b = document.querySelector("#weekbar"); return !!b && !b.hidden; }));
+  ok("Clothing shows the whole assortment, not one week",
+    await p.evaluate(() => document.querySelectorAll("#v-brands .grid .c").length > 0));
+  ok("…and has no week control either",
+    await p.evaluate(() => document.querySelectorAll("#weekbar, .weekchips").length === 0));
 
-  await p.click('.tab[data-view="lab"]');
-  await p.waitForTimeout(1000);
-  ok("…and not on the analysis tab, where a single week cannot be compared",
-    await p.evaluate(() => { const b = document.querySelector("#weekbar"); return !b || b.hidden; }));
-
-  ok("no page errors", errs.length === 0, errs.join(" | "));
+    ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();
   process.exit(fail ? 1 : 0);

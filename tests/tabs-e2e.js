@@ -391,6 +391,41 @@ const products = Array.from({ length: 24 }, (_, i) => ({
   ok("no number standing on it at rest", fab.mounted && !fab.showing.length,
     (fab.showing || []).join(", "));
 
+  /* ---- the two tabs say what they are, and the result box holds no button ----
+
+     Renamed on request: Collector -> RADAR, Products -> DROPS. The values the
+     code routes on (data-view) are untouched — a label is a label.
+
+     And the box under the run used to carry an Excel button and a View
+     button. Both said something the screen already offers three centimetres
+     away: the transport bar below makes the spreadsheet, and the DROPS tab
+     above opens this list's products. Two roads to one place drift apart and
+     neither becomes the one people learn. The sentence stays — it is a fact,
+     not a control. */
+  await p.click('.tab[data-view="collector"]');
+  await p.waitForTimeout(500);
+  const named = await p.evaluate(() => ({
+    tabs: [...document.querySelectorAll(".tabs .tab")].map(b => (b.textContent || "").trim()),
+    views: [...document.querySelectorAll(".tabs .tab")].map(b => b.dataset.view),
+  }));
+  ok("the tabs read RADAR and DROPS",
+    named.tabs.join("|").toUpperCase() === "RADAR|DROPS", JSON.stringify(named.tabs));
+  ok("…and still route on the same values",
+    named.views.join("|") === "collector|products", JSON.stringify(named.views));
+
+  const box = await p.evaluate(() => {
+    const b = document.querySelector("#listresult");
+    return { hidden: !b || b.hidden,
+      text: b ? (b.textContent || "").replace(/\s+/g, " ").trim() : "",
+      buttons: b ? b.querySelectorAll("button").length : -1,
+      gone: document.querySelectorAll("#listxlsx, #listview").length };
+  });
+  ok("the result box still says what the list holds",
+    box.hidden || /products collected by this list/.test(box.text), JSON.stringify(box));
+  ok("…and has no buttons in it", box.buttons === 0 && box.gone === 0, JSON.stringify(box));
+  ok("the spreadsheet is still one press away on the transport bar",
+    await p.evaluate(() => !!document.querySelector(".runbar #jxlsx")));
+
   ok("no page errors", errs.length === 0, errs.join("\n       "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();

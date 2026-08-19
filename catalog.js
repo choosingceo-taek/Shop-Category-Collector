@@ -135,7 +135,7 @@
       scopeId = b.dataset.id;
       try { chrome.storage.local.set({ [SCOPE_KEY]: scopeId }); } catch (e) {}
       applyScope();
-      curWeekStart = undefined; curBrand = "";
+      curBrand = "";
       renderScope(); fillFilters(); redrawAll();
       // this list's weeks are its own record — write them the first time it is opened
       rollup().then(redrawAll);
@@ -156,7 +156,6 @@
     if (!$("#v-lab").hidden) renderLab();
     if (!$("#v-new").hidden) renderNew();
     if (!$("#v-brands").hidden) renderBrands();
-    renderWeekBar();
     paintStats();
     paintDataChip();
     paintCheck();
@@ -1009,16 +1008,21 @@
     /* The header follows the tab. 상품 = full filter row; 신상 피드/브랜드 =
        search only (the dropdowns and export buttons act on the PRODUCTS grid and
        would lie here); LAB / Scan lists = no row at all. */
+    /* The filter row is not drawn at all any more (asked for). On the two
+       browsing tabs it had shrunk to one thing — a search box — and the rail
+       on the left already asks every question that narrows this screen, by
+       brand, category, fabric and colour, with the counts beside them.
+
+       The controls stay in the DOM because they are still what the export and
+       the report read to decide which rows go in the file (`visible()`); they
+       simply hold their defaults now. Removing the markup would take the
+       spreadsheet with it. */
     const filters = document.querySelector(".filters");
-    filters.hidden = !(view === "products" || view === "new" || view === "brands");
-    filters.classList.toggle("slim", view === "new" || view === "brands");
-    $("#q").placeholder = view === "products"
-      ? "Search name · fabric · colour" : "Search this view — name, fabric, colour, brand";
+    filters.hidden = true;
     if (view === "lists") renderLists();
     if (view === "lab") renderLab();
     if (view === "new") renderNew();
     if (view === "brands") renderBrands();
-    renderWeekBar();               // shown on the browsing tabs, not the analysis
   }
 
   // LAB — change over time, computed from what we collected (no external service)
@@ -1184,9 +1188,7 @@
      honest for every shop; a shop-stated launch date exists only on Shopify
      and is shown on the card when we have it. Clips are excluded, as in LAB:
      hand-picked items are not arrivals. */
-  /* undefined = never chosen (open on the newest week) · null = ALL WEEKS ·
-     a number = that week. */
-  let curWeekStart, curBrand = "";
+  let curBrand = "";
 
   const tierList = () => [...new Set(items.map(i => i.tier).filter(Boolean))].sort();
   const inTier = i => !curTier || i.tier === curTier;
@@ -1401,7 +1403,9 @@
   const matchesQ = (i, q) => !q ||
     [i.name, i.fabric_composition, i.colorways, i.brand, i.design]
       .join(" ").toLowerCase().includes(q);
-  const currentQ = () => $("#q").value.trim().toLowerCase();
+  /* Nothing to type into any more — the search box is gone from the screen.
+     The readers below still ask, and get "everything". */
+  const currentQ = () => "";
 
   function weekBuckets() {
     const rows = scanned();
@@ -1530,101 +1534,44 @@
     blockedPaint = setTimeout(paintCheck, 600);
   }
 
-  /* The weeks, on the header — one control for "which week am I looking at",
-     which is a question about the screen and not about one tab of it.
+  /* No week control on the header any more (asked for). What replaced it is
+     not a smaller control — it is no control at all: New In shows every week
+     it has, newest first, each pile introduced by the days it covers. Nothing
+     is behind a picker, so nothing can be hidden by one, and the week is
+     named where the products are rather than in a toolbar three inches away.
 
-     A scrubber rather than a wrapping row of chips: there is one per week and
-     a year is fifty-two of them. It scrolls, the arrows step it, the open week
-     is named at the end, and ALL is the first stop for the times the question
-     is not about a week at all. */
-  const WEEK_ALL = "all";
-  function renderWeekBar() {
-    const bar = $("#weekbar"), strip = $("#wkstrip");
-    if (!bar || !strip) return;
-    const weeks = weekBuckets();                       // oldest first, as time runs
-    bar.hidden = !weeks.length || $("#v-lab").hidden === false;
-    if (bar.hidden) return;
-    if (curWeekStart === undefined ||
-        (curWeekStart !== null && !weeks.some(w => w.start === curWeekStart))) {
-      curWeekStart = weeks[weeks.length - 1].start;      // the newest, to open on
-    }
-    const W = window.TrendCalc;
-    strip.innerHTML =
-      `<button data-w="${WEEK_ALL}" class="${curWeekStart === null ? "on" : ""}"
-        title="every week collected">ALL</button>` +
-      weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}"
-        title="${esc(W.weekId(w.start))}">${esc(W.weekId(w.start).replace(/^\d{4}-/, ""))}</button>`).join("");
-    $("#wknow").textContent = curWeekStart === null ? "ALL WEEKS" : W.weekId(curWeekStart);
-    const on = strip.querySelector("button.on");
-    if (on) on.scrollIntoView({ block: "nearest", inline: "center" });
-  }
-  function pickWeek(v) {
-    curWeekStart = v === WEEK_ALL ? null : +v;
-    renderWeekBar();
-    if (!$("#v-new").hidden) renderNew();
-    if (!$("#v-brands").hidden) renderBrands();
-  }
-  document.addEventListener("click", e => {
-    const b = e.target.closest && e.target.closest("#wkstrip button");
-    if (b) pickWeek(b.dataset.w);
-  });
-  const stepWeek = dir => {
-    const weeks = weekBuckets();
-    if (!weeks.length) return;
-    const at = curWeekStart === null ? weeks.length : weeks.findIndex(w => w.start === curWeekStart);
-    const next = weeks[Math.max(0, Math.min(weeks.length - 1, at + dir))];
-    if (next) pickWeek(String(next.start));
-  };
-  $("#wkprev") && $("#wkprev").addEventListener("click", () => stepWeek(-1));
-  $("#wknext") && $("#wknext").addEventListener("click", () => stepWeek(1));
+     CLOTHING goes back to the whole assortment, which is what it was before
+     a week was ever applied to it. */
   // the rows the browsing tabs may show, given the week on the header
-  const inWeek = i => {
-    if (curWeekStart == null) return true;               // ALL, or nothing chosen yet
-    const w = weekBuckets().find(x => x.start === curWeekStart);
-    return !!w && i.addedAt >= w.start && i.addedAt < w.end;
-  };
+  const inWeek = () => true;
 
   function renderNew() {
     const el = $("#v-new");
     const weeks = weekBuckets().slice().reverse();          // newest first
     if (!weeks.length) { el.innerHTML = EMPTY_FEED; return; }
-    if (curWeekStart === undefined ||
-        (curWeekStart !== null && !weeks.some(w => w.start === curWeekStart))) curWeekStart = weeks[0].start;
-    /* ALL is every week in one pile — the same grouping, a wider window. */
-    const wk = curWeekStart === null
-      ? { start: weeks[weeks.length - 1].start, end: weeks[0].end,
-          items: [].concat(...weeks.map(w => w.items)), count: weeks.reduce((n, w) => n + w.count, 0) }
-      : weeks.find(w => w.start === curWeekStart);
 
-    /* The weeks, and nothing else — no tally on the chip. Counting what came
-       in is the LAB's job and it does it properly, by brand; here the figure
-       was decoration on a control whose whole meaning is "which week". */
-    const span = (a, b) => {
-      const f = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
-      return `${f(a)}-${f(b - 1)}`;
-    };
-    /* One chip, and it is the open week — the picker itself is on the header
-       now, where it belongs to the whole screen. This says which week the pile
-       below is, and which days that week covers. */
-    const chips = `<button data-w="${wk.start}" class="on"><b>${
-      curWeekStart === null ? "ALL WEEKS" : esc(window.TrendCalc.weekId(wk.start))
-      }</b><i class="wkspan"> : ${esc(span(wk.start, wk.end))}</i></button>`;
+    /* Every week, not one of them.
 
-    // search first, so the brand chips' counts describe what is on screen
-    const q = currentQ();
-    const searched = wk.items.filter(i => matchesQ(i, q));
-    // the rail is built from the searched week, so its counts describe what
-    // is actually on offer here rather than the whole catalogue
-    renderRail(searched);
+       There used to be a picker — chips here, then a scrubber on the header —
+       and it has been taken off. What replaces it is not a smaller control but
+       none: the feed simply runs down the weeks, newest first. Nothing sits
+       behind a control, so no control can hide it, and the reader scrolls
+       instead of choosing.
+
+       A week is introduced by the days it covers, written plainly rather than
+       through the browser's locale, which had been printing Korean month names
+       on an otherwise English screen. The W-number still names the week in the
+       records and the spreadsheets — it just is not what a person reads here. */
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const day = t => { const d = new Date(t); return `${MON[d.getMonth()]} ${d.getDate()}`; };
+    const span = (a, b) => `${day(a)} – ${day(b - 1)}`;
+
+    // the rail is built from everything the feed can show, so its counts
+    // describe what is actually on offer here
+    const everything = [].concat(...weeks.map(w => w.items));
+    renderRail(everything);
     wireRail(renderNew);
-    const wkItems = searched.filter(i => railMatch(i));
-
-    /* No brand row across the middle any more. The rail on the left asks that
-       question — with counts, a search box and tiers — and a second brand
-       filter three inches away is two controls for one thing: they drift,
-       and the screen stops saying which one is narrowing it. The only chips
-       left over the feed are the weeks, which is what this tab is FOR. */
-    const shownItems = wkItems;
 
     /* One week, one pile — brand (biggest first) → cards, and no day inside it.
 
@@ -1632,44 +1579,39 @@
        shop is added or one comes back. Split by the day it happened to be
        collected, the same brand appeared under two headings and the week read
        as two half-weeks of work rather than one week of a season. The week
-       here is Monday to Sunday (bucketStart already starts weeks on Monday)
-       and it is named the way the record names it — 2026-W34.
+       here is Monday to Sunday (bucketStart already starts weeks on Monday).
 
        Nothing is counted twice: a product is one row keyed by its address, so
        Wednesday's pass over Monday's page updates that row rather than adding
        another, and `addedAt` stays the first sighting — which is what puts it
        in this week and no other. The shop's own order survives inside each
        brand group. */
-    const groups = new Map();
-    shownItems.forEach(i => {
-      const b = i.brand || "Other";
-      if (!groups.has(b)) groups.set(b, []);
-      groups.get(b).push(i);
-    });
-    const sections = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
-      .map(([brand, ii]) =>
-        `<div class="brandsec"><b>${esc(brand)}</b></div>
-         <div class="grid">${ii.slice().sort(bySitePos).map(feedCard).join("")}</div>`).join("");
+    const blockOf = wk => {
+      const mine = wk.items.filter(i => railMatch(i));
+      if (!mine.length) return "";
+      const groups = new Map();
+      mine.forEach(i => {
+        const b = i.brand || "Other";
+        if (!groups.has(b)) groups.set(b, []);
+        groups.get(b).push(i);
+      });
+      const brands = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
+        .map(([brand, ii]) =>
+          `<div class="brandsec"><b>${esc(brand)}</b></div>
+           <div class="grid">${ii.slice().sort(bySitePos).map(feedCard).join("")}</div>`).join("");
+      return `<div class="wkhead">${esc(span(wk.start, wk.end))}</div>${brands}`;
+    };
+    const sections = weeks.map(blockOf).join("");
 
-    /* One date on the screen. The same week was being said three times — a
-       line above the title, a tag at the far right, and the chip itself — and
-       the chip is the one that is also the control. The days it covers ride
-       IN the open chip, written plainly rather than through the browser's
-       locale, which had been printing Korean month names on an otherwise
-       English screen. */
     el.innerHTML = `
       <div class="edhead"><div><h2>New In</h2></div></div>
-      <div class="weekchips">${chips}</div>
       ${tierChips()}
       ${railNote()}
-      ${sections || `<div class="none">${q ? `Nothing matches "${esc(q)}" in this week.`
-        : anyPicked() ? "Nothing in this week matches the filters on the left."
-        : "No products in this week."}</div>`}`;
+      ${sections || `<div class="none">${anyPicked()
+        ? "Nothing matches the filters on the left." : "No products yet."}</div>`}`;
     armImgFallback(el);
     wireRailNote(el, renderNew);
     wireTierChips(el, () => renderNew());
-    el.querySelectorAll(".weekchips button").forEach(b =>
-      b.addEventListener("click", () => { curWeekStart = +b.dataset.w; renderNew(); }));
   }
 
   function renderBrands() {

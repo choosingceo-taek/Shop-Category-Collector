@@ -4,8 +4,8 @@
    add it to your own list of reference sites — and shape that list over time
    (rename, regroup, split into several lists). Everything else hangs off that.
 
-   COLLECTOR  add the current page, curate the list, run the whole list
-   PRODUCTS   what those scans collected, filter and export
+   RADAR      add the current page, curate the list, run the whole list
+   DROPS      what those scans collected, filter and export
 
    Adding works on ANY page, not just the shops with an adapter: a reference URL
    is worth keeping even when we can't scan it yet. Entries carry a SCAN/REF tag
@@ -20,7 +20,7 @@
   let tab = null, read = null, job = null, queue = null;
   let lists = [], curList = null;
   let products = [], picked = new Set();
-  /* PRODUCTS shows the list that is open in COLLECTOR.
+  /* DROPS shows the list that is open in RADAR.
 
      The scoping already existed and there was almost no way to reach it: the
      only thing that set it was a "View" button in the box a finished run
@@ -28,7 +28,7 @@
      a designer looking at one research question saw every other one mixed in.
 
      The tab strip above already chooses the list, so nothing new is needed to
-     say which — PRODUCTS just follows it. Seeing everything is a deliberate
+     say which — DROPS just follows it. Seeing everything is a deliberate
      step out of that, which is what the bar's control does, and it says which
      of the two it is in either case. */
   /* Four quiet minutes is the worker's own watchdog reading, and the same
@@ -524,7 +524,7 @@
   /* Taking an address out of a list takes out what it collected.
 
      Removing the row used to remove only the plan: everything that address had
-     already scraped stayed in the catalog, so PRODUCTS and the LAB went on
+     already scraped stayed in the catalog, so DROPS and the LAB went on
      counting a page the list says is gone, and there was no way to undo a scan
      short of emptying the whole catalog. A list is one research question
      (v1.71) — an address that is no longer in it is no longer part of the
@@ -560,7 +560,7 @@
     const what = `${e.brand || hostOf(e.url)}${e.label ? " · " + e.label : ""}`;
     const n = await forgetPage(Object.assign({ dry: true }, spec));
     const text = n
-      ? `Remove ${what}? The ${n} product${n === 1 ? "" : "s"} it collected ${n === 1 ? "goes" : "go"} too — out of PRODUCTS, out of the LAB, out of the next spreadsheet.`
+      ? `Remove ${what}? The ${n} product${n === 1 ? "" : "s"} it collected ${n === 1 ? "goes" : "go"} too — out of DROPS, out of the LAB, out of the next spreadsheet.`
       : `Remove ${what}?`;
     if (!await confirmIn(text)) return;
     const gone = n ? await forgetPage(spec) : 0;
@@ -692,31 +692,6 @@
       (brands.size ? ` · ${brands.size} brands` : "");
   }
 
-  // Excel of exactly this list's results, through the same 12-column builder.
-  async function exportRows(rows, filename, btn) {
-    if (!rows.length) return toast("Nothing to export");
-    const label = btn.textContent; btn.disabled = true;
-    try {
-      const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
-        ExcelJS: window.ExcelJS,
-        fetchImage: url => new Promise(res => {
-          if (!url) return res(null);
-          try { chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
-            void chrome.runtime.lastError; res(r && r.ok ? r : null); }); } catch (e) { res(null); }
-        }),
-        filters: {},
-        onProgress: (i, total) => { btn.textContent = `${i}/${total}`; },
-      });
-      let b64 = "";
-      for (let i = 0; i < bytes.length; i += 0x8000)
-        b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-      chrome.runtime.sendMessage({
-        type: "downloadFile", filename, b64: btoa(b64),
-        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }, r => toast(r && r.ok ? `Saved ${rows.length} rows to Excel` : "Export failed"));
-    } catch (e) { toast("Export failed"); }
-    finally { btn.disabled = false; btn.textContent = label; }
-  }
 
   /* Which tab is doing the work.
 
@@ -824,7 +799,7 @@
 
   /* Build the last run's spreadsheet, here, on demand.
 
-     A run no longer writes one by itself: it fills the catalog, and PRODUCTS
+     A run no longer writes one by itself: it fills the catalog, and DROPS
      and the LAB have every shop's products the moment that shop finishes.
      Making the file costs a download of every photo in the run, so it waits
      to be asked for. The panel loads ExcelJS itself, so this does not depend
@@ -977,7 +952,7 @@
       ? "Show every list"
       : (curList ? `Back to ${curList.name}` : "Back to the open list");
     if (!products.length) {
-      grid.innerHTML = '<div class="pempty">Nothing collected yet.<br>Add sites in COLLECTOR, then press ▶ Scan all.</div>';
+      grid.innerHTML = '<div class="pempty">Nothing collected yet.<br>Add sites in RADAR, then press ▶ Scan all.</div>';
     } else if (!rows.length) {
       grid.innerHTML = '<div class="pempty">No products match these filters.</div>';
     } else {
@@ -1962,17 +1937,6 @@
   $("#runlist").addEventListener("click", () =>
     startRun((curList && curList.entries) || []));
 
-  $("#listxlsx").addEventListener("click", () => {
-    const rows = productsOfList(curList && curList.id);
-    const tag = (curList.name || "list").replace(/[^\w가-힣]+/g, "_");
-    exportRows(rows, `${tag}_${rows.length}items_${new Date().toISOString().slice(0, 10)}.xlsx`, $("#listxlsx"));
-  });
-  // jump to PRODUCTS showing only this list's results
-  $("#listview").addEventListener("click", () => {
-    scopeAll = false; syncScope();
-    paintProductFilters();
-    document.querySelector('.tab[data-view="products"]').click();
-  });
 
   $("#pgrid").addEventListener("change", e => {
     const ck = e.target.closest(".ck"); if (!ck) return;

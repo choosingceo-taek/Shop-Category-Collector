@@ -81,24 +81,19 @@ const THIS_WEEK = 5;
   await p.click('.tab[data-view="new"]');
   await p.waitForTimeout(1200);
 
-  /* The picker moved to the header (it is a question about the whole screen,
-     not about one tab), so the weeks are counted there. What is left in the
-     feed is one chip naming the open week and the days it covers. */
+  /* No picker anywhere — it was taken off the header (asked for) and nothing
+     replaced it. The feed runs down every week it has, each pile introduced by
+     the days it covers, so both weeks are on the screen at once. */
   const wk = await p.evaluate(() => ({
-    chips: [...document.querySelectorAll("#wkstrip button")]
-      .map(b => (b.textContent || "").trim()).filter(t => t !== "ALL"),
-    now: (document.querySelector("#wknow") || {}).textContent || "",
-    on: (document.querySelector(".weekchips button.on") || {}).textContent || "",
+    picker: document.querySelectorAll("#wkstrip, #wknow, .weekchips").length,
+    heads: [...document.querySelectorAll("#v-new .wkhead")].map(e => (e.textContent || "").trim()),
   }));
-  /* The open chip also carries the days it covers — and it is the only place
-     the week is written; the line above the title and the tag beside it were
-     two more copies of the same date. */
-  ok("the weeks are named the way the record names them",
-    wk.chips.length === 2 && wk.chips.every(t => /^W\d{2}$/.test(t)) &&
-    /^\d{4}-W\d{2}$/.test(wk.now.trim()),
-    JSON.stringify(wk.chips) + " · " + wk.now);
-  ok("…and there is one chip per week, not one per day",
-    wk.chips.length === 2, JSON.stringify(wk.chips));
+  ok("there is no week picker", wk.picker === 0, JSON.stringify(wk));
+  ok("…and both weeks are on the screen, one heading each",
+    wk.heads.length === 2, JSON.stringify(wk.heads));
+  ok("…named by the days they cover, not by a W-number",
+    wk.heads.every(t => /^[A-Z][a-z]{2} \d{1,2} – [A-Z][a-z]{2} \d{1,2}$/.test(t)),
+    JSON.stringify(wk.heads));
 
   const view = await p.evaluate(() => {
     const el = document.querySelector("#v-new");
@@ -107,20 +102,31 @@ const THIS_WEEK = 5;
       brandHeads: [...el.querySelectorAll(".brandsec")].map(e => (e.textContent || "").trim()),
       cards: [...el.querySelectorAll(".grid .c")].map(c =>
         ((c.textContent || "").match(/(ALO|COS) \d/) || [""])[0]),
+      // the cards under the FIRST week heading — everything up to the next one
+      firstWeek: (() => {
+        const out = [];
+        let on = false;
+        for (const n of el.children) {
+          if (n.classList.contains("wkhead")) { if (on) break; on = true; continue; }
+          if (!on) continue;
+          n.querySelectorAll(".c").forEach(c =>
+            out.push(((c.textContent || "").match(/(ALO|COS) \d/) || [""])[0]));
+        }
+        return out;
+      })(),
       kicker: (el.querySelector(".kicker") || {}).textContent || "",
     };
   });
   ok("no day headings inside the week", view.days === 0, `${view.days} day headings`);
   ok("Monday's and Wednesday's and Sunday's work are one pile",
-    view.cards.length === THIS_WEEK, `${view.cards.length} cards, expected ${THIS_WEEK}`);
-  ok("…and last week's product is not in it",
-    !view.cards.includes("ALO 6"), JSON.stringify(view.cards));
-  ok("one brand, one heading — no matter which day it was collected",
-    view.brandHeads.length === new Set(view.brandHeads).size &&
-    view.brandHeads.length === 2, JSON.stringify(view.brandHeads));
-  ok("the open week says which days it cover, on the chip itself",
-    / : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}$/.test(wk.on.trim()), wk.on);
-  ok("…and the date is not repeated above the title", !view.kicker.trim(), view.kicker);
+    view.firstWeek.length === THIS_WEEK,
+    `${view.firstWeek.length} cards under the newest week, expected ${THIS_WEEK}`);
+  ok("…and last week's product is under its own heading, not in it",
+    !view.firstWeek.includes("ALO 6") && view.cards.includes("ALO 6"),
+    JSON.stringify(view.firstWeek) + " | all: " + JSON.stringify(view.cards));
+  ok("one brand, one heading inside a week — no matter which day it was collected",
+    view.brandHeads.length === 3, JSON.stringify(view.brandHeads));
+  ok("the date is not repeated above the title", !view.kicker.trim(), view.kicker);
 
   /* Scanning the same page again inside the same week adds nothing: same
      address, same row, first sighting kept. */
@@ -132,13 +138,12 @@ const THIS_WEEK = 5;
   await p.waitForTimeout(1200);
   const again = await p.evaluate(() => ({
     cards: document.querySelectorAll("#v-new .grid .c").length,
-    chips: [...document.querySelectorAll("#wkstrip button")]
-      .map(b => (b.textContent || "").trim()).filter(t => t !== "ALL"),
+    heads: document.querySelectorAll("#v-new .wkhead").length,
   }));
   ok("a second pass over the same page does not duplicate anything",
-    again.cards === THIS_WEEK, `${again.cards} cards, expected ${THIS_WEEK}`);
+    again.cards === THIS_WEEK + 1, `${again.cards} cards, expected ${THIS_WEEK + 1}`);
   ok("…and does not open a new week",
-    again.chips.length === 2, JSON.stringify(again.chips));
+    again.heads === 2, String(again.heads));
 
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
