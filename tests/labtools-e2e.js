@@ -28,14 +28,19 @@ const BRANDS = ["ATHLETA", "GYMSHARK", "VUORI"];
 const FABRIC = ["95% Cotton 5% Elastane", "100% Linen", "88% Polyester 12% Spandex"];
 const NAMES = ["Satin Slip Dress", "Linen Poplin Shirt", "Ribbed Tank",
   "Oversized Hoodie", "Ruched Midi Skirt", "Cropped Jersey Tee"];
+/* Two lists, the way a designer keeps them — and one product in both, since
+   listIds is a union and a garment really can answer two questions. */
 const items = Array.from({ length: 30 }, (_, n) => ({
   url: `https://example.com/p/${n}`,
   brand: BRANDS[n % BRANDS.length], category: "New In",
   name: NAMES[n % NAMES.length] + " " + n,
   price: "$" + (40 + (n % 9) * 10), image_url: "",
   fabric_composition: FABRIC[n % FABRIC.length],
-  addedAt: Date.now() - (n % 4) * DAY, listIds: ["l0"],
+  addedAt: Date.now() - (n % 4) * DAY,
+  listIds: n === 0 ? ["l0", "l1"] : (n % 3 === 0 ? ["l1"] : ["l0"]),
 }));
+const IN_L0 = items.filter(i => i.listIds.includes("l0")).length;
+const IN_L1 = items.filter(i => i.listIds.includes("l1")).length;
 
 (async () => {
   const ctx = await chromium.launchPersistentContext("/tmp/pw-labtools", {
@@ -52,7 +57,10 @@ const items = Array.from({ length: 30 }, (_, n) => ({
   await p.goto(`chrome-extension://${id}/catalog.html`);
   await p.waitForTimeout(1200);
   await p.evaluate(() => new Promise(r => chrome.storage.local.set({
-    wpb_lists: [{ id: "l0", name: "My references", createdAt: 1, entries: [] }] }, r)));
+    wpb_lists: [
+      { id: "l0", name: "FABRIC", createdAt: 1, entries: [] },
+      { id: "l1", name: "WMN", createdAt: 2, entries: [] },
+    ] }, r)));
   await p.evaluate(rows => CatalogStore.putScan({ meta: { scanId: "lt" }, items: rows }), items);
   await p.reload();
   await p.waitForTimeout(2600);
@@ -107,6 +115,54 @@ const items = Array.from({ length: 30 }, (_, n) => ({
   ok("on the dashboard template, which is what the LAB is",
     await p.locator("#tmpl").inputValue() === "standard",
     await p.locator("#tmpl").inputValue());
+
+  /* ---- 3b. the spreadsheet: one tab per list ------------------------------
+
+     A list is one research question, and a single sheet with every list
+     poured into it answers none of them. */
+  const xl = await p.evaluate(() => {
+    const b = document.querySelector("#labxlsx");
+    if (!b) return { there: false };
+    const br = b.getBoundingClientRect();
+    const hr = document.querySelector("#labhtml").getBoundingClientRect();
+    return { there: true, text: (b.innerText || "").trim(),
+      beforeHtml: br.right <= hr.left + 1, sameRow: Math.abs(br.top - hr.top) < 4 };
+  });
+  ok("the LAB bar carries an Excel button too", xl.there);
+  ok("beside the HTML one, on the same row", xl.there && xl.beforeHtml && xl.sameRow,
+    JSON.stringify(xl));
+
+  /* Build the book in the page and read its tabs back, rather than trusting
+     that a download happened: what matters is what is INSIDE the file. */
+  const book = await p.evaluate(async () => {
+    const rows = await CatalogStore.allProducts();
+    const lists = await new Promise(r =>
+      chrome.storage.local.get("wpb_lists", o => r((o || {}).wpb_lists || [])));
+    const groups = [];
+    lists.forEach(l => {
+      const mine = rows.filter(x => [].concat(x.listIds || []).includes(l.id));
+      if (mine.length) groups.push({ name: l.name, items: mine });
+    });
+    const out = await window.WPBExcel.buildKnitWorkbook(rows, {
+      ExcelJS: window.ExcelJS, groups, filters: {},
+    });
+    const wb = new window.ExcelJS.Workbook();
+    await wb.xlsx.load(out.bytes.buffer);
+    return {
+      tabs: wb.worksheets.map(w => w.name),
+      counts: wb.worksheets.map(w => w.rowCount - 1),   // minus the header
+      bytes: out.bytes.length,
+    };
+  });
+  ok("the book has a tab per list, named after it",
+    book.tabs.join("|") === "FABRIC|WMN", book.tabs.join(" | "));
+  ok("FABRIC's tab holds FABRIC's rows", book.counts[0] === IN_L0,
+    `${book.counts[0]} rows, expected ${IN_L0}`);
+  ok("WMN's tab holds WMN's rows", book.counts[1] === IN_L1,
+    `${book.counts[1]} rows, expected ${IN_L1}`);
+  ok("a product in both lists is on both tabs",
+    book.counts[0] + book.counts[1] > 30, `${book.counts[0] + book.counts[1]} of 30 products`);
+  ok("and it is a real workbook", book.bytes > 3000, `${book.bytes} bytes`);
 
   /* ---- 4. the rail lists values, not counts ---- */
   await p.click('.tab[data-view="brands"]');

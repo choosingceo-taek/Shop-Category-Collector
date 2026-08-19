@@ -307,7 +307,20 @@
     const fetchImage = typeof ctx.fetchImage === "function" ? ctx.fetchImage : null;
     const onProgress = typeof ctx.onProgress === "function" ? ctx.onProgress : null;
 
-    const { kept: unsorted, dropped } = filterKept(items, ctx.filters);
+    /* One sheet, or one per list.
+
+       A designer keeps a list per research question, and a single sheet with
+       every list poured into it answers none of them — you cannot read what
+       FABRIC brought in without first pulling WMN's rows back out. So when
+       the caller knows which list each row belongs to it hands over groups,
+       and each becomes its own tab named after the list.
+
+       A product can belong to two lists (listIds is a union), and it appears
+       on both tabs: it really was collected for both questions, and dropping
+       it from one would make that tab lie about what the list holds. */
+    const rawGroups = Array.isArray(ctx.groups) && ctx.groups.length
+      ? ctx.groups : [{ name: "Products", items }];
+    const dropped = [];
 
     /* One file, grouped by brand and then by category. A list run collects
        several brands and several categories each, and a spreadsheet that
@@ -323,15 +336,46 @@
        then refuses to load the whole extension. */
     const cmp = (a, b) => (!a || !b) ? ((!a && !b) ? 0 : (a ? -1 : 1)) : a.localeCompare(b);
     const low = v => String(v || "").toLowerCase();
-    const kept = unsorted.slice().sort((a, b) =>
-      cmp(low(a.brand), low(b.brand)) || cmp(low(a.category), low(b.category)));
-
-    // colour-variant families: how many kept rows share each product slug
-    const family = new Map();
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Fabric-Scanner";
-    const ws = wb.addWorksheet("Products", { views: [{ state: "frozen", ySplit: 1 }] });
+
+    /* Excel's own rules for a tab name, applied here rather than discovered
+       when the file refuses to open: no []:*?/\\, 31 characters, and unique
+       within the book. */
+    const usedNames = new Set();
+    const sheetName = raw => {
+      let n = String(raw || "Products").replace(/[[\]:*?/\\]+/g, " ").trim().slice(0, 31) || "Products";
+      if (usedNames.has(n.toLowerCase())) {
+        let i = 2;
+        while (usedNames.has((n.slice(0, 28) + " " + i).toLowerCase())) i++;
+        n = n.slice(0, 28) + " " + i;
+      }
+      usedNames.add(n.toLowerCase());
+      return n;
+    };
+
+    const sheets = rawGroups.map(g => {
+      const r = filterKept(g.items || [], ctx.filters);
+      dropped.push(...(r.dropped || []));
+      return {
+        name: sheetName(g.name),
+        rows: r.kept.slice().sort((a, b) =>
+          cmp(low(a.brand), low(b.brand)) || cmp(low(a.category), low(b.category))),
+      };
+    }).filter(s => s.rows.length);
+    if (!sheets.length) sheets.push({ name: sheetName("Products"), rows: [] });
+
+    const grand = sheets.reduce((n, s) => n + s.rows.length, 0);
+    let placed = 0;
+    const keptOut = {};
+
+    for (const sheet of sheets) {
+    const kept = sheet.rows;
+    keptOut[sheet.name] = kept;
+    // colour-variant families: how many kept rows share each product slug
+    const family = new Map();
+    const ws = wb.addWorksheet(sheet.name, { views: [{ state: "frozen", ySplit: 1 }] });
     ws.columns = HEADERS.map((h, i) => ({ header: h, width: WIDTHS[i] }));
 
     const head = ws.getRow(1);
@@ -346,7 +390,8 @@
 
     for (let i = 0; i < kept.length; i++) {
       const rec = kept[i];
-      if (onProgress && i % 3 === 0) { try { await onProgress(i, kept.length); } catch (e) {} }
+      placed++;
+      if (onProgress && placed % 3 === 0) { try { await onProgress(placed, grand); } catch (e) {} }
       const rowNo = i + 2;
       const row = ws.getRow(rowNo);
 
@@ -409,9 +454,10 @@
         }
       }
     }
+    }
 
     const buf = await wb.xlsx.writeBuffer();
-    return { bytes: new Uint8Array(buf), kept: { Products: kept }, dropped };
+    return { bytes: new Uint8Array(buf), kept: keptOut, dropped };
   }
 
   const api = { HEADERS, buildKnitWorkbook, filterKept, literalDesign, reasonKo, _familyKey: familyKey, _colorList: colorList };

@@ -104,6 +104,12 @@
   .labhtml em { font-style:normal; }
   .labhtml:hover { background:#000; border-color:#000; }
   .labhtml:disabled { opacity:.45; cursor:default; }
+  /* Two ways to take the week away, and only one of them is the headline.
+     The spreadsheet sits to the left of it in outline, so the pair reads as
+     one group rather than two competing solids. */
+  .labhtml.ghost { margin-left:auto; background:none; color:var(--ink); border-color:var(--line2); }
+  .labhtml.ghost + .labhtml { margin-left:8px; }
+  .labhtml.ghost:hover { background:var(--wash); border-color:var(--ink); color:var(--ink); }
   /* Each analysis is its own card on the grey ground — the heading belongs to
      the card, so nothing needs a rule under it to say where a section ends. */
   .sec { background:var(--card); border-radius:var(--r); padding:11px 14px 12px;
@@ -608,6 +614,12 @@
              One press: the same builder the Products tab used to carry, on
              the dashboard template, embedding every photograph so the page
              opens with no internet. -->
+        <!-- The spreadsheet, beside the file it belongs with. One tab per
+             list, because a list is one research question. -->
+        <button id="labxlsx" class="labhtml ghost" title="Export to Excel — one tab per list, thumbnails included">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.6h7.2L19 8.4v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4.6a2 2 0 0 1 1-2zm6.4 2H7v16.8h10V9.4h-4.6z"/><path d="M8.6 11.6h1.7l1.1 1.9 1.1-1.9h1.7l-1.9 3 2 3.1h-1.7l-1.2-2-1.2 2H8.4l2-3.1z"/></svg>
+          <em>EXCEL</em>
+        </button>
         <button id="labhtml" class="labhtml" title="Build the dashboard as one HTML file — photographs included, opens without internet">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.6h7.2L19 8.4v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4.6a2 2 0 0 1 2-2zm6.4 2H6v16.8h11V9.4h-4.6z"/><path d="M7.6 12.2h1.5v1.7h1.3v-1.7h1.5v5h-1.5v-1.9H9.1v1.9H7.6zM13 12.2h3.9v1.4h-1.2v3.6h-1.5v-3.6H13z"/></svg>
           <em>HTML</em>

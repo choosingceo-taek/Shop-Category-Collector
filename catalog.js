@@ -828,6 +828,21 @@
      builder again — a second caller is a second thing to keep in step, and
      this is the same file either way. The progress the builder writes goes on
      the hidden button, so this one carries its own. */
+  const labXlsxBtn = $("#labxlsx");
+  if (labXlsxBtn) {
+    labXlsxBtn.addEventListener("click", async () => {
+      const em = labXlsxBtn.querySelector("em");
+      const was = em ? em.textContent : "";
+      labXlsxBtn.disabled = true;
+      if (em) em.textContent = "Building…";
+      try { await exportXlsx(); }
+      finally {
+        labXlsxBtn.disabled = false;
+        if (em) em.textContent = was || "EXCEL";
+      }
+    });
+  }
+
   const labHtmlBtn = $("#labhtml");
   if (labHtmlBtn) {
     labHtmlBtn.addEventListener("click", async () => {
@@ -859,8 +874,24 @@
     const label = btn.textContent;
     btn.disabled = true;
     try {
+      /* One tab per list. A list is one research question, and a single
+         sheet with every list poured into it answers none of them — reading
+         what FABRIC brought in would mean pulling WMN's rows back out by
+         hand. Rows belonging to no list keep a tab of their own rather than
+         disappearing; a row in two lists is on both, because it really was
+         collected for both. */
+      const groups = [];
+      lists.forEach(l => {
+        const mine = rows.filter(r => [].concat(r.listIds || []).includes(l.id));
+        if (mine.length) groups.push({ name: l.name || "List", items: mine });
+      });
+      const unfiled = rows.filter(r => !lists.some(l =>
+        [].concat(r.listIds || []).includes(l.id)));
+      if (unfiled.length) groups.push({ name: "Unfiled", items: unfiled });
+
       const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
         ExcelJS: window.ExcelJS,
+        groups,
         // the service worker holds the host access needed to read shop CDNs
         fetchImage: url => new Promise(res => {
           if (!url) return res(null);
@@ -883,7 +914,10 @@
       a.href = url; a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 8000);
-      alert(`Exported to Excel.\n${rows.length} products · ${(blob.size / 1048576).toFixed(1)} MB`);
+      alert(`Exported to Excel.\n${rows.length} products · ${(blob.size / 1048576).toFixed(1)} MB\n\n` +
+        (groups.length > 1
+          ? `One tab per list: ${groups.map(g => `${g.name} (${g.items.length})`).join(" · ")}`
+          : `One tab: ${(groups[0] && groups[0].name) || "Products"}`));
     } catch (e) {
       alert("Export failed: " + (e && e.message || e));
     } finally { btn.disabled = false; btn.textContent = label; }
