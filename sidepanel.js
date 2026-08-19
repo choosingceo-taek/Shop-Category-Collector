@@ -1092,8 +1092,26 @@
       if (st[RELOAD_OK] === false) return false;
       const q = await load(QUEUE);
       if (q && q.active) return false;
-      // no prompt: if the grant has lapsed this waits for a real press
-      if (!await knownFolder(false)) return false;
+      /* No prompt here — Chrome grants only inside a gesture, and there is no
+         gesture in "the panel opened". But silence was the whole complaint:
+         the grant lapses on every browser restart, so from the second session
+         on this returned false and said nothing, and the promise that opening
+         the panel installs the update quietly stopped being true.
+
+         So when the folder is remembered and merely locked, the box opens and
+         names the one press that finishes it. AUTO_TRIED is deliberately NOT
+         set on this path: nothing was attempted, and marking it would silence
+         the message for the rest of that version. */
+      if (!await knownFolder(false)) {
+        if (await folderRemembered()) {
+          $("#updbox").hidden = false;
+          refreshUpdBox(); await paintAuto(); paintReload(false);
+          $("#uautonote").textContent =
+            `v${latest} is out. Press ⚡ Update now — Chrome needs you to confirm ` +
+            `your Market Lens folder once after a restart, and it installs from there.`;
+        }
+        return false;
+      }
       await new Promise(r => chrome.storage.local.set({ [AUTO_TRIED]: latest }, r));
       $("#updbox").hidden = false;
       refreshUpdBox(); await paintAuto(); paintReload(false);
@@ -1111,10 +1129,15 @@
     if (!box.hidden) { box.hidden = true; return; }
     box.hidden = false;
     refreshUpdBox(); await paintAuto(); paintReload(false);
-    // Only when there is something to install and somewhere to put it. With no
-    // folder yet the first press has to be the folder question, and with
-    // nothing newer the press is someone looking, not asking for an install.
-    if (await knownFolder(false) && await checkNewer()) $("#uauto").click();
+    /* Only when there is something to install and somewhere to put it. With no
+       folder yet the first press has to be the folder question, and with
+       nothing newer the press is someone looking, not asking for an install.
+
+       A remembered-but-locked folder counts as somewhere to put it: this is a
+       real press, so the permission Chrome wants can be asked for inside it —
+       the synthetic click carries the activation through. Requiring the grant
+       up front is what made a locked folder look like no folder. */
+    if (await folderRemembered() && await checkNewer()) $("#uauto").click();
   });
 
   /* Being told, rather than having to look.
@@ -1244,6 +1267,24 @@
     return (await I.folderReady(extDir, ask)) ? extDir : null;
   }
 
+  /* Remembered is not the same as usable, and the panel used to show them as
+     one thing.
+
+     Chrome keeps the directory handle across restarts but not, on its own, the
+     permission on it: the next morning queryPermission answers "prompt" until
+     someone confirms it inside a click. So knownFolder(false) went false, and
+     the button went back to "📂 Choose my Market Lens folder" — word for word
+     what it says to a person who has never set a folder at all. The one-time
+     step looked like it had to be done again, every day, and the update was
+     read as something to do by hand instead.
+
+     The handle is right there. This asks the only other question — is it
+     merely locked? — so the two states can stop wearing the same face. */
+  async function folderRemembered() {
+    if (!extDir) extDir = await I.loadFolder();
+    return !!extDir;
+  }
+
   function setBar(done, total) {
     const bar = $("#ubar"), fill = $("#ubarfill");
     bar.hidden = false;
@@ -1255,11 +1296,19 @@
      is the only thing that says whether the click did anything. */
   async function paintAuto(keepNote) {
     const dir = await knownFolder(false);
-    $("#uauto").textContent = dir ? "⚡ Update now" : "📂 Choose my Market Lens folder";
+    const held = dir ? true : await folderRemembered();
+    /* Three states, not two. A locked folder still says "Update now", because
+       that is exactly what the press does: the handler asks Chrome for the
+       folder inside the click and then installs. Sending someone back to the
+       picker for a folder the extension is already holding is what made this
+       look like manual work. */
+    $("#uauto").textContent = held ? "⚡ Update now" : "📂 Choose my Market Lens folder";
     if (keepNote) return;
     $("#uautonote").textContent = dir
       ? `writes straight into ${dir.name || "your Market Lens folder"} and restarts on it`
-      : "one time only: point at the folder Chrome loaded, and updates become one click";
+      : held
+        ? "your folder is remembered — Chrome just asks you to confirm it once after a restart, then this installs"
+        : "one time only: point at the folder Chrome loaded, and updates become one click";
   }
 
   $("#uauto").addEventListener("click", async () => {

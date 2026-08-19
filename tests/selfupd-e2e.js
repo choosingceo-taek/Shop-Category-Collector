@@ -205,6 +205,88 @@ function makeZip(version, shape) {
   ok("a wrapped archive still lands at the top of the folder",
     landed.version === "99.8.0" && landed.top && !landed.nested, JSON.stringify(landed));
 
+  /* ---- the folder that is remembered but locked ---------------------------
+
+     Chrome keeps the directory handle across a restart; it does not, on its
+     own, keep the permission on it. The next morning queryPermission answers
+     "prompt" until someone confirms inside a click. Every assertion above ran
+     against a handle that was always granted, which is exactly why the state
+     that actually reaches people — every day, from the second session on —
+     was the one nothing here had ever looked at.
+
+     What went wrong in that state was not the machinery: pressing the button
+     asks for the folder inside the click and installs. It was that the panel
+     showed a locked folder and an unknown folder with the same words, so the
+     one-time step looked like it had to be redone daily, and the update read
+     as something to do by hand. */
+  await panel.addInitScript(() => {
+    FileSystemDirectoryHandle.prototype.queryPermission = async () => "prompt";
+    FileSystemDirectoryHandle.prototype.requestPermission = async () => "granted";
+  });
+  // the switch was left off by the test above it, and the worker may have been
+  // recycled since the stub was planted — a fresh one would answer from the
+  // real network, which is not what is under test here
+  const restub = async () => {
+    const w = ctx.serviceWorkers()[0];
+    if (!w) return;
+    await w.evaluate(v => {
+      self.LensUpdate.check = async () => ({ ok: true,
+        current: chrome.runtime.getManifest().version, latest: v, newer: true });
+    }, "99.9.0").catch(() => {});
+    await w.evaluate(() => refreshUpdate(true)).catch(() => {});
+  };
+  await restub();
+  await panel.evaluate(() => new Promise(r =>
+    chrome.storage.local.set({ wpb_autoupdate: true }, r)));
+  await panel.evaluate(() => new Promise(r =>
+    chrome.storage.local.remove("wpb_autotried", r)));
+  await disarm();
+  await panel.reload();
+  await panel.waitForTimeout(3000);
+
+  ok("a locked folder still opens the box rather than going quiet",
+    !await panel.locator("#updbox").isHidden());
+  const lockedNote = await panel.locator("#uautonote").innerText().catch(() => "");
+  ok("…and it says which version and which press finishes it",
+    /99\.9\.0/.test(lockedNote) && /Update now/i.test(lockedNote), lockedNote);
+  /* Read the button from a box that has actually been painted, whichever way
+     it got opened — otherwise this is reading text left over from before the
+     folder was locked, and passes without holding anything. */
+  if (await panel.locator("#updbox").isHidden()) {
+    await panel.click("#verchip");
+    await panel.waitForTimeout(1200);
+  }
+  const lockedBtn = await panel.locator("#uauto").innerText();
+  ok("the button is Update now, not the folder question again",
+    /Update now/i.test(lockedBtn), lockedBtn);
+  const lockedHint = await panel.locator("#uautonote").innerText().catch(() => "");
+  ok("…and the note says the folder is remembered, not that one is needed",
+    !/one time only/i.test(lockedHint), lockedHint);
+  const lockedTried = await panel.evaluate(() => new Promise(r =>
+    chrome.storage.local.get("wpb_autotried", o => r((o || {}).wpb_autotried || ""))));
+  ok("nothing was attempted, so the message is not silenced next time",
+    lockedTried === "", lockedTried);
+
+  /* and the press really does finish it — the grant is asked for inside the
+     click, which is the only place Chrome will give it */
+  await panel.evaluate(async () => {
+    const dir = await window.__mlFolderReady;
+    const mf = await dir.getFileHandle("manifest.json", { create: true });
+    const w = await mf.createWritable();
+    await w.write(JSON.stringify({ manifest_version: 3, name: "Market Lens", version: "1.0.0" }));
+    await w.close();
+  });
+  await disarm();
+  if (await panel.locator("#updbox").isHidden()) {
+    await panel.click("#verchip");
+    await panel.waitForTimeout(900);
+  }
+  await panel.click("#uauto");
+  await panel.waitForTimeout(4500);
+  const afterPress = await panel.locator("#uautonote").innerText().catch(() => "");
+  ok("one press on a locked folder installs",
+    /written into|installed/i.test(afterPress) && /99\.9\.0/.test(afterPress), afterPress);
+
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();
