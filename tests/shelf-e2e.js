@@ -258,7 +258,14 @@ const items = Array.from({ length: 32 }, (_, n) => {
     JSON.stringify(subs));
 
   /* Every badge on the page is drawn the same way: a rule in ink, black on
-     white, filled when it is the open one. */
+     white, filled when it is the open one.
+
+     Park the pointer first. A button under the cursor is deliberately drawn
+     with a softer rule (button:hover), so measuring while the mouse still
+     rests on the tab that was clicked last reads the hover state and calls it
+     the resting one. */
+  await p.mouse.move(2, 2);
+  await p.waitForTimeout(150);
   const inked = await p.evaluate(() => {
     const px = el => getComputedStyle(el);
     const ink = px(document.body).getPropertyValue("--ink").trim();

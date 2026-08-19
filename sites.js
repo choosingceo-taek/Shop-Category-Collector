@@ -1649,9 +1649,39 @@
       // Anything else keeps the old single-price behavior.
       const PRICE_ALL = new RegExp(PRICE_RE.source, "g");
       const priceNum = s => parseFloat(String(s).replace(/[^0-9.]/g, ""));
+      /* Every price in a row, each read from the element that says it.
+
+         Reading them out of the row's combined TEXT undid the care taken
+         choosing the leaf a moment ago: markup puts no whitespace between two
+         nodes, so a "20% off" badge sitting next to the price made the row
+         read "$129.00 $89.0020% off" and the sale pair came back as
+         `$89.0020`. Found by generating the shapes rather than by anyone
+         reporting it, which is the point — the cell is plausible, the
+         spreadsheet looks full, and the only thing that suffers is the LAB's
+         reading of markdown pressure and every median price in the report.
+         Same failure as "189,00 €" (v2.7.0) and "New In48 items" (v2.8.0), and
+         the same answer: read the smallest element that says it. */
+      function priceTokens(row) {
+        const els = [];
+        (row.querySelectorAll ? row.querySelectorAll("*") : []).forEach(el => {
+          if (el.children && el.children.length > 2) return;
+          const t = textOf(el);
+          if (t.length <= 40 && PRICE_RE.test(t)) els.push(el);
+        });
+        const set = new Set(els);
+        const out = [];
+        for (const el of els) {
+          let wraps = false;
+          for (const k of el.querySelectorAll("*")) if (set.has(k)) { wraps = true; break; }
+          if (!wraps) { const p = firstPrice(textOf(el)); if (p) out.push(p.trim()); }
+        }
+        return [...new Set(out)];
+      }
       function pricePairFrom(leaf, tile) {
-        const rowText = textOf(leaf.parentElement || leaf);
-        const toks = [...new Set((rowText.match(PRICE_ALL) || []).map(t => t.trim()))];
+        const row = leaf.parentElement || leaf;
+        let toks = priceTokens(row);
+        // a row with no element of its own saying it still has its own text
+        if (!toks.length) toks = [...new Set((textOf(row).match(PRICE_ALL) || []).map(t => t.trim()))];
         if (toks.length === 2 && priceNum(toks[0]) !== priceNum(toks[1])) {
           const [a, b] = toks;
           return priceNum(a) < priceNum(b) ? { price: a, price_was: b } : { price: b, price_was: a };

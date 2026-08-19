@@ -42,18 +42,31 @@ const HREF = {
 
 /* ---- the axes ------------------------------------------------------------ */
 const AX = {
-  image: ["img", "picture", "background", "lazy", "noscript", "chipFirst"],
-  money: ["usd", "euroAfter", "krAfter", "chfBefore", "audBefore", "gluedToName"],
-  name: ["tileText", "altOnly", "jsonld", "urlOnly", "srBoilerplate"],
+  /* swatchAlt: a colourway preview that declares no size at all and says what
+     it is only in its alt text — the Varley shape (v3.46.0). The size guard
+     cannot see it; the shop's own word "swatch" is the whole evidence. */
+  image: ["img", "picture", "background", "lazy", "noscript", "chipFirst", "swatchAlt"],
+  /* saleWasNow: two prices in the tile, the old one struck through. Which one
+     goes in the cell is not a preference — it is what the shop is charging. */
+  money: ["usd", "euroAfter", "krAfter", "chfBefore", "audBefore", "gluedToName", "saleWasNow"],
+  /* ratingGlued: the star rating lives inside the title block, and markup puts
+     no space between two elements — the Gymshark shape (v3.50.0). */
+  name: ["tileText", "altOnly", "jsonld", "urlOnly", "srBoilerplate", "ratingGlued"],
   nest: ["flat", "innerAnchor", "wrappingAnchor"],
   href: ["clean", "slugId", "query", "amazon"],
   junk: ["none", "sizePicker", "addToBag", "saleBadge"],
+  /* promoTile: a banner sitting IN the grid with no product behind it. It is
+     not junk inside a tile — it is a tile-shaped thing that is not a garment,
+     which is why it gets an axis of its own. */
+  extras: ["none", "promoTile"],
 };
-const BASE = { image: "img", money: "usd", name: "tileText", nest: "flat", href: "clean", junk: "none" };
+const BASE = { image: "img", money: "usd", name: "tileText", nest: "flat",
+  href: "clean", junk: "none", extras: "none" };
 
 const PRICE_TEXT = {
   usd: "$89.00", euroAfter: "89,00 €", krAfter: "890 kr",
   chfBefore: "CHF 89.00", audBefore: "A$89.00", gluedToName: "$89.00",
+  saleWasNow: "$89.00",
 };
 
 /* ---- the generator -------------------------------------------------------
@@ -85,6 +98,10 @@ function tile(c, i) {
                              `<noscript><img src="${PHOTO}" alt="${name}" width="800" height="1067"></noscript>`; break;
     case "chipFirst":  img = `<img src="${CHIP}" alt="Black" width="40" height="40">` +
                              `<img src="${PHOTO}" alt="${name}" width="800" height="1067">`; break;
+    /* No declared size anywhere — the only thing that says this is not the
+       garment is the shop's own alt text. */
+    case "swatchAlt":  img = `<img src="${CHIP}" alt="Color swatch for Mid Tan">` +
+                             `<img src="${PHOTO}" alt="${name}" width="800" height="1067">`; break;
   }
 
   const priceText = PRICE_TEXT[c.money];
@@ -92,9 +109,15 @@ function tile(c, i) {
     : c.name === "srBoilerplate"
       ? `<span class="sr-only">Activating this element will cause content on the page to be updated.</span>` +
         `<span class="t">${name}</span>`
-      : `<span class="t">${name}</span>`;
+      /* the rating and the title are siblings in ONE title block, with no
+         whitespace between them — textContent runs them together */
+      : c.name === "ratingGlued"
+        ? `<div class="product-card__title"><span class="rating">4.3</span><span class="t">${name}</span></div>`
+        : `<span class="t">${name}</span>`;
   // glued: no whitespace at all between the name node and the price node
-  const priceNode = `<span class="pr">${priceText}</span>`;
+  const priceNode = c.money === "saleWasNow"
+    ? `<span class="was"><s>$129.00</s></span> <span class="pr">${priceText}</span>`
+    : `<span class="pr">${priceText}</span>`;
   const body = c.money === "gluedToName"
     ? `<div class="meta">${nameNode}${priceNode}</div>`
     : `<div class="meta">${nameNode} ${priceNode}</div>`;
@@ -119,10 +142,18 @@ function page(c, n = 6) {
       item: { "@type": "Product", name: NAME, url: HREF[c.href], image: PHOTO },
     })),
   })}</script>` : "";
+  /* A banner tile in the middle of the grid: a headline, a paragraph and a
+     link to a content page. It looks like a card and is not a product. */
+  const promo = c.extras === "promoTile" ? `
+    <li class="card promo">
+      <img src="https://cdn.shop.example/img/promo-banner.jpg" alt="New colours dropping">
+      <div class="meta"><span class="t">NEW COLOURS DROP FRIDAY</span></div>
+      <a class="cta" href="https://shop.example/pages/new-colours">FIND OUT MORE</a>
+    </li>` : "";
   return `<!doctype html><meta charset="utf-8"><title>New In | Shop</title>${ld}
     <style>.card{display:block}.ph{width:800px;height:1067px}.sr-only{position:absolute;
       width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}</style>
-    <h1>New In</h1><ul class="grid">${Array.from({ length: n }, (_, i) => tile(c, i)).join("")}</ul>`;
+    <h1>New In</h1><ul class="grid">${Array.from({ length: n }, (_, i) => tile(c, i)).join("")}${promo}</ul>`;
 }
 
 /* ---- the combinations ---------------------------------------------------- */
@@ -145,7 +176,10 @@ function combos() {
 function check(c, rows) {
   const bad = [];
   if (!rows.length) return ["no products at all"];
-  if (rows.__n < 6) bad.push(`only ${rows.__n} of 6 tiles read`);
+  /* Exactly six. Fewer means tiles were dropped; MORE means something that is
+     not a garment was filed as one, which is the quieter of the two failures
+     because the spreadsheet still looks full. */
+  if (rows.__n !== 6) bad.push(`${rows.__n} rows for 6 garments`);
   const r = rows[0];
 
   // NAME
@@ -157,6 +191,8 @@ function check(c, rows) {
   } else if (!got) bad.push("no name");
   else if (/activating this element/i.test(got)) bad.push(`name is screen-reader text: "${got}"`);
   else if (/^select size$/i.test(got)) bad.push(`name is a control: "${got}"`);
+  else if (/^[\s★☆⭐(]*[0-5][.,]\d/.test(got))
+    bad.push(`name wears a rating badge: "${got}"`);
   else if (!got.toLowerCase().includes(wantName.toLowerCase().split(" ")[0]))
     bad.push(`name not the product's: "${got}" (wanted ~"${wantName}")`);
 
