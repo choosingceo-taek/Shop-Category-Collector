@@ -205,7 +205,10 @@
     meta = meta || {}; images = images || {};
     const agg = Calc.aggregate(items);
     const norm = (items || []).map(Calc.normItem);
-    const title = meta.title || "Market research report";
+    /* One name on the file, and it is the tool's. "Market research report"
+         over "Market Lens" was a description stacked on a name — the sheet a
+         designer sends on should say what made it, once. */
+    const title = meta.title || "MARKET LENS";
     const when = meta.generatedAt || new Date().toISOString().slice(0, 10);
 
     const fibers = agg.fiberPresence.slice(0, 10)
@@ -221,14 +224,23 @@
       key: r.key, value: r.value, label: String(r.value), color: SERIES[2],
     }));
 
+    /* A card is a door. Every row carries the address it was collected from,
+       so the picture and the name lead back to the shop's own page — which is
+       also where the full-size photograph lives, and where a designer goes
+       next anyway. target=_blank so the report is not navigated away from,
+       and rel=noopener because the page being opened is someone else's. */
+    const openIn = (p, inner) => p.product_url
+      ? `<a class="plink" href="${esc(p.product_url)}" target="_blank" rel="noopener">${inner}</a>`
+      : inner;
+
     const cards = norm.map(p => {
       const img = images[p.product_url] || "";
       const sale = p.onSale;
       return `<figure class="p">
-        ${img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`}
+        ${openIn(p, img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`)}
         <figcaption>
           ${p.brand ? `<span class="pb">${esc(p.brand)}</span>` : ""}
-          <span class="pn">${esc(p.name || "(untitled)")}</span>
+          ${openIn(p, `<span class="pn">${esc(p.name || "(untitled)")}</span>`)}
           ${p.price != null ? `<span class="pp${sale ? " sale" : ""}">${money(p.price)}${
             sale ? ` <s>${money(p.priceWas)}</s>` : ""}</span>` : ""}
           ${p.fibers.length ? `<span class="pf">${esc(p.fibers.map(f => (f.pct != null ? f.pct + "% " : "") + f.fiber).join(", "))}</span>` : ""}
@@ -243,9 +255,9 @@
         const img = images[p.product_url] || "";
         const raw = (items || []).find(x => (x.product_url || "") === p.product_url) || {};
         return `<tr>
-          <td>${img ? `<img class="tt" src="${img}" alt="">` : ""}</td>
+          <td>${openIn(p, img ? `<img class="tt" src="${img}" alt="">` : "")}</td>
           <td>${esc(p.brand)}</td>
-          <td class="tn">${esc(p.name)}</td>
+          <td class="tn">${openIn(p, esc(p.name))}</td>
           <td>${esc(p.category)}</td>
           <td class="num${p.onSale ? " sale" : ""}">${p.price != null ? money(p.price) : "—"}</td>
           <td class="num">${p.priceWas != null ? money(p.priceWas) : "—"}</td>
@@ -258,13 +270,51 @@
     const plates = norm.map(p => {
       const img = images[p.product_url] || "";
       return `<figure class="lb">
-        ${img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`}
+        ${openIn(p, img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`)}
         <figcaption>
-          <b>${esc(p.name || "")}</b>
+          ${openIn(p, `<b>${esc(p.name || "")}</b>`)}
           <span>${esc([p.brand, p.price != null ? money(p.price) : ""].filter(Boolean).join(" · "))}</span>
           ${p.fibers.length ? `<span class="lf">${esc(p.fibers.map(f => (f.pct != null ? f.pct + "% " : "") + f.fiber).join(", "))}</span>` : ""}
         </figcaption></figure>`;
     }).join("");
+
+    /* The headline is what this week is actually made of.
+
+       "This week, decoded." was a title about the file rather than about the
+       assortment — it read the same in January and in August. The products
+       have already been collected and their names are the shops' own words,
+       so the two words that come up most across them ARE the week, and they
+       are countable rather than written.
+
+       Two, at most: a headline that lists five words is a ranking, and the
+       ranking is on the panels below. Brand names are excluded — a shop
+       putting its own name in every product title would win every week and
+       say nothing (v3.1.0 settled that for the axes). Fewer than two words
+       collected, and it falls back to naming the scope rather than inventing
+       one. */
+    const headWords = (() => {
+      const brandish = new Set();
+      (agg.brandShare || []).forEach(b => String(b.key || "").toLowerCase()
+        .split(/[^a-z0-9]+/).forEach(w => { if (w.length > 2) brandish.add(w); }));
+      const tally = new Map();
+      norm.forEach(p => {
+        const seen = new Set(Calc.nameKeywords(String(p.name || "")));
+        seen.forEach(w => {
+          if (w.length < 3 || brandish.has(w)) return;
+          tally.set(w, (tally.get(w) || 0) + 1);
+        });
+      });
+      return [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 2).map(([w]) => w);
+    })();
+    const cap = w => w.charAt(0).toUpperCase() + w.slice(1);
+    const headline = headWords.length === 2
+      ? `${cap(headWords[0])},\n${cap(headWords[1])}.`
+      : headWords.length === 1 ? `${cap(headWords[0])}.`
+      : `${meta.scope || "This week"}.`;
+    const headnote = headWords.length
+      ? `The words the shops used most across the ${agg.count.toLocaleString()} products collected here.`
+      : "A single view of the fabric, colour and category of the assortment collected for this list.";
 
     const scopeBits = [];
     if (meta.period) scopeBits.push(meta.period);
@@ -336,10 +386,10 @@
     const cardArr = norm.map((p, i) => {
       const img = images[p.product_url] || "";
       return `<figure class="p">
-        ${img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`}
+        ${openIn(p, img ? `<img src="${img}" alt="">` : `<div class="ph"></div>`)}
         <figcaption>
           ${p.brand ? `<span class="pb">${esc(p.brand)}</span>` : ""}
-          <span class="pn">${esc(p.name || "(untitled)")}</span>
+          ${openIn(p, `<span class="pn">${esc(p.name || "(untitled)")}</span>`)}
           ${p.price != null ? `<span class="pp${p.onSale ? " sale" : ""}">${money(p.price)}${
             p.onSale ? ` <s>${money(p.priceWas)}</s>` : ""}</span>` : ""}
           ${p.fibers.length ? `<span class="pf">${esc(p.fibers.map(f => (f.pct != null ? f.pct + "% " : "") + f.fiber).join(", "))}</span>` : ""}
@@ -472,9 +522,13 @@
 <header class="topbar">
   <div class="topline">
     <div class="brand"><div class="bmark">ML</div>
-      <div><b>${esc(title)}</b><span>${esc([meta.scope, meta.period].filter(Boolean).join(" · ") || "Market Lens")}</span></div></div>
-    <div class="tsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a7 7 0 1 1-4.2 12.6l-2.1 2.1-1.4-1.4 2.1-2.1A7 7 0 0 1 10 3m0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10"/></svg>
-      <input id="q" type="search" placeholder="Search products, brands, categories or fabrics…"></div>
+      <div><b>${esc(title)}</b>${[meta.scope, meta.period].filter(Boolean).length
+        ? `<span>${esc([meta.scope, meta.period].filter(Boolean).join(" · "))}</span>` : ""}</div></div>
+    <!-- No search box. The rail on the left asks the questions this file can
+         answer — brand, category, fabric — and it asks them with the values
+         the file actually contains. A box that types anything into a page
+         that is already a fixed selection was a fourth control saying what
+         three already said. (The same reason it came off the LAB.) -->
     <span class="tstamp">${esc(when)}</span>
   </div>
   <nav class="pills">
@@ -498,8 +552,8 @@
     <section data-sec="over">
       <div class="hero">
         <span class="heyebrow">EXECUTIVE OVERVIEW</span>
-        <h1>${esc(meta.scope || "This week")},<br>decoded.</h1>
-        <p>A single view of the fabric, colour, brand and price decisions in the assortment collected for this list.</p>
+        <h1>${esc(headline).replace(/\n/g, "<br>")}</h1>
+        <p>${esc(headnote)}</p>
         <div class="hchips">${heroChips}</div>
       </div>
       <div class="dtiles">
@@ -522,28 +576,18 @@
         <section class="panel"><div class="ptitle"><b>Category ranking</b><span>styles per category</span></div>
           ${rankRows(catRows)}</section>
       </div>
+      <!-- Price distribution, brand ranking and decision signals are not drawn
+           (asked for). What is left answers what the season is MADE of —
+           fibre, category, colour — which is the question this sheet is
+           opened with. The price maths and the brand tally are still computed
+           and still in the data sheet; they simply do not get a panel here.
+           The By Brand section is the place a brand is asked about. -->
       <div class="pgrid">
-        <section class="panel"><div class="ptitle"><b>Price distribution</b><span>current selling price</span></div>
-          ${histogram(agg.priceHistogram) || `<p class="sub">No price data.</p>`}</section>
         <section class="panel"><div class="ptitle"><b>Fibre family mix</b><span>primary fibre across valid compositions</span></div>
           ${donut(fibTop, withFabric, "with fabric")}</section>
-      </div>
-      <div class="pgrid">
-        <section class="panel"><div class="ptitle"><b>Brand ranking</b><span>styles per brand</span></div>
-          ${rankRows(brandRows)}</section>
         <section class="panel"><div class="ptitle"><b>Colour frequency</b><span>colourways named by the shops</span></div>
           ${rankRows(colRows)}</section>
       </div>
-
-      <section class="panel wide"><div class="ptitle"><b>Decision signals</b><span>stated from the figures above, nothing inferred</span></div>
-        <div class="sigs">
-          ${agg.fiberPresence.length ? signal("01", "Fabric anchor", agg.fiberPresence[0].key,
-            `${agg.fiberPresence[0].pct}% of products with a composition use it.`, "a") : ""}
-          ${agg.categoryShare.length ? signal("02", "Assortment weight", agg.categoryShare[0].key,
-            `${agg.categoryShare[0].value} of ${agg.count} products sit in this category.`, "b") : ""}
-          ${agg.brandShare.length ? signal("03", "Largest drop", agg.brandShare[0].key,
-            `${agg.brandShare[0].value} products, the widest footprint in this list.`, "c") : ""}
-        </div></section>
 
       <div class="shead"><h2>Representative products</h2>
         <p>The assortment as collected, in the order the shops showed it.</p></div>
@@ -622,30 +666,27 @@
   });
   /* The rail filters narrow the product wall and the two feeds together —
      one filter, every view, the same rule the LAB scope follows. */
-  var q = document.getElementById("q");
   var fs = { brand: document.getElementById("fbrand"), cat: document.getElementById("fcat"),
              fab: document.getElementById("ffab") };
   function railFilter() {
     var b = fs.brand ? fs.brand.value : "", c = fs.cat ? fs.cat.value : "",
-        f = fs.fab ? fs.fab.value : "", t = q ? q.value.trim().toLowerCase() : "";
+        f = fs.fab ? fs.fab.value : "";
     var cards = document.querySelectorAll(".p");
     for (var i = 0; i < cards.length; i++) {
       var el = cards[i], txt = (el.textContent || "").toLowerCase();
       var keep = (!b || txt.indexOf(b.toLowerCase()) >= 0) &&
                  (!c || txt.indexOf(c.toLowerCase()) >= 0) &&
-                 (!f || txt.indexOf(f.toLowerCase()) >= 0) &&
-                 (!t || txt.indexOf(t) >= 0);
+                 (!f || txt.indexOf(f.toLowerCase()) >= 0);
       el.style.display = keep ? "" : "none";
     }
   }
   ["brand", "cat", "fab"].forEach(function (k) {
     if (fs[k]) fs[k].addEventListener("change", railFilter);
   });
-  if (q) q.addEventListener("input", railFilter);
   var fc = document.getElementById("fclear");
   if (fc) fc.addEventListener("click", function () {
     ["brand", "cat", "fab"].forEach(function (k) { if (fs[k]) fs[k].value = ""; });
-    if (q) q.value = ""; railFilter();
+    railFilter();
   });
   show("over");
 })();
@@ -687,6 +728,13 @@
   @media (max-width:760px) { .two { grid-template-columns:1fr; } .sheet { padding:22px 18px 40px; } }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:13px; }
   .p { margin:0; }
+  /* A card links out. The anchor carries no colour and no underline of its
+     own — the card was already the thing being pressed, and a link that
+     repainted it would make the report look like a web page instead of a
+     sheet. */
+  .plink { color:inherit; text-decoration:none; display:block; }
+  .tb .plink { display:inline; }
+  .plink:hover .pn, .tb .plink:hover { text-decoration:underline; }
   .p img, .p .ph { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:8px;
     background:${GRID}; display:block; }
   .p figcaption { display:flex; flex-direction:column; gap:1px; margin-top:6px; }
@@ -866,10 +914,6 @@
     letter-spacing:.04em; }
   .brand b { display:block; font-size:15px; }
   .brand span { display:block; font-size:11.5px; color:var(--dmut); }
-  .tsearch { flex:1; min-width:0; position:relative; display:flex; align-items:center; }
-  .tsearch svg { position:absolute; left:14px; width:16px; height:16px; fill:var(--dmut); }
-  .tsearch input { width:100%; padding:11px 14px 11px 38px; border-radius:12px;
-    border:1px solid var(--dline); background:var(--dsurf); font-size:13.5px; color:var(--dink); }
   .tstamp { flex:none; font-size:11.5px; color:var(--dmut); }
   .pills { display:flex; gap:6px; padding:12px 0 10px; flex-wrap:wrap; }
   .pills .nv { border:0; background:none; color:var(--dmut); font:600 13px/1 inherit;

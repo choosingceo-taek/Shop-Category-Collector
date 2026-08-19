@@ -175,9 +175,42 @@
   const MB = n => (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB";
   const ymd = t => new Date(t).toISOString().slice(0, 10);
 
+  /* Every address the lists still hold, in the two forms a product row can be
+     matched by — the page it came off, and the brand+category pair the list
+     row shows for rows collected before pages were recorded. */
+  function liveAddresses() {
+    const sigs = [], pairs = [];
+    [].concat(lists || []).forEach(l => (l.entries || []).forEach(e => {
+      if (!e || !e.url) return;
+      try { sigs.push(window.ScanLists.pageSig(e.url)); } catch (err) {}
+      pairs.push(String(e.brand || "").trim().toLowerCase() + " :: " +
+        String(e.label || "").trim().toLowerCase());
+    }));
+    return { sigs, pairs };
+  }
+
+  /* Products from shops the lists no longer name. Counted, never swept on its
+     own — the number goes in front of the person and the press is theirs. */
+  async function paintOrphans() {
+    const btn = $("#dataorph");
+    if (!btn) return;
+    let f = null;
+    try { f = await window.CatalogStore.orphans(Object.assign({ dry: true }, liveAddresses())); }
+    catch (e) { btn.hidden = true; return; }
+    btn.hidden = !f || !f.total;
+    if (btn.hidden) return;
+    const names = f.brands.slice(0, 3).map(([b, n]) => `${b} ${n}`).join(" · ");
+    const more = f.brands.length > 3 ? ` +${f.brands.length - 3}` : "";
+    btn.textContent = `Remove ${f.total.toLocaleString()} products no longer in a list…`;
+    btn.title = `From shops the lists no longer name: ${names}${more}.\n` +
+      "Collected before those addresses were taken out of the list. " +
+      "The weekly record keeps the weeks whose products are all gone.";
+  }
+
   async function paintDataChip() {
     const chip = $("#datachip");
     if (!chip) return;
+    paintOrphans();
     let u = null;
     try { u = await window.CatalogStore.usage(); } catch (e) { return; }
     /* The chip used to be the byte count, and that number was measured to
@@ -399,6 +432,28 @@
         : "Nothing was older than that — nothing removed.");
       if (res.removed) await load();
       paintDataChip();
+    });
+
+    /* The dropped shops' products. Same call counts and removes (dry), so the
+       number on the button is the number that goes. */
+    $("#dataorph").addEventListener("click", async () => {
+      const btn = $("#dataorph"), was = btn.textContent;
+      const live = liveAddresses();
+      const found = await window.CatalogStore.orphans(Object.assign({ dry: true }, live));
+      if (!found.total) { btn.hidden = true; return; }
+      const names = found.brands.map(([b, n]) => `${b} · ${n}`).join("\n");
+      if (!window.confirm(
+        `Remove ${found.total.toLocaleString()} products from shops your lists no longer name?\n\n` +
+        `${names}\n\n` +
+        "They leave DROPS, the LAB and the next spreadsheet. Weeks whose products " +
+        "are all gone keep their frozen totals; weeks that still hold other " +
+        "products are recounted without these.")) return;
+      btn.disabled = true; btn.textContent = "Removing…";
+      try {
+        const res = await window.CatalogStore.forgetOrphans(live);
+        window.alert(`${res.removed.toLocaleString()} removed.`);
+        await load();
+      } finally { btn.disabled = false; btn.textContent = was; paintDataChip(); }
     });
 
     /* A catalog that can leave the machine it was collected on.
@@ -766,7 +821,18 @@
   // as data URIs. That is what makes the file still work in a year: shops
   // delete products and rotate CDN paths, so a report that merely linked to
   // their images would quietly lose every picture.
-  const THUMB_W = 240, THUMB_Q = 0.72;
+  /* How big the pictures go into the file.
+
+     240px was sized for the card as it is laid out, which is right until the
+     file is opened on any screen that draws two device pixels per CSS pixel —
+     then every photograph in a report about how clothes look is soft. The
+     report is a design document; the pictures are the point.
+
+     Doubled, at a higher quality. It costs file size — roughly 40 KB a
+     product instead of 15, so a 340-product report goes from about 5 MB to
+     about 14 MB — and that is the right way round for a file that is opened,
+     read and sent on rather than served. */
+  const THUMB_W = 480, THUMB_Q = 0.8;
 
   function fetchImage(url) {
     return new Promise(res => {
@@ -852,7 +918,10 @@
     const proj = projects.find(p => p.id === $("#projf").value);
     const today = new Date().toISOString().slice(0, 10);
     const html = window.ReportGen.build(rows, images, {
-      title: proj ? proj.name : (scope ? `${scope} market research` : "Market research report"),
+      /* One name on the sheet, and it is the tool's. The scope and the period
+         still ride underneath it — that is what this file is OF — but the
+         title itself does not change wording with the selection. */
+      title: "MARKET LENS",
       subtitle: [periodLabel, proj ? scope : ""].filter(Boolean).join(" · ") || (scope ? "" : "Whole catalog"),
       scope, period: periodLabel, generatedAt: today,
       template: $("#tmpl").value, labHtml,

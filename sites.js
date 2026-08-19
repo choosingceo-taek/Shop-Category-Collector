@@ -1961,6 +1961,9 @@
         category: p.type || "",
         price_was,
         image_url: shopifyImage(p),
+        // the gallery's first frame is the shop's own statement of what this
+        // garment looks like; a variant asset is a colourway and is not
+        image_canonical: !!shopifyGallery(p),
         reason: composition ? "" : "not_found",
       };
     }
@@ -2134,6 +2137,21 @@
        products.json gives `images:[{src}]`, the per-product .js gives
        `featured_image` (protocol-relative) and `images:[url]`. Any of them is
        a fact from the shop, which beats a lazy grid that never rendered. */
+    /* The product's OWN primary photograph, as the shop ordered its gallery.
+
+       Not the same question as "is there any picture here". A colour variant
+       carries its own asset, and on plenty of shops that asset is the swatch —
+       a flat gradient of the colourway, not the garment. So this answers only
+       from the product-level gallery, and it is what earns the right to
+       replace whatever the tile rendered. */
+    function shopifyGallery(p) {
+      const first = [].concat((p && p.images) || [])[0];
+      const cand = (first && (first.src || first)) || (p && p.featured_image) || "";
+      const s = String(cand || "").trim();
+      if (!s) return "";
+      return s.slice(0, 2) === "//" ? "https:" + s : s;
+    }
+
     function shopifyImage(p) {
       if (!p || typeof p !== "object") return "";
       const first = [].concat(p.images || [])[0];
@@ -2186,6 +2204,9 @@
         // none (applyDetail never overwrites a picture the listing supplied),
         // and it costs nothing — the bulk pull already carries it.
         image_url: shopifyImage(p),
+        // the gallery's first frame is the shop's own statement of what this
+        // garment looks like; a variant asset is a colourway and is not
+        image_canonical: !!shopifyGallery(p),
         // when the shop actually published it — a real launch date, unlike our
         // own "first seen". Stored for later; trends still bucket by first-seen
         // so brands measured different ways never get compared as if equal.

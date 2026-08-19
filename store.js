@@ -556,6 +556,55 @@
     return { removed: doomed.length, kept: (items || []).length - doomed.length };
   }
 
+  /* Products whose address is in no list any more.
+
+     A list reorganised — three shops dropped, five added — leaves the dropped
+     shops' products in the catalog, because until v3.50.0 removing a row from
+     a list removed only the plan. So the wall says 432 while the list says 8
+     shops, and 45 of those products come from shops nobody is watching: every
+     count on that screen, and in the spreadsheet, answers a question that is
+     no longer being asked.
+
+     Whether they should GO is the person's call, not this function's, and not
+     a scheduled job's (v1.82.0: nothing is ever deleted on a timer). What this
+     does is make them countable, by name, so the choice can be made with the
+     number in front of it.
+
+     The same two kinds of evidence as forgetPage: `pages` when the row has it,
+     brand+category for rows collected before rows recorded their page.
+
+     Guarded: with no addresses at all — an empty list, a list not loaded yet —
+     EVERY row looks orphaned, and answering "all of them" to a question about
+     leftovers is how a catalog gets emptied by accident. */
+  async function orphans(spec) {
+    const sigs = new Set([].concat((spec && spec.sigs) || []).filter(Boolean));
+    const pairs = new Set([].concat((spec && spec.pairs) || []).filter(Boolean));
+    if (!sigs.size && !pairs.size) return { total: 0, brands: [], keys: [], refused: true };
+    const items = await all("products");
+    const keys = [];
+    const byBrand = new Map();
+    (items || []).forEach(p => {
+      if (!p || !p.key) return;
+      const brand = cleanBrand(p.brand, p.product_url || p.url) || "Other";
+      const pages = [].concat(p.pages || []).filter(Boolean);
+      const claimed = pages.length
+        ? pages.some(s => sigs.has(s))
+        : pairs.has(pairKey(brand, cleanCategory(p.category)));
+      if (claimed) return;
+      keys.push(p.key);
+      byBrand.set(brand, (byBrand.get(brand) || 0) + 1);
+    });
+    return { total: keys.length, keys, refused: false,
+      brands: [...byBrand.entries()].sort((a, b) => b[1] - a[1]) };
+  }
+  /* Counting and removing are one function, so the number put in front of the
+     person is the number that goes. */
+  async function forgetOrphans(spec) {
+    const found = await orphans(spec);
+    if (found.total && !(spec && spec.dry)) await removeProducts(found.keys);
+    return { removed: found.total, brands: found.brands, refused: found.refused };
+  }
+
   /* ---- keeping the catalog from growing without end -----------------------
 
      Measured on this database: about 283 bytes per product once IndexedDB has
@@ -710,7 +759,7 @@
     allTrends, putTrends, clearTrends,
     appendRunRows, getRunRows, clearRunRows,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
-    pruneOlderThan, forgetPage, usage, exportAll, importAll,
+    pruneOlderThan, forgetPage, orphans, forgetOrphans, usage, exportAll, importAll,
     clearAll, productKey, merge, dedupe, cleanImage, cleanBrand, cleanCategory };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;

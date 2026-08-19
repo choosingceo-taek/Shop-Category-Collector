@@ -672,6 +672,12 @@
              is why it sits by the size and not in the products toolbar. -->
         <div class="databox" id="databox" hidden>
           <span id="datafacts"></span>
+          <!-- A list gets reorganised: shops dropped, shops added. The products
+               the dropped shops collected stay, because removing a row from a
+               list only removed the plan until v3.50.0 — so the wall counts
+               shops nobody watches any more. Named here with the number, and
+               only ever removed by pressing it. Hidden when there are none. -->
+          <button id="dataorph" hidden></button>
           <button id="datatrim">Free up space…</button>
           <button id="dataout">Back up (.json)</button>
           <button id="datain">Merge in a backup…</button>

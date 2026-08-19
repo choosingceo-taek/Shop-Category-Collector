@@ -40,6 +40,8 @@ node tests/encoding-test.js
 | `varley-e2e.js` | a grid that previews its colourways: the swatch is not the garment and not its name, and the fifteen behind the Load more button still come back — in the shop's order |
 | `gymgrid-e2e.js` | a collection grid that grows on scroll with no button: all fifty-one come back in the page's order, and the star rating in the title block is not part of the name |
 | `nikegrid-e2e.js` | Nike's /w/ shape: a shell whose grid is painted seconds later, an overlay link for the name, /t/<slug>/<code> addresses, a 3,200px footer, and the blend under Product Details |
+| `orphan-e2e.js` | a list reorganised leaves products behind: they are counted by shop, removed only when pressed, and never when there is no list to compare against |
+| `swatchtile-e2e.js` | the tile drew a colourway swatch and the shop's own gallery has the garment — the gallery wins, a variant asset does not, and a re-scan shows the correction |
 | `unfile-e2e.js` | taking an address out of a list takes out what it collected — except a garment another saved address still collects — and says the number before it does |
 | `gymshark-e2e.js` | where Gymshark states the blend — MATERIALS & CARE in a tab panel the bulk JSON does not carry, with marketing prose above it and care text glued to it |
 | `weekbucket-e2e.js` | a week is Monday to Sunday and is named 2026-W34: three sittings land in one pile, one brand gets one heading, and a second pass duplicates nothing |

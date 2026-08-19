@@ -178,6 +178,11 @@ async function catalogSave(j, a, kept, total, queue) {
       product_type: it.product_type || "",
       // where the shop had it on the page — the merchandiser's own ranking
       pos: it.pos || 0,
+      /* Which reading of the product page produced this row (see READER).
+         Left absent rather than zero when this scan did not read one: merge
+         refuses blanks but would happily write a 0 over a stored 2, which
+         would make every row look stale for ever. */
+      readerV: it._readerV || undefined,
       // when the shop itself published the product, where the shop tells us
       launched_at: it.launched_at || "",
     })),
@@ -1528,11 +1533,24 @@ async function runStep(j) {
             // the shop's own publish date, where the shop states one (Shopify's
             // published_at). Never inferred — a missing date stays missing.
             if (d.launched_at && !it.launched_at) it.launched_at = d.launched_at;
-            // A lazy-loading grid can hand back a tile with no photo at all
-            // (Zara's images only resolve as you scroll past). The PDP's own
-            // structured-data image fills that hole; it never overwrites a
-            // photo the listing already gave us.
-            if (d.image_url && !it.image_url) it.image_url = d.image_url;
+            /* A lazy-loading grid can hand back a tile with no photo at all
+               (Zara's images only resolve as you scroll past). The PDP's own
+               structured-data image fills that hole.
+
+               And when the shop STATES which photograph is the product's — the
+               first frame of its own gallery — that outranks whatever the tile
+               rendered, for the same reason its title does (v1.68, which
+               stopped an entire Edikted sheet reading "Select Size"). A tile
+               is a theme's choice and can be a colourway swatch: Set Active's
+               striped pieces came back as flat bands of colour, no garment in
+               them, while the product page opened on the model wearing it.
+               Structured data over DOM heuristics is the first rule in this
+               file; the picture had been the one column not following it.
+
+               Only the gallery earns this. An image hung off a variant is a
+               colourway asset — promoting THAT would install the swatch on
+               purpose. */
+            if (d.image_url && (!it.image_url || d.image_canonical)) it.image_url = d.image_url;
             // a PDP markdown (both current + original present) is authoritative
             // for this product — the listing tile often shows only the regular
             // price, so reflect the on-page sale in Current Price.
@@ -1549,7 +1567,7 @@ async function runStep(j) {
             // whatever the DOM scrape guessed — that is what stopped a whole
             // Edikted sheet reading "Select Size".
             if (d.name && (!it.name || d.name_canonical)) it.name = d.name;
-            if (d.image_url && !it.image_url) it.image_url = d.image_url;
+            if (d.image_url && (!it.image_url || d.image_canonical)) it.image_url = d.image_url;
             if (d.product_url && !/-l\d/i.test(it.product_url || "")) it.product_url = d.product_url;
         it._compReason = d.reason || "";
       } else { it.fabric_composition = d || ""; }
@@ -1580,6 +1598,12 @@ async function runStep(j) {
        stands in only when it can answer both of the things this step is for —
        what the garment is made of, and what it looks like. */
     const FRESH_MS = 30 * 24 * 3600e3;
+    /* Which reading of a product page a stored row came from. Bump it in any
+       release that changes what a column is read FROM, and every row from
+       before is read again once instead of waiting out FRESH_MS.
+         1  the reader as it stood through v3.54.0
+         2  the shop's own gallery frame outranks the tile's picture */
+    const READER = 2;
     let known = {};
     try {
       const urls = j.items.filter(it => !it._specDone)
@@ -1609,7 +1633,22 @@ async function runStep(j) {
         // whole means both columns this step exists for: composition and photo
         const wholeEnough = !!(seen && seen.fabric_composition &&
           String(it.image_url || seen.image_url || "").trim());
-        if (wholeEnough &&
+        /* …and read by THIS version of the reader.
+
+           The skip exists to save a page load, and it was also silently
+           deciding that a column read by an older release was final. When the
+           way a column is read changes — the picture, this time: the shop's
+           own gallery frame now outranks whatever the tile drew — every row
+           already holding the old answer would have kept it until the row
+           aged a month. The person who asked for the fix re-scans and sees no
+           change, which is indistinguishable from not having fixed it.
+
+           So a row records which reader produced it, and only a row from the
+           current one is taken as read. Rows from before pay one page load,
+           once. Every future change to how a column is read gets the same by
+           bumping this number. */
+        const readOK = (seen && (seen.readerV || 0)) >= READER;
+        if (wholeEnough && readOK &&
             Date.now() - (seen.updatedAt || 0) < FRESH_MS) {
           it.fabric_composition = seen.fabric_composition;
           if (!it.colorways && seen.colorways) it.colorways = seen.colorways;
@@ -1617,12 +1656,14 @@ async function runStep(j) {
           if (!it.design && seen.design) it.design = seen.design;
           if (!it.size_range && seen.size_range) it.size_range = seen.size_range;
           if (!it.image_url && seen.image_url) it.image_url = seen.image_url;
+          it._readerV = seen.readerV || 0;
           it._specDone = true; reused++;
           return;                                     // the page is not opened
         }
         try {
           applyDetail(it, await readDetail(a, it.product_url, j.repair,
             { image: !!String(it.image_url || "").trim() }));
+          it._readerV = READER;
         }
         catch (e) { it.fabric_composition = ""; it._compReason = "error"; }   // never stall the run
         it._specDone = true;

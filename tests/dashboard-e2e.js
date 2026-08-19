@@ -41,12 +41,45 @@ const items = Array.from({ length: 60 }, (_, i) => ({
   fs.writeFileSync("/tmp/dash.html", html);
 
   // ---- it is still an archive -------------------------------------------------
-  ok("nothing is fetched from outside the file",
-    (html.match(/(src|href)="(?!data:|#)[a-z]+:/gi) || []).length === 0,
-    JSON.stringify((html.match(/(src|href)="(?!data:|#)[a-z]+:[^"]{0,60}/gi) || []).slice(0, 3)));
+  /* Still an archive: nothing is FETCHED from outside when the file opens.
+
+     A link is not a fetch. The cards now carry the address each row was
+     collected from, so pressing one opens the shop's own page — which is
+     where the full-size photograph is and where a designer goes next. That
+     costs the file nothing offline: no request is made until someone clicks.
+     So the check is about what LOADS — src, and the stylesheet/preload kind
+     of href — and not about anchors. */
+  const loaded = (html.match(/src="(?!data:|#)[a-z]+:[^"]{0,60}/gi) || [])
+    .concat(html.match(/<link[^>]+href="(?!data:|#)[a-z]+:[^"]{0,60}/gi) || []);
+  ok("nothing is fetched from outside the file", loaded.length === 0,
+    JSON.stringify(loaded.slice(0, 3)));
+  ok("…and a card is a door to the shop's own page",
+    /<a class="plink" href="https:\/\/[^"]+" target="_blank" rel="noopener"/.test(html),
+    (html.match(/<a class="plink"[^>]{0,80}/) || ["(none)"])[0]);
   ok("one small script, for the tabs and the filters",
     (html.match(/<script/g) || []).length === 1);
   ok("the analysis reads in English", !/[가-힣]/.test(html.replace(/<!--[\s\S]*?-->/g, "")));
+
+  /* What the overview stopped drawing (asked for), and what its headline says
+     now. The price maths and the brand tally are still COMPUTED — they are in
+     the data sheet and the By Brand section — they simply do not get a panel
+     on the first screen. */
+  ok("no price distribution panel on the overview",
+    !/<b>Price distribution<\/b>/.test(html));
+  ok("…no brand ranking panel", !/<b>Brand ranking<\/b>/.test(html));
+  ok("…and no decision signals", !/Decision signals/.test(html) && !/class="sigs"/.test(html));
+  /* One name on the sheet, and it is the tool's. This fixture passes a title
+     of its own, so the default is checked where it applies — when the caller
+     names none, which is what the LAB does now. */
+  const untitled = RG.build(items, {}, { scope: "Young Women's · Tops" });
+  ok("the sheet carries one name, the tool's",
+    /<b>MARKET LENS<\/b>/.test(untitled) && !/Market research report/.test(untitled),
+    (untitled.match(/<div><b>[^<]{0,40}/) || ["(none)"])[0]);
+  ok("…and the headline is the words the shops used, not a fixed phrase",
+    !/decoded\./.test(untitled) && /<h1>[A-Z][a-z]+/.test(untitled),
+    (untitled.match(/<h1>[^<]{0,40}/) || ["(none)"])[0]);
+  ok("no search box — the rail asks the questions this file can answer",
+    !/type="search"/.test(html) && !/id="q"/.test(html));
 
   const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
   const p = await b.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -63,7 +96,6 @@ const items = Array.from({ length: 60 }, (_, i) => ({
     ["a row of KPI tiles", ".dtiles .dt"],
     ["ranking panels", ".panel .rank .rrow"],
     ["a fibre donut", ".donut svg circle"],
-    ["decision signals", ".sigs .sig"],
     ["a product wall", ".grid.wall .p"],
   ]) ok(what, await p.locator(sel).count() > 0, sel);
 
@@ -78,16 +110,18 @@ const items = Array.from({ length: 60 }, (_, i) => ({
   const chip = await p.locator(".hchip").first().innerText();
   ok("…and the hero says the same", chip.replace(/[^\d]/g, "") === String(n), chip);
 
+  /* One figure, two places. The decision signals that used to be the third
+     are not drawn any more, so the check is between the ranking and the
+     donut's legend — which is where two numbers could still disagree inside
+     one file, and the whole reason both come from a single aggregate. */
   const topFib = await p.locator(".panel .rank .rrow").first().innerText();
   const legend = await p.locator(".dlegend li").first().innerText();
-  const sig = await p.locator(".sig.a").innerText();
   const pct = s2 => (s2.match(/(\d+)\s*%/) || [])[1];
-  ok("the fabric ranking, the donut legend and the signal are one figure",
-    pct(topFib) && pct(topFib) === pct(legend) && pct(topFib) === pct(sig),
-    JSON.stringify([topFib, legend, sig]));
+  ok("the fabric ranking and the donut legend are one figure",
+    pct(topFib) && pct(topFib) === pct(legend),
+    JSON.stringify([topFib, legend]));
   const name = s2 => s2.split("\n")[0].trim();
-  ok("…and they name the same fibre",
-    name(topFib) === name(legend) && sig.includes(name(topFib)),
+  ok("…and they name the same fibre", name(topFib) === name(legend),
     JSON.stringify([name(topFib), name(legend)]));
 
   // ---- it still carries the three sections that existed ----------------------
