@@ -1679,7 +1679,8 @@
     $("#uauto").click();
   });
 
-  /* Files already replaced on disk (update.bat, or a copy by hand) — the only
+  /* Files already replaced on disk (an install that finished, or a copy by
+     hand) — the only
      thing left is the restart, and that is a button here rather than an
      instruction to go and find chrome://extensions. Held back while a scan is
      running: restarting mid-run loses that morning's spreadsheet. */
@@ -2017,7 +2018,7 @@
     refreshProducts();
     observe();
     /* Update notices, in the order that matters. If the new files are ALREADY
-       in the folder — update.bat has run — that is the only thing worth
+       in the folder — an install has already run — that is the only thing worth
        saying, because one click finishes it. Otherwise fall back to "a newer
        version exists", which is a longer road. */
     try {

@@ -251,6 +251,50 @@ function makeZip(version, shape) {
   ok("a wrapped archive still lands at the top of the folder",
     landed.version === "99.8.0" && landed.top && !landed.nested, JSON.stringify(landed));
 
+  /* ---- what an older release left behind has to LEAVE --------------------
+
+     An install writes what the archive holds and nothing else, so a file
+     delivered by an older version stayed in the folder for good. Before
+     v3.21.0 the download was a GitHub branch archive — the whole repository —
+     so those copies still hold update.bat, which runs
+
+         powershell -NoProfile -ExecutionPolicy Bypass -Command
+           "Invoke-WebRequest -Uri <url> -OutFile %TEMP%\marketlens.zip"
+
+     then expands it over a folder. Defender reads that as a script downloader
+     and says "threats found" — not when it runs, but whenever the folder is
+     rescanned, which an update causes. Every update, the same alert.
+
+     It is not enough to stop shipping the file. It has to come back out. */
+  const swept = await panel.evaluate(async bytes => {
+    const dir = await window.__mlFolderReady;
+    const I = window.LensInstaller;
+    // as an install from before v3.21.0 left it
+    for (const name of ["update.bat", "update.command"]) {
+      const fh = await dir.getFileHandle(name, { create: true });
+      const w = await fh.createWritable();
+      await w.write("powershell -NoProfile -ExecutionPolicy Bypass -Command \"x\"");
+      await w.close();
+    }
+    const before = [];
+    for await (const [n] of dir.entries()) before.push(n);
+    const out = await I.install(dir, new Uint8Array(bytes).buffer, () => {});
+    const after = [];
+    for await (const [n] of dir.entries()) after.push(n);
+    return { before, after, swept: out.swept || [], version: out.version };
+  }, Array.from(makeZip("99.9.0", "flat")));
+  ok("the folder really was holding the old script",
+    swept.before.includes("update.bat") && swept.before.includes("update.command"),
+    JSON.stringify(swept.before));
+  ok("an update takes it back out",
+    !swept.after.includes("update.bat") && !swept.after.includes("update.command"),
+    JSON.stringify(swept.after));
+  ok("…and says which files it removed",
+    swept.swept.length === 2, JSON.stringify(swept.swept));
+  ok("…while the extension itself is still there and installed",
+    swept.after.includes("manifest.json") && swept.after.includes("sites.js") &&
+    swept.version === "99.9.0", JSON.stringify(swept));
+
   /* ---- the folder that is remembered but locked ---------------------------
 
      Chrome keeps the directory handle across a restart; it does not, on its

@@ -308,9 +308,9 @@ try {
 
    Chrome re-reads an unpacked extension's files on request, so the worker can
    simply look: fetch its own manifest and compare the version on disk with the
-   version it is running. When they differ, update.bat (or update.command) has
-   already put the new files there and the panel says so in one line, with the
-   one step left.
+   version it is running. When they differ, the new files are already in the
+   folder — an install finished, or someone copied them in — and the panel says
+   so in one line, with the one step left.
 
    It does NOT reload itself. chrome.runtime.reload() unloads an unpacked
    extension and — measured, not assumed — does not reliably bring it back; an

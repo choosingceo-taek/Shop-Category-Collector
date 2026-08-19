@@ -162,6 +162,47 @@
   }
 
   // ---- the whole job, from one click ---------------------------------------
+  /* Files we used to ship and no longer do, taken back out of the folder.
+
+     An install writes what is in the archive and, until now, nothing else —
+     so anything delivered by an older release stayed in the extension folder
+     for good. Before v3.21.0 the download was a GitHub BRANCH ARCHIVE, which
+     carries the whole repository, so every copy installed back then still
+     holds update.bat and update.command.
+
+     Those two are why Windows Security says "threats found" after an update.
+     update.bat runs
+
+         powershell -NoProfile -ExecutionPolicy Bypass -Command
+           "Invoke-WebRequest -Uri <url> -OutFile %TEMP%\\marketlens.zip"
+
+     then expands it and copies it over a folder — download, unpack, overwrite,
+     with the execution policy turned off. That is the shape of a script
+     downloader and Defender's heuristics treat it as one; the file does not
+     have to run to be flagged, it only has to be sitting there when the folder
+     is rescanned, which is exactly what an update causes. Hence: every update,
+     the same alert.
+
+     They are also dead. The panel has installed updates by itself since
+     v3.17.0, and the double-click scripts were the road before that.
+
+     A NAMED list, not "delete anything the archive did not bring". A blanket
+     sweep would take a person's own notes out of that folder, and on a partial
+     archive it would take the extension apart. This list describes the past,
+     so it does not rot. */
+  const RETIRED = ["update.bat", "update.command"];
+  async function sweepRetired(dir) {
+    const gone = [];
+    for (const name of RETIRED) {
+      try {
+        await dir.getFileHandle(name);          // throws if it is not there
+        await dir.removeEntry(name);
+        gone.push(name);
+      } catch (e) { /* not present, or the browser will not remove it */ }
+    }
+    return gone;
+  }
+
   async function install(dir, zipBuffer, onProgress) {
     const here = await isExtensionFolder(dir);
     if (!here.ok) {
@@ -174,14 +215,15 @@
     if (!looksLikeTheExtension(entries))
       throw new Error("that archive does not look like Market Lens");
     const written = await writeAll(dir, entries, onProgress);
+    const swept = await sweepRetired(dir);
     const mf = entries.find(e => e.path === "manifest.json");
     let version = "";
     try { version = JSON.parse(new TextDecoder().decode(mf.bytes)).version || ""; } catch (e) {}
-    return { written, version };
+    return { written, version, swept };
   }
 
   const API = { unzip, stripTopFolder, writeAll, looksLikeTheExtension, isExtensionFolder,
-    saveFolder, loadFolder, folderReady, install };
+    saveFolder, loadFolder, folderReady, install, sweepRetired, RETIRED };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.LensInstaller = API;
 })(typeof self !== "undefined" ? self : this);
