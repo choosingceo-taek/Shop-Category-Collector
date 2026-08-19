@@ -58,6 +58,13 @@
     text-transform:uppercase; color:var(--muted); margin-right:2px; }
   .fs select, .fs button { font-size:12px; padding:4px 8px; }
   .fs input[type=search] { padding:4px 9px; font-size:12px; }
+  /* The catalog's own housekeeping, on the tab about scanning: what the
+     catalog weighs and how it travels, and what each site produced. Off the
+     analysis header, where an orange "needs a look" read as an error over
+     work that was fine. */
+  .housekeep { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    margin-bottom:12px; }
+  .housekeep .databox, .housekeep .checkbar { flex-basis:100%; }
   .selbar { display:none; align-items:center; gap:10px; margin-top:10px; padding:9px 12px;
     background:var(--wash); border-radius:var(--r); font-size:13px; }
   .selbar.on { display:flex; }
@@ -471,44 +478,6 @@
            is how trust goes, so that one is always said — and it is silent on
            every scan that merged nothing, which is nearly all of them. -->
       <span class="stats" id="stats"></span>
-      <!-- What the catalog weighs, and the one way to make it smaller. The
-           weekly snapshots keep the trend after products are pruned, so this
-           is a working-set control rather than a delete-your-history button.
-           It rides the line that is already here. -->
-      <button class="datachip" id="datachip" title="What this catalog is holding">·</button>
-      <!-- Opened from the chip, closed by default, so it costs no height until
-           someone asks. Everything here is about the catalog as a whole, which
-           is why it sits by the size and not in the products toolbar. -->
-      <div class="databox" id="databox" hidden>
-        <span id="datafacts"></span>
-        <button id="datatrim">Free up space…</button>
-        <button id="dataout">Back up (.json)</button>
-        <button id="datain">Merge in a backup…</button>
-        <input type="file" id="datafile" accept=".json,application/json" hidden>
-        <!-- Search interest. There is no public Google Trends API and a rank
-             cannot be collected retroactively, so the accurate road is the
-             CSV that trends.google.com exports. Until one is imported the
-             search lane on the cards simply is not drawn. -->
-        <button id="gtin">Add Google Trends (.csv)…</button>
-        <input type="file" id="gtfile" accept=".csv,text/csv" hidden>
-      </div>
-      <!-- What the scans think of their own results.
-
-           Every problem in this file's history reached the designer the same
-           way: they opened the LAB, saw something wrong, and said so. The scan
-           already graded itself — but the grade went to a console command, so
-           it might as well not have existed. This is the same grade, on the
-           screen they were going to open anyway.
-
-           It shows BOTH halves now. "Which sites give good information and
-           which do not" is the question a designer actually asks before
-           trusting a week's numbers, and a band that only ever listed failures
-           could answer half of it. The chip rides this line, so the list costs
-           no height until it is opened. -->
-      <button class="datachip" id="checkchip" title="What each scanned site produced" hidden><span id="checkn"></span></button>
-      <div class="checkbar" id="checkbar" hidden>
-        <div class="checkbox" id="checkbox" hidden></div>
-      </div>
     </div>
     <div class="filters">
       <!-- Grouped by what each control does, not by what fits on the line:
@@ -651,6 +620,58 @@
     <div id="v-products" hidden><div class="grid" id="grid"></div></div>
 
     <div id="v-lists" hidden>
+      <!-- Housekeeping, on the tab that is about scanning.
+
+           Both of these used to ride the LAB's title line, and neither is
+           about the season: one is the catalog's own weight and the way it
+           travels between browsers, the other is what each SITE produced. On
+           an analysis page an orange "7 need a look" reads as an error banner
+           over work that is fine, and the Data chip is a filing cabinet in the
+           middle of a report. They are not gone — losing the backup door would
+           mean losing the only route a catalog has to another laptop, and
+           losing the site grades would let a half scan grade itself clean
+           again. They are one tab away, on the tab that already answers
+           "what did the scans do". -->
+      <div class="housekeep">
+      <!-- What the catalog weighs, and the one way to make it smaller. The
+             weekly snapshots keep the trend after products are pruned, so this
+             is a working-set control rather than a delete-your-history button.
+             It rides the line that is already here. -->
+        <button class="datachip" id="datachip" title="What this catalog is holding">·</button>
+        <!-- Opened from the chip, closed by default, so it costs no height until
+             someone asks. Everything here is about the catalog as a whole, which
+             is why it sits by the size and not in the products toolbar. -->
+        <div class="databox" id="databox" hidden>
+          <span id="datafacts"></span>
+          <button id="datatrim">Free up space…</button>
+          <button id="dataout">Back up (.json)</button>
+          <button id="datain">Merge in a backup…</button>
+          <input type="file" id="datafile" accept=".json,application/json" hidden>
+          <!-- Search interest. There is no public Google Trends API and a rank
+               cannot be collected retroactively, so the accurate road is the
+               CSV that trends.google.com exports. Until one is imported the
+               search lane on the cards simply is not drawn. -->
+          <button id="gtin">Add Google Trends (.csv)…</button>
+          <input type="file" id="gtfile" accept=".csv,text/csv" hidden>
+        </div>
+        <!-- What the scans think of their own results.
+
+             Every problem in this file's history reached the designer the same
+             way: they opened the LAB, saw something wrong, and said so. The scan
+             already graded itself — but the grade went to a console command, so
+             it might as well not have existed. This is the same grade, on the
+             screen they were going to open anyway.
+
+             It shows BOTH halves now. "Which sites give good information and
+             which do not" is the question a designer actually asks before
+             trusting a week's numbers, and a band that only ever listed failures
+             could answer half of it. The chip rides this line, so the list costs
+             no height until it is opened. -->
+        <button class="datachip" id="checkchip" title="What each scanned site produced" hidden><span id="checkn"></span></button>
+        <div class="checkbar" id="checkbar" hidden>
+          <div class="checkbox" id="checkbox" hidden></div>
+        </div>
+      </div>
       <div class="lists-head">
         <select id="listsel"></select>
         <button id="newlist">＋ New list</button>

@@ -164,6 +164,57 @@ const IN_L1 = items.filter(i => i.listIds.includes("l1")).length;
     book.counts[0] + book.counts[1] > 30, `${book.counts[0] + book.counts[1]} of 30 products`);
   ok("and it is a real workbook", book.bytes > 3000, `${book.bytes} bytes`);
 
+  /* ---- 3c. housekeeping is off the analysis header ------------------------
+
+     An orange "7 need a look" on the LAB's title line reads as an error over
+     work that is fine, and the Data chip is a filing cabinet in the middle of
+     a report. Neither is deleted — the backup door is the only route a
+     catalog has to another laptop, and the site grades are what stop a half
+     scan grading itself clean — so both moved to the tab that already answers
+     "what did the scans do". */
+  const house = await p.evaluate(() => {
+    const where = sel => {
+      const e = document.querySelector(sel);
+      if (!e) return "missing";
+      if (e.closest("header")) return "header";
+      if (e.closest("#v-lists")) return "scan lists";
+      return "elsewhere";
+    };
+    const headerText = (document.querySelector("header") || {}).innerText || "";
+    return {
+      data: where("#datachip"), databox: where("#databox"),
+      check: where("#checkchip"), checkbar: where("#checkbar"),
+      headerSaysNeedsLook: /need a look/i.test(headerText),
+      headerSaysData: /\bData\b/.test(headerText),
+    };
+  });
+  ok("the Data chip is off the header", house.data === "scan lists", house.data);
+  ok("…and its box went with it", house.databox === "scan lists", house.databox);
+  ok("the site grades are off the header", house.check === "scan lists", house.check);
+  ok("…and their list went too", house.checkbar === "scan lists", house.checkbar);
+  ok("nothing on the header says anything needs a look", !house.headerSaysNeedsLook);
+  ok("nor offers Data there", !house.headerSaysData);
+
+  await p.click('.tab[data-view="lists"]');
+  await p.waitForTimeout(700);
+  const reachable = await p.evaluate(() => {
+    const e = document.querySelector("#datachip");
+    const r = e && e.getBoundingClientRect();
+    return { visible: !!r && r.width > 0 && r.height > 0 };
+  });
+  ok("but Data is right there on Scan lists — the backup door still opens",
+    reachable.visible);
+  await p.click("#datachip");
+  await p.waitForTimeout(500);
+  const opened = await p.evaluate(() => {
+    const b = document.querySelector("#databox");
+    return { open: !!b && !b.hidden, text: (b && b.innerText) || "" };
+  });
+  ok("…and it still offers backup and merge", opened.open &&
+    /Back up/i.test(opened.text) && /Merge in/i.test(opened.text), opened.text.slice(0, 120));
+  await p.click('.tab[data-view="lab"]');
+  await p.waitForTimeout(500);
+
   /* ---- 4. the rail lists values, not counts ---- */
   await p.click('.tab[data-view="brands"]');
   await p.waitForTimeout(1800);
