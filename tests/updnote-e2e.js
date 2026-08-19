@@ -187,6 +187,43 @@ const SAY_NEWER = `(() => {
   ok("the update box says what an update does to the data",
     /keeps everything/i.test(keep) && /same folder/i.test(keep), keep);
 
+  /* The folder is not automatically the newest thing.
+
+     Reported from a real panel: the chip read `v3.33.0 → 3.36.0` while the
+     banner underneath said "Version 3.35.0 is in your folder, ready to run" —
+     an install that had landed earlier. Pressing the one button there restarts
+     onto 3.35.0, which is already behind, and the chip goes on saying a newer
+     one exists. One-click update never reaches the newest version. So the
+     newer of the two decides which banner this is. */
+  await sw.evaluate(() => { self.LensUpdate.check = async () => ({
+    ok: true, current: chrome.runtime.getManifest().version, latest: "99.0.0", newer: true }); });
+  /* The folder record is written by the worker's own disk check, and opening
+     the panel asks for that check — so the state is set up by telling the
+     worker what the folder holds, not by writing the record behind its back
+     (which it would immediately correct). */
+  await sw.evaluate(() => { self.diskVersion = async () => "3.35.0"; });
+  await sw.evaluate(() => checkForReplacedFiles());
+  await panel.reload();
+  await panel.waitForTimeout(1800);
+  ok("a folder holding an older build does not offer the restart",
+    await panel.locator("#upready").isHidden());
+  ok("…it offers the install that reaches the newest",
+    await panel.locator("#upnote").isVisible(),
+    await panel.locator("#upnote").innerText().catch(() => "(absent)"));
+  ok("…and says what the folder is currently holding",
+    /3\.35\.0/.test(await panel.locator("#updisk").innerText().catch(() => "")),
+    await panel.locator("#updisk").innerText().catch(() => "(absent)"));
+
+  /* And once the folder holds the newest, the restart is the whole job — that
+     banner has to come back, or the install runs forever. */
+  await sw.evaluate(() => { self.diskVersion = async () => "99.0.0"; });
+  await sw.evaluate(() => checkForReplacedFiles());
+  await panel.reload();
+  await panel.waitForTimeout(1800);
+  ok("with the newest in the folder, the restart is what is offered",
+    await panel.locator("#upready").isVisible() && await panel.locator("#upnote").isHidden(),
+    await panel.locator("#upready").innerText().catch(() => "(absent)"));
+
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();

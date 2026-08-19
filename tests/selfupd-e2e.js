@@ -53,6 +53,12 @@ function makeZip(version, shape) {
     JSON.stringify({ manifest_version: 3, name: "Market Lens", version: "1.0.0" }));
 
   const zip = makeZip("99.9.0", "flat");
+  /* A fresh profile, or this measures the last run rather than this one: both
+     `wpb_autotried` (which exists precisely to stop a second attempt at the
+     same version) and the OPFS folder the install writes into survive in the
+     profile directory, so a re-run would refuse to install and then find the
+     previous run's files sitting there and call it a pass. */
+  execSync("rm -rf /tmp/pw-selfupd");
   const ctx = await chromium.launchPersistentContext("/tmp/pw-selfupd", {
     executablePath: "/opt/pw-browsers/chromium", headless: false,
     args: [`--disable-extensions-except=${REPO}`, `--load-extension=${REPO}`, "--no-sandbox"] });

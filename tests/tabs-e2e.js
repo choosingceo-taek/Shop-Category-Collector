@@ -304,15 +304,61 @@ const products = Array.from({ length: 24 }, (_, i) => ({
   ok("…opened at that site", /example0\.com/.test(sent.opened), sent.opened);
   ok("…and it still belongs to the list", run && run.listId === "l0", run && run.listId);
 
-  /* Two runs share one queue, so the second one would scramble the first. */
+  /* Two runs share one queue, so the second one would scramble the first.
+     A live run is one that has written something recently — every write on the
+     path stamps `at`, which is what makes "running" a fact rather than a flag
+     nobody ever clears. */
   await p.evaluate(() => new Promise(r =>
-    chrome.storage.local.set({ wpb_queue: { active: true, idx: 0, listId: "l0" } }, r)));
+    chrome.storage.local.set({ wpb_queue: { active: true, idx: 0, listId: "l0",
+      list: [{ brand: "FABRIC", label: "New In", url: "https://www.example0.com/new" }],
+      at: Date.now() } }, r)));
   await p.evaluate(() => { window.__sent = []; });
   await p.click("#listbody .ent .run");
   await p.waitForTimeout(2500);
   const during = await p.evaluate(() => window.__sent.length);
   ok("it refuses while a scan is already running", during === 0, `${during} messages`);
+
+  /* ---- 4b. a run that stopped writing is over, whatever the flag says ----
+
+     `active` survives a closed tab, a quit browser and a shop that hangs, and
+     the panel believed it on its own: ▶ stayed asleep, the progress line
+     stayed up, and — because the index kept the position it died at — it read
+     "20/11 ·", the twentieth of eleven sites, with no name after it. Four
+     quiet minutes is the same reading the worker's watchdog takes. */
+  const stale = await p.evaluate(async () => {
+    await new Promise(r => chrome.storage.local.set({ wpb_queue: {
+      active: true, idx: 19, listId: "l0",
+      list: Array.from({ length: 11 }, (_, i) => ({ brand: "B" + i, label: "New In",
+        url: `https://www.example${i}.com/new` })),
+      at: Date.now() - 31 * 60 * 1000 } }, r));
+    await new Promise(r => setTimeout(r, 1200));
+    const q = document.querySelector("#qstate");
+    return { hidden: q.hidden, text: (q.textContent || "").trim(),
+      runDisabled: document.querySelector("#runlist").disabled };
+  });
+  ok("a run gone quiet for half an hour is not shown as running", stale.hidden,
+    JSON.stringify(stale));
+  ok("…and ▶ is awake again", stale.runDisabled === false, JSON.stringify(stale));
+  ok("…so no impossible position is printed", !/20\s*\/\s*11/.test(stale.text),
+    JSON.stringify(stale));
+
+  /* The counter itself: past the end of the list there is no site to name. */
+  const overrun = await p.evaluate(async () => {
+    await new Promise(r => chrome.storage.local.set({ wpb_queue: {
+      active: true, idx: 19, listId: "l0",
+      list: Array.from({ length: 11 }, (_, i) => ({ brand: "B" + i, label: "New In",
+        url: `https://www.example${i}.com/new` })),
+      at: Date.now() } }, r));
+    await new Promise(r => setTimeout(r, 1200));
+    const q = document.querySelector("#qstate");
+    return { hidden: q.hidden, text: (q.textContent || "").trim() };
+  });
+  ok("a live run past the end of its list says so in words", !overrun.hidden &&
+    /finishing/i.test(overrun.text) && !/20\s*\/\s*11/.test(overrun.text),
+    JSON.stringify(overrun));
+
   await p.evaluate(() => new Promise(r => chrome.storage.local.remove("wpb_queue", r)));
+  await p.waitForTimeout(600);
 
   /* ---- 5. the grab button carries no count ---- */
   const fab = await p.evaluate(async () => {

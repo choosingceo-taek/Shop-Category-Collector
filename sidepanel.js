@@ -31,6 +31,10 @@
      say which — PRODUCTS just follows it. Seeing everything is a deliberate
      step out of that, which is what the bar's control does, and it says which
      of the two it is in either case. */
+  /* Four quiet minutes is the worker's own watchdog reading, and the same
+     one is used everywhere here: a run that has not written anything in
+     that long is a leftover, not a scan. */
+  const STALL_MS = 4 * 60 * 1000;
   let listFilter = "";          // derived from the open list; see syncScope
   let scopeAll = false;         // …unless the person asked for every list
 
@@ -686,9 +690,26 @@
     } catch (e) { cb && cb(null); }
   }
 
+  /* A run is alive only if it has moved recently.
+
+     The panel believed `active` on its own, so a run that ended without
+     clearing itself — a closed tab, a quit browser, a shop that hung — left
+     the panel showing a progress line forever, with ▶ asleep beside it. And
+     because the index kept the position it died at, the line read "20/11 ·"
+     with no name after it: the twentieth of eleven sites, which is not a
+     place. Same reading as the restart guard and as the worker's watchdog:
+     four quiet minutes is a leftover, not a scan. */
+  function queueLive(q) {
+    if (!q || !q.active) return false;
+    const beat = q.at || q.startedAt || 0;
+    if (!beat) return false;                     // written before heartbeats existed
+    if (job && job.paused) return true;          // held on purpose, not stalled
+    return Date.now() - beat <= STALL_MS;
+  }
+
   function paintQueue() {
     const box = $("#qstate");
-    const running = !!(queue && queue.active);
+    const running = queueLive(queue);
     box.hidden = !running;
     if (running) {
       /* A run record written by an older build may not carry `list` at all,
@@ -696,9 +717,14 @@
          whole panel down, not just this line. The queue is the one record
          here written by another context, so it is read defensively. */
       const items = (queue && queue.list) || [];
-      const cur = items[queue.idx] || {};
-      box.innerHTML = `<b>${queue.idx + 1}/${items.length || "?"}</b> ` +
-        `${esc(cur.brand || "")} · ${esc(cur.label || "")}`;
+      const cur = items[queue.idx];
+      /* Past the end of the list there is no site to name, and printing the
+         position anyway gives "20/11 ·" — a number that cannot be true and a
+         separator with nothing after it. */
+      box.innerHTML = cur
+        ? `<b>${queue.idx + 1}/${items.length || "?"}</b> ` +
+          `${esc(cur.brand || "")} · ${esc(cur.label || "")}`
+        : `<b>Finishing…</b>`;
     }
     renderList();
     paintLive();          // the controls depend on BOTH the job and the queue
@@ -713,7 +739,7 @@
     /* Run · hold · stop. The controls never move or vanish — a control that
        disappears makes the user hunt for it mid-run — so state shows as
        enabled/disabled, and pause names what pressing it will do. */
-    const running = !!(queue && queue.active);
+    const running = queueLive(queue);
     const busy = on || running;
     const paused = !!(job && job.paused);
     const btn = $("#runlist");
@@ -1262,16 +1288,23 @@
     foot.textContent = `You are running v${running}. Checking…`;
     chrome.storage.local.get("wpb_filesready", o => {
       const ready = (o || {}).wpb_filesready;
-      if (ready && ready.onDisk) {
-        foot.textContent = `v${ready.onDisk} is already in your folder — step 3 is all that is left.`;
-        return;
-      }
+      const onDisk = ready && ready.onDisk ? ready.onDisk : "";
       chrome.runtime.sendMessage({ type: "updateStatus", force: true }, r => {
         void chrome.runtime.lastError;
+        const latest = r && r.ok && r.latest ? r.latest : "";
+        /* The folder is only "done" while nothing newer exists. Otherwise this
+           line would tell someone to restart onto a version GitHub has already
+           passed — and the chip above says so at the same time. */
+        if (onDisk && !(latest && verCmp(latest, onDisk) > 0)) {
+          foot.textContent = `v${onDisk} is already in your folder — step 3 is all that is left.`;
+          return;
+        }
         foot.textContent = !r || !r.ok
           ? `You are running v${running}. Could not reach GitHub to check for a newer one.`
           : r.newer
-            ? `v${r.latest} is available — you are running v${running}.`
+            ? (onDisk
+                ? `v${r.latest} is available — you are running v${running}, and your folder is holding v${onDisk}.`
+                : `v${r.latest} is available — you are running v${running}.`)
             : `v${running} is the latest. Downloading again is harmless.`;
       });
     });
@@ -1468,29 +1501,56 @@
     return (stale ? false : v[RELOAD_OK]) !== false;
   }
 
+  // "1.42.0" vs "1.9.3" — numeric per segment, so 42 > 9 (string compare lies)
+  function verCmp(a, b) {
+    const pa = String(a || "").split(".").map(n => parseInt(n, 10) || 0);
+    const pb = String(b || "").split(".").map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const d = (pa[i] || 0) - (pb[i] || 0);
+      if (d) return d < 0 ? -1 : 1;
+    }
+    return 0;
+  }
+
   /* Which of the two update states this is. They are a different distance
      from done: "a newer version exists" is a download away, "the files are in
      your folder" is one restart away — and offering the download again when
      the files are already there is how someone presses Update now four times
-     and watches nothing change. */
+     and watches nothing change.
+
+     But the folder is not automatically the newest thing. An install that
+     landed a while ago leaves v3.35.0 sitting there while GitHub has moved to
+     3.36.0, and then the restart banner is the WRONG one — it is one click to
+     a version that is already behind, and the chip beside it says
+     `v3.33.0 → 3.36.0` at the same time. So the newer of the two wins: if
+     GitHub has something past what is on disk, this is an install, and the
+     banner says what the folder is holding so the number is not a surprise. */
   function paintUpdateBanner() {
     chrome.storage.local.get("wpb_filesready", o => {
       const ready = (o || {}).wpb_filesready;
-      if (ready && ready.onDisk) {
-        $("#rdver").textContent = ready.onDisk;
-        $("#upready").hidden = false;
-        $("#upnote").hidden = true;
-        return;
-      }
+      const onDisk = ready && ready.onDisk ? ready.onDisk : "";
       /* A new version has to be visible without going looking for it. The
          banner is the whole update: one button, the same one the version chip
          carries, so nobody has to know where GitHub is. */
       chrome.runtime.sendMessage({ type: "updateStatus", force: true }, r => {
         void chrome.runtime.lastError;
+        const latest = r && r.ok && r.latest ? r.latest : "";
+        if (onDisk && !(latest && verCmp(latest, onDisk) > 0)) {
+          $("#rdver").textContent = onDisk;
+          $("#upready").hidden = false;
+          $("#upnote").hidden = true;
+          return;
+        }
         if (!r || !r.newer) return;
         $("#upver").textContent = "v" + r.latest;
         $("#upcur").textContent = "v" + r.current;
+        const held = $("#updisk");
+        if (held) {
+          held.textContent = onDisk ? `Your folder is holding v${onDisk} — this replaces it.` : "";
+          held.hidden = !onDisk;
+        }
         $("#upnote").hidden = false;
+        $("#upready").hidden = true;
       });
     });
   }
@@ -1549,13 +1609,8 @@
      watchdog treats four quiet minutes as stuck rather than busy. The same
      number is the right one here: quiet that long is a leftover, and holding
      a restart for it protects nothing. */
-  const STALL_MS = 4 * 60 * 1000;
   async function runningNow() {
-    const q = await load(QUEUE);
-    if (!q || !q.active) return null;
-    const beat = Math.max(q.at || q.startedAt || 0, 0);
-    if (beat && Date.now() - beat > STALL_MS) return null;   // stopped, not running
-    return q;
+    return queueLive(await load(QUEUE)) ? true : null;
   }
 
   async function maybeAutoReload(v) {
