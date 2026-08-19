@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Market Lens",
-  "version": "3.43.0",
+  "version": "3.44.0",
   "description": "참고할 브랜드 카테고리 URL을 리스트로 모으고, 그 리스트를 스캔해 브랜드·카테고리·상품명·썸네일·URL·원단·혼용률을 Excel로 뽑는 마켓 리서치 도구.",
   "permissions": [
     "storage",

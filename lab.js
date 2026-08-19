@@ -501,12 +501,20 @@
        a label rather than a measurement — nothing is read off it. */
     const INK = (window.ReportCalc && window.ReportCalc.COLOUR_INK) || {};
     const AXES = [
-      ["fabricfam", "Fabric"],
+      /* FABRIC counts the fifteen fibres the designer named, read from the
+         compositions — the measured half. It used to count `fabricfam`, the
+         cloth a shop NAMES in a title, and that put RIBBED, TERRY, RIB,
+         HEATHER and JERSEY on the same row as COTTON and NYLON: two
+         vocabularies in one axis, so nothing on it could be added up. The
+         weave reading is not lost — it is what the DETAIL axis and the name
+         keywords still read — but the fabric question is answered in fibres,
+         the same fifteen the filter rail offers. */
+      ["fabric", "Fabric"],
       ["color", "Colour"],
       ["fit", "Fit"],
       ["keyword", "Detail"],
     ];
-    const blendMap = T.blends ? T.blends(items, { dim: "fabricfam" }) : {};
+    const blendMap = T.blends ? T.blends(items, { dim: "fabric" }) : {};
 
     /* One card per keyword: what it is, how many shops carry it, what it is
        made of, and the shape it has traced. The card is the unit because a
@@ -553,9 +561,10 @@
                 : "against the " + a.shared + " shops that produced in both " + unit + "s"}">${
               r.delta == null ? "—" : r.delta > 0 ? "▲" + r.delta
                 : r.delta < 0 ? "▼" + Math.abs(r.delta) : "0"}</span></div>
-          <div class="axnum"><b>${r.n}</b><i>/${roster} brands</i></div>
-          <div class="axmeta">${r.products} ${r.products === 1 ? "product" : "products"}${
-            d === "fabricfam" && blendMap[r.key] ? ` · ${esc(blendMap[r.key])}` : ""}</div>
+          <div class="axnum" title="${r.n} of the ${roster} shops that put something out this ${unit} had ${esc(r.key)} in it — a shop that dropped sixty of them still counts once, which is what makes this a market reading rather than one label being busy"><b>${r.n}</b><i>/${roster} brands</i></div>
+          <div class="axmeta" title="${r.products} collected ${r.products === 1 ? "product is" : "products are"} ${esc(r.key)}${
+            d === "fabric" ? ", and the line beside it is the blend those products state most often" : ""}">${r.products} ${r.products === 1 ? "product" : "products"}${
+            d === "fabric" && blendMap[r.key] ? ` · ${esc(blendMap[r.key])}` : ""}</div>
           ${areaChart(r.spark.filter(v => v != null))}
           ${searchLane(r.key)}
         </article>`).join("")

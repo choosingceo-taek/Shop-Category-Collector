@@ -85,8 +85,13 @@ const THIS_WEEK = 5;
     chips: [...document.querySelectorAll(".weekchips button")].map(b => (b.textContent || "").trim()),
     on: (document.querySelector(".weekchips button.on") || {}).textContent || "",
   }));
+  /* The open chip also carries the days it covers — and it is the only place
+     the week is written; the line above the title and the tag beside it were
+     two more copies of the same date. */
   ok("the weeks are named the way the record names them",
-    wk.chips.length === 2 && wk.chips.every(t => /^\d{4}-W\d{2}$/.test(t)), JSON.stringify(wk.chips));
+    wk.chips.length === 2 &&
+    wk.chips.every(t => /^\d{4}-W\d{2}( : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2})?$/.test(t)),
+    JSON.stringify(wk.chips));
   ok("…and there is one chip per week, not one per day",
     wk.chips.length === 2, JSON.stringify(wk.chips));
 
@@ -108,8 +113,9 @@ const THIS_WEEK = 5;
   ok("one brand, one heading — no matter which day it was collected",
     view.brandHeads.length === new Set(view.brandHeads).size &&
     view.brandHeads.length === 2, JSON.stringify(view.brandHeads));
-  ok("the line above says which days the week covers",
-    /Mon–Sun/.test(view.kicker), view.kicker);
+  ok("the open week says which days it cover, on the chip itself",
+    / : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}$/.test(wk.on.trim()), wk.on);
+  ok("…and the date is not repeated above the title", !view.kicker.trim(), view.kicker);
 
   /* Scanning the same page again inside the same week adds nothing: same
      address, same row, first sighting kept. */

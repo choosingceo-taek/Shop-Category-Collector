@@ -29,7 +29,7 @@ for (let w = 0; w < WEEKS; w++) {
       name: NAMES[n % NAMES.length] + " " + n,
       price: "$" + (40 + (n % 9) * 10),
       image_url: "",
-      fabric: FABRIC[n % FABRIC.length],
+      fabric_composition: FABRIC[n % FABRIC.length],
       addedAt: Date.now() - (WEEKS - w) * 7 * DAY,
       listIds: ["l0"],
     });

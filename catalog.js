@@ -94,15 +94,18 @@
       .filter(Boolean)).size;
     const counts = new Map(lists.map(l =>
       [l.id, brandsIn(allItems.filter(i => [].concat(i.listIds || []).includes(l.id)))]));
-    const allBrands = brandsIn(allItems);
     // With no list saved there is nothing to choose between — the rail would
     // be a control with one option, which is just noise.
     rail.hidden = lists.length < 1;
-    /* The name, and no figure. Which list is open is the question these chips
-       answer; how much is in it is what the page below is for. The tally is
-       still a hover away, where it costs nothing. */
+    /* Lists only. "All lists" pooled research questions that were never asked
+       together — a week of FABRIC and a week of WMN averaged into one line —
+       and it was the default, so that pooled screen is what most people saw.
+       A list is one research question; this rail chooses which one.
+
+       The name, and no figure: which list is open is what these chips answer,
+       and how much is in it is what the page below is for. The tally is still
+       a hover away, where it costs nothing. */
     box.innerHTML =
-      `<button data-id="" class="${scopeId ? "" : "on"}" title="${allBrands} brands · ${allItems.length} products">All lists</button>` +
       lists.map(l => `<button data-id="${esc(l.id)}" class="${scopeId === l.id ? "on" : ""}" ` +
         `title="${counts.get(l.id) || 0} brands in ${esc(l.name)}">` +
         `<span class="dot" style="background:${listColor(l.name)}"></span>${esc(l.name)}</button>`).join("");
@@ -496,8 +499,10 @@
       const o = await new Promise(r => chrome.storage.local.get(SCOPE_KEY, x => r(x || {})));
       scopeId = o[SCOPE_KEY] || "";
     } catch (e) { scopeId = ""; }
-    // a list that was deleted leaves a scope pointing at nothing — fall back
-    if (scopeId && !lists.some(l => l.id === scopeId)) scopeId = "";
+    /* A scope is always one of the lists. A deleted list leaves it pointing at
+       nothing, and a first run has never chosen — both land on the first list,
+       because there is no "everything" to fall back to any more. */
+    if (!lists.some(l => l.id === scopeId)) scopeId = (lists[0] && lists[0].id) || "";
     projects = await S.allProjects();
     try { snapshots = await S.allSnapshots(); } catch (e) { snapshots = []; }
     applyScope();
@@ -972,6 +977,8 @@
     $("#v-lab").hidden = view !== "lab";
     $("#v-new").hidden = view !== "new";
     $("#v-brands").hidden = view !== "brands";
+    // each browsing tab keeps its own rail picks
+    if (view === "new" || view === "brands") facetView = view;
     // the rail belongs to the two browsing tabs, and goes with them
     $("#railwrap").hidden = !(view === "new" || view === "brands");
     $("#v-products").hidden = view !== "products";
@@ -1198,15 +1205,23 @@
     ["color", "Colour", i => window.ReportCalc.colourFamilies(i && i.colorways)],
   ];
   const T = () => window.TrendCalc;
-  const facetPick = {};                       // key -> Set of chosen values
-  FACETS.forEach(f => { facetPick[f[0]] = new Set(); });
-  let brandQuery = "";                        // the Brand group's own search
+  /* One set of picks PER TAB, not one for the page.
+
+     They were shared, so ticking three brands on New In silently narrowed
+     Clothing as well — and the second screen looked like the whole catalogue
+     with most of it missing. The two tabs ask different questions ("what
+     arrived this week" and "what does this shop carry"), so they keep their
+     own answers; switching back finds the screen as it was left. */
+  const facetPick = { new: {}, brands: {} };  // view -> key -> Set of chosen values
+  Object.keys(facetPick).forEach(v => FACETS.forEach(f => { facetPick[v][f[0]] = new Set(); }));
+  let facetView = "new";                      // which tab's picks are in play
+  const brandQ = { new: "", brands: "" };     // the Brand group's own search, per tab
   const railOpen = { category: true, fabric: true, brand: true };
   const RAIL_CUT = 8;                         // values shown before "show all"
   const railAll = {};                         // groups the user expanded
 
   const facetValues = (f, i) => (f[2](i) || []).filter(Boolean);
-  const chosenIn = k => facetPick[k];
+  const chosenIn = k => (facetPick[facetView] || facetPick.new)[k];
   const anyPicked = () => FACETS.some(f => chosenIn(f[0]).size);
 
   // does a row pass every group EXCEPT the one named (for that group's counts)
@@ -1242,8 +1257,8 @@
         const rank = n => { const x = GARMENT_ORDER.indexOf(n); return x < 0 ? 99 : x; };
         list.sort((a, b) => rank(a[0]) - rank(b[0]));
       }
-      if (g.key === "brand" && brandQuery) {
-        const q = brandQuery.toLowerCase();
+      if (g.key === "brand" && brandQ[facetView]) {
+        const q = brandQ[facetView].toLowerCase();
         list = list.filter(([v]) => String(v).toLowerCase().includes(q) || chosen.has(v));
       }
       const open = railOpen[g.key] || chosen.size > 0;
@@ -1273,7 +1288,7 @@
           tiers.get(t).push([v, n]);
         });
         const order = [...tiers.keys()].sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b));
-        body = `<input type="search" class="rsearch" id="rbq" placeholder="Search brand" value="${esc(brandQuery)}">` +
+        body = `<input type="search" class="rsearch" id="rbq" placeholder="Search brand" value="${esc(brandQ[facetView])}">` +
           order.map(t => (order.length > 1 || t
             ? `<div class="rtier">${esc(t || "Untiered")}</div>` : "") +
             tiers.get(t).map(row).join("")).join("");
@@ -1313,7 +1328,7 @@
     const q = el.querySelector("#rbq");
     if (q) {
       q.addEventListener("input", () => {
-        brandQuery = q.value;
+        brandQ[facetView] = q.value;
         railAll.brand = true;
         rerender();
         const again = $("#rail").querySelector("#rbq");
@@ -1335,7 +1350,7 @@
   function wireRailNote(el, rerender) {
     const b = el.querySelector("#railclear");
     if (b) b.addEventListener("click", () => {
-      FACETS.forEach(f => chosenIn(f[0]).clear()); brandQuery = ""; rerender();
+      FACETS.forEach(f => chosenIn(f[0]).clear()); brandQ[facetView] = ""; rerender();
     });
   }
 
@@ -1499,8 +1514,13 @@
     /* The weeks, and nothing else — no tally on the chip. Counting what came
        in is the LAB's job and it does it properly, by brand; here the figure
        was decoration on a control whose whole meaning is "which week". */
+    const span = (a, b) => {
+      const f = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
+      return `${f(a)}-${f(b - 1)}`;
+    };
     const chips = weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}">
-      <b>${esc(window.TrendCalc.weekId(w.start))}</b></button>`).join("");
+      <b>${esc(window.TrendCalc.weekId(w.start))}</b>${
+        w.start === curWeekStart ? `<i class="wkspan"> : ${esc(span(w.start, w.end))}</i>` : ""}</button>`).join("");
 
     // search first, so the brand chips' counts describe what is on screen
     const q = currentQ();
@@ -1543,21 +1563,14 @@
         `<div class="brandsec"><b>${esc(brand)}</b></div>
          <div class="grid">${ii.slice().sort(bySitePos).map(feedCard).join("")}</div>`).join("");
 
-    /* The week id first, then the days it covers: 2026-W34 : 8/17-8/23. The
-       record speaks in W34 and a person does not, so both are on the line —
-       and the dates are written plainly rather than in the browser's locale,
-       which turned them into Korean month names on a screen that is otherwise
-       English. */
-    const span = (a, b) => {
-      const f = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
-      return `${f(a)}-${f(b - 1)}`;
-    };
+    /* One date on the screen. The same week was being said three times — a
+       line above the title, a tag at the far right, and the chip itself — and
+       the chip is the one that is also the control. The days it covers ride
+       IN the open chip, written plainly rather than through the browser's
+       locale, which had been printing Korean month names on an otherwise
+       English screen. */
     el.innerHTML = `
-      <div class="edhead">
-        <div><span class="kicker">${esc(window.TrendCalc.weekId(wk.start))} : ${esc(span(wk.start, wk.end))}</span>
-          <h2>New In</h2></div>
-        <span class="weektag">WEEK ${esc(window.TrendCalc.weekId(wk.start))}</span>
-      </div>
+      <div class="edhead"><div><h2>New In</h2></div></div>
       <div class="weekchips">${chips}</div>
       ${tierChips()}
       ${railNote()}
@@ -1584,8 +1597,7 @@
     wireRail(renderBrands);
     const rows = all.filter(i => railMatch(i));
     if (!rows.length) {
-      el.innerHTML = `<div class="edhead"><div><h2>By Brand</h2></div></div>
-        ${railNote()}
+      el.innerHTML = `${railNote()}
         <div class="none">No products match the filters on the left.</div>`;
       wireRailNote(el, renderBrands);
       return;
@@ -1631,11 +1643,8 @@
     const nw = newOf(curBrand);
 
     el.innerHTML = `
-      <div class="edhead">
-        <div><span class="kicker">counted from scans</span>
-          <h2>By Brand</h2></div>
-        ${latest ? `<span class="weektag">WEEK ${esc(window.TrendCalc.weekId(latest.start))}</span>` : ""}
-      </div>
+      <!-- No title here: the tab above says which screen this is, and the
+           brand column below says what it is showing. -->
       ${tierChips()}
       ${railNote()}
       <div class="brandwrap">
@@ -1666,7 +1675,9 @@
     }
     curList = lists.find(x => x.id === (curList && curList.id)) || lists[0];
     // a list renamed, added or deleted here changes what the scope rail offers
-    if (scopeId && !lists.some(l => l.id === scopeId)) { scopeId = ""; applyScope(); }
+    if (!lists.some(l => l.id === scopeId)) {
+      scopeId = (lists[0] && lists[0].id) || ""; applyScope();
+    }
     renderScope();
   }
   function fillListSelect() {

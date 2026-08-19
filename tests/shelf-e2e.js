@@ -33,7 +33,10 @@ const items = Array.from({ length: 32 }, (_, n) => {
   const s = SHAPES[n % SHAPES.length];
   return {
     url: `https://example.com/p/${n}`,
-    brand: s[0], category: "New In", name: "Piece " + n,
+    /* Names that carry a WEAVE word, the way the shops write them — that is
+       what used to reach the fabric axis instead of the fibre. */
+    brand: s[0], category: "New In",
+    name: ["Ribbed Tank", "Terry Hoodie", "Jersey Tee", "Waffle Crew"][n % 4] + " " + n,
     price: "$" + (40 + (n % 9) * 10), image_url: "",
     colorways: s[1], fabric_composition: s[2],
     addedAt: Date.now() - (n % 3) * DAY,
@@ -89,6 +92,26 @@ const items = Array.from({ length: 32 }, (_, n) => {
   ok("…each card shows the colour it is about",
     axisInk && axisInk.length > 0 && axisInk.every(c => /^rgb/.test(c)),
     JSON.stringify(axisInk));
+
+  /* The FABRIC axis answers in fibres — the same fifteen the rail offers. It
+     used to answer in the cloth a shop NAMES in a title, which put RIBBED,
+     TERRY, RIB, HEATHER and JERSEY beside COTTON and NYLON: two vocabularies
+     on one axis, so nothing on it could be added up. */
+  const FIBRES = ["Polyester", "Cotton", "Elastane/Spandex", "Nylon", "Viscose",
+    "Polyamide", "Silk", "Linen", "Acrylic", "Rayon", "Wool", "Tencel",
+    "Polyurethane", "Cupro", "Acetate"];
+  const fabAxis = await p.evaluate(() => {
+    const sec = [...document.querySelectorAll("section.sec.ax")]
+      .find(s => /Fabric/i.test((s.querySelector("h3") || {}).textContent || ""));
+    return sec ? [...sec.querySelectorAll(".axk")].map(e => e.textContent.trim()) : null;
+  });
+  ok("the LAB has a FABRIC axis", Array.isArray(fabAxis) && fabAxis.length > 0,
+    JSON.stringify(fabAxis));
+  ok("…and every card on it is one of the fifteen fibres",
+    fabAxis && fabAxis.every(k => FIBRES.includes(k)), JSON.stringify(fabAxis));
+  ok("…so a weave name is not a fabric card",
+    fabAxis && !fabAxis.some(k => /ribbed|terry|\brib\b|heather|jersey|satin|poplin/i.test(k)),
+    JSON.stringify(fabAxis));
 
   // ---- the fibre blocks --------------------------------------------------
   const fibres = await p.evaluate(() => {

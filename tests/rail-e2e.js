@@ -63,8 +63,15 @@ const items = Array.from({ length: 60 }, (_, n) => ({
   const tabs = await p.evaluate(() => [...document.querySelectorAll(".tab")].map(t => ({
     view: t.dataset.view, text: (t.innerText || "").replace(/\s+/g, " ").trim() })));
   ok("the page has three tabs", tabs.length === 3, JSON.stringify(tabs));
-  ok("…LAB, New In, By Brand",
+  ok("…Home, New In, Clothing",
     tabs.map(t => t.view).join(",") === "lab,new,brands", JSON.stringify(tabs.map(t => t.view)));
+  /* HOME, not LAB: the mark at the top left already says LAB, and a tab under
+     it with the same word reads as a second product. CLOTHING, not By Brand,
+     which the page under it was repeating as its own title. */
+  const tabWord = t => (t.text.replace(/[^A-Za-z ]/g, "").trim().split(/\s+/)[0] || "");
+  ok("the first tab is Home, since the mark above already says LAB",
+    /^home$/i.test(tabWord(tabs[0])), tabs[0].text);
+  ok("the third is Clothing", /^clothing$/i.test(tabWord(tabs[2])), tabs[2].text);
   ok("no Products tab", !tabs.some(t => /product/i.test(t.text)), JSON.stringify(tabs));
   ok("no Scan lists tab", !tabs.some(t => /scan lists/i.test(t.text)), JSON.stringify(tabs));
 
@@ -208,6 +215,7 @@ const items = Array.from({ length: 60 }, (_, n) => ({
       brandHeads: txt(".brandsec"),
       kicker: txt(".kicker")[0] || "",
       note: el.querySelectorAll(".railnote").length,
+      weektags: el.querySelectorAll(".weektag").length,
     };
   });
   ok("no brand row across the middle — the rail asks that", feed.brandChipRow === 0,
@@ -216,17 +224,22 @@ const items = Array.from({ length: 60 }, (_, n) => ({
     String(feed.note));
   ok("the weeks are still there", feed.weekChips.length > 0, JSON.stringify(feed.weekChips));
   ok("…named the way the record names them, with no tally",
-    feed.weekChips.every(t => /^\d{4}-W\d{2}$/.test(t)), JSON.stringify(feed.weekChips));
+    feed.weekChips.every(t => /^\d{4}-W\d{2}( : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2})?$/.test(t)),
+    JSON.stringify(feed.weekChips));
+  /* The open one carries the days it covers — and it is the ONLY place the
+     week is said. It used to be on the line above the title, on a tag at the
+     far right and on the chip: three copies of one date. */
+  ok("…and the open week says which days it covers",
+    feed.weekChips.some(t => / : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}$/.test(t)),
+    JSON.stringify(feed.weekChips));
   ok("a day heading is a day", feed.days.every(t => !/\d+$/.test(t.replace(/\)$/, ""))),
     JSON.stringify(feed.days));
   ok("a brand heading is a brand", feed.brandHeads.every(t => !/\d/.test(t)),
     JSON.stringify(feed.brandHeads));
-  /* The line above names the week and the days it covers — 2026-W34 :
-     8/17-8/23 — which is a date, not a tally, and is written plainly rather
-     than in whatever locale the browser happens to be set to. */
-  ok("and the line above names the week and its days",
-    /^\d{4}-W\d{2} : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2}$/.test(feed.kicker.trim()),
-    feed.kicker);
+  /* And the date is said once. There is no line above the title and no tag at
+     the far right — both were repeating the chip. */
+  ok("the week is not repeated above the title", !feed.kicker.trim(), feed.kicker);
+  ok("…nor on a tag beside it", feed.weektags === 0, String(feed.weektags));
 
   const chips = await p.evaluate(() =>
     [...document.querySelectorAll("#scopechips button")].map(b => (b.textContent || "").trim()));
@@ -246,6 +259,51 @@ const items = Array.from({ length: 60 }, (_, n) => ({
   ok("…and the brand column is names only",
     bybrand.column.length > 0 && bybrand.column.every(t => !/\d/.test(t)),
     JSON.stringify(bybrand.column));
+
+  /* ---- 5. each tab keeps its own filters ---------------------------------
+
+     They shared one set, so ticking three brands on New In silently narrowed
+     Clothing too, and that screen looked like the whole catalogue with most
+     of it missing. Two tabs, two questions, two answers. */
+  await p.click('.tab[data-view="new"]');
+  await p.waitForTimeout(900);
+  const picked2 = await p.evaluate(async () => {
+    const box3 = [...document.querySelectorAll('.rail input[data-k="brand"]')][0];
+    if (!box3) return { picked: "", cleared: false };
+    const v = box3.dataset.v;
+    box3.click();
+    await new Promise(r => setTimeout(r, 700));
+    return { picked: v };
+  });
+  ok("a brand can be ticked on New In", !!picked2.picked, JSON.stringify(picked2));
+  await p.click('.tab[data-view="brands"]');
+  await p.waitForTimeout(1000);
+  const bleed = await p.evaluate(() =>
+    [...document.querySelectorAll("#rail input[type=checkbox]")].filter(i => i.checked)
+      .map(i => i.dataset.k + ":" + i.dataset.v));
+  /* Clothing keeps whatever IT was left with (a fabric, from earlier here) —
+     what must not have arrived is New In's brand. */
+  ok("…and Clothing is not filtered by it",
+    !bleed.some(v => v.split(":")[1] === picked2.picked), JSON.stringify(bleed));
+  await p.click('.tab[data-view="new"]');
+  await p.waitForTimeout(1000);
+  const kept = await p.evaluate(() =>
+    [...document.querySelectorAll("#rail input[type=checkbox]")].filter(i => i.checked)
+      .map(i => i.dataset.v));
+  ok("…while New In finds its own pick where it left it",
+    kept.length === 1 && kept[0] === picked2.picked, JSON.stringify(kept));
+
+  /* ---- 6. lists only ------------------------------------------------------
+
+     "All lists" pooled research questions that were never asked together — a
+     week of one list averaged with a week of another — and it was the default,
+     so the pooled screen is the one most people saw. */
+  const scope = await p.evaluate(() =>
+    [...document.querySelectorAll("#scopechips button")].map(b => ({
+      text: (b.textContent || "").trim(), on: b.classList.contains("on") })));
+  ok("the scope rail offers the lists", scope.length === 1, JSON.stringify(scope));
+  ok("…and no All lists", !scope.some(c => /all lists/i.test(c.text)), JSON.stringify(scope));
+  ok("…with one of them open", scope.some(c => c.on), JSON.stringify(scope));
 
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
