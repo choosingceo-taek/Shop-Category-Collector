@@ -305,6 +305,66 @@ const items = Array.from({ length: 60 }, (_, n) => ({
   ok("…and no All lists", !scope.some(c => /all lists/i.test(c.text)), JSON.stringify(scope));
   ok("…with one of them open", scope.some(c => c.on), JSON.stringify(scope));
 
+  /* ---- 7. the week picker, on the header ---------------------------------
+
+     "Which week am I looking at" is a question about the screen, not about one
+     of its tabs, so the weeks sit under the list chips: a scrubber, because a
+     year is fifty-two of them, with ALL as the first stop and the open week
+     named at the end. It is not drawn on the analysis tab — narrowing a trend
+     to one week leaves nothing to compare with, and a control that cannot act
+     is worse than no control. */
+  await p.click('.tab[data-view="new"]');
+  await p.waitForTimeout(900);
+  const bar = await p.evaluate(() => {
+    const b = document.querySelector("#weekbar");
+    if (!b || b.hidden) return { shown: false };
+    const chips = [...b.querySelectorAll("#wkstrip button")].map(x => (x.textContent || "").trim());
+    const head = document.querySelector("header");
+    const tabs = document.querySelector(".tabs");
+    return {
+      shown: true, chips,
+      now: (b.querySelector("#wknow") || {}).textContent || "",
+      arrows: b.querySelectorAll(".wkarrow").length,
+      underHeader: !!(head && head.contains(b)),
+      aboveTabs: !!(tabs && b.getBoundingClientRect().bottom <= tabs.getBoundingClientRect().top + 1),
+      on: [...b.querySelectorAll("#wkstrip button.on")].map(x => (x.textContent || "").trim()),
+    };
+  });
+  ok("the week picker is on screen", bar.shown, JSON.stringify(bar));
+  ok("…on the header, above the tabs", bar.underHeader && bar.aboveTabs, JSON.stringify(bar));
+  const wkChips = bar.chips || [];
+  ok("…with ALL first and then the weeks",
+    wkChips[0] === "ALL" && wkChips.slice(1).every(t => /^W\d{2}$/.test(t)),
+    JSON.stringify(wkChips));
+  ok("…arrows to step through them", bar.arrows === 2, String(bar.arrows));
+  ok("…and the open week named at the end",
+    /^\d{4}-W\d{2}$/.test((bar.now || "").trim()) && (bar.on || []).length === 1,
+    JSON.stringify(bar));
+
+  /* It acts on the browsing tabs — including Clothing, which had no week of
+     its own before. */
+  const acted = await p.evaluate(async () => {
+    const before = document.querySelectorAll("#v-new .grid .c").length;
+    const all = [...document.querySelectorAll("#wkstrip button")].find(b => b.dataset.w === "all");
+    if (!all) return { before, after: -1, now: "(no picker)" };
+    all.click();
+    await new Promise(r => setTimeout(r, 800));
+    return { before, after: document.querySelectorAll("#v-new .grid .c").length,
+      now: (document.querySelector("#wknow") || {}).textContent || "" };
+  });
+  ok("choosing ALL widens the feed to every week",
+    acted.after >= acted.before && /ALL/i.test(acted.now), JSON.stringify(acted));
+
+  await p.click('.tab[data-view="brands"]');
+  await p.waitForTimeout(1000);
+  ok("the picker is on the Clothing tab too",
+    await p.evaluate(() => { const b = document.querySelector("#weekbar"); return !!b && !b.hidden; }));
+
+  await p.click('.tab[data-view="lab"]');
+  await p.waitForTimeout(1000);
+  ok("…and not on the analysis tab, where a single week cannot be compared",
+    await p.evaluate(() => { const b = document.querySelector("#weekbar"); return !b || b.hidden; }));
+
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();

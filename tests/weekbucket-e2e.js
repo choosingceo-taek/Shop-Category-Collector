@@ -81,17 +81,22 @@ const THIS_WEEK = 5;
   await p.click('.tab[data-view="new"]');
   await p.waitForTimeout(1200);
 
+  /* The picker moved to the header (it is a question about the whole screen,
+     not about one tab), so the weeks are counted there. What is left in the
+     feed is one chip naming the open week and the days it covers. */
   const wk = await p.evaluate(() => ({
-    chips: [...document.querySelectorAll(".weekchips button")].map(b => (b.textContent || "").trim()),
+    chips: [...document.querySelectorAll("#wkstrip button")]
+      .map(b => (b.textContent || "").trim()).filter(t => t !== "ALL"),
+    now: (document.querySelector("#wknow") || {}).textContent || "",
     on: (document.querySelector(".weekchips button.on") || {}).textContent || "",
   }));
   /* The open chip also carries the days it covers — and it is the only place
      the week is written; the line above the title and the tag beside it were
      two more copies of the same date. */
   ok("the weeks are named the way the record names them",
-    wk.chips.length === 2 &&
-    wk.chips.every(t => /^\d{4}-W\d{2}( : \d{1,2}\/\d{1,2}-\d{1,2}\/\d{1,2})?$/.test(t)),
-    JSON.stringify(wk.chips));
+    wk.chips.length === 2 && wk.chips.every(t => /^W\d{2}$/.test(t)) &&
+    /^\d{4}-W\d{2}$/.test(wk.now.trim()),
+    JSON.stringify(wk.chips) + " · " + wk.now);
   ok("…and there is one chip per week, not one per day",
     wk.chips.length === 2, JSON.stringify(wk.chips));
 
@@ -127,7 +132,8 @@ const THIS_WEEK = 5;
   await p.waitForTimeout(1200);
   const again = await p.evaluate(() => ({
     cards: document.querySelectorAll("#v-new .grid .c").length,
-    chips: [...document.querySelectorAll(".weekchips button")].map(b => (b.textContent || "").trim()),
+    chips: [...document.querySelectorAll("#wkstrip button")]
+      .map(b => (b.textContent || "").trim()).filter(t => t !== "ALL"),
   }));
   ok("a second pass over the same page does not duplicate anything",
     again.cards === THIS_WEEK, `${again.cards} cards, expected ${THIS_WEEK}`);

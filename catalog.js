@@ -135,7 +135,7 @@
       scopeId = b.dataset.id;
       try { chrome.storage.local.set({ [SCOPE_KEY]: scopeId }); } catch (e) {}
       applyScope();
-      curWeekStart = null; curBrand = "";
+      curWeekStart = undefined; curBrand = "";
       renderScope(); fillFilters(); redrawAll();
       // this list's weeks are its own record — write them the first time it is opened
       rollup().then(redrawAll);
@@ -156,6 +156,7 @@
     if (!$("#v-lab").hidden) renderLab();
     if (!$("#v-new").hidden) renderNew();
     if (!$("#v-brands").hidden) renderBrands();
+    renderWeekBar();
     paintStats();
     paintDataChip();
     paintCheck();
@@ -1017,6 +1018,7 @@
     if (view === "lab") renderLab();
     if (view === "new") renderNew();
     if (view === "brands") renderBrands();
+    renderWeekBar();               // shown on the browsing tabs, not the analysis
   }
 
   // LAB — change over time, computed from what we collected (no external service)
@@ -1182,7 +1184,9 @@
      honest for every shop; a shop-stated launch date exists only on Shopify
      and is shown on the card when we have it. Clips are excluded, as in LAB:
      hand-picked items are not arrivals. */
-  let curWeekStart = null, curBrand = "";
+  /* undefined = never chosen (open on the newest week) · null = ALL WEEKS ·
+     a number = that week. */
+  let curWeekStart, curBrand = "";
 
   const tierList = () => [...new Set(items.map(i => i.tier).filter(Boolean))].sort();
   const inTier = i => !curTier || i.tier === curTier;
@@ -1526,12 +1530,71 @@
     blockedPaint = setTimeout(paintCheck, 600);
   }
 
+  /* The weeks, on the header — one control for "which week am I looking at",
+     which is a question about the screen and not about one tab of it.
+
+     A scrubber rather than a wrapping row of chips: there is one per week and
+     a year is fifty-two of them. It scrolls, the arrows step it, the open week
+     is named at the end, and ALL is the first stop for the times the question
+     is not about a week at all. */
+  const WEEK_ALL = "all";
+  function renderWeekBar() {
+    const bar = $("#weekbar"), strip = $("#wkstrip");
+    if (!bar || !strip) return;
+    const weeks = weekBuckets();                       // oldest first, as time runs
+    bar.hidden = !weeks.length || $("#v-lab").hidden === false;
+    if (bar.hidden) return;
+    if (curWeekStart === undefined ||
+        (curWeekStart !== null && !weeks.some(w => w.start === curWeekStart))) {
+      curWeekStart = weeks[weeks.length - 1].start;      // the newest, to open on
+    }
+    const W = window.TrendCalc;
+    strip.innerHTML =
+      `<button data-w="${WEEK_ALL}" class="${curWeekStart === null ? "on" : ""}"
+        title="every week collected">ALL</button>` +
+      weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}"
+        title="${esc(W.weekId(w.start))}">${esc(W.weekId(w.start).replace(/^\d{4}-/, ""))}</button>`).join("");
+    $("#wknow").textContent = curWeekStart === null ? "ALL WEEKS" : W.weekId(curWeekStart);
+    const on = strip.querySelector("button.on");
+    if (on) on.scrollIntoView({ block: "nearest", inline: "center" });
+  }
+  function pickWeek(v) {
+    curWeekStart = v === WEEK_ALL ? null : +v;
+    renderWeekBar();
+    if (!$("#v-new").hidden) renderNew();
+    if (!$("#v-brands").hidden) renderBrands();
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("#wkstrip button");
+    if (b) pickWeek(b.dataset.w);
+  });
+  const stepWeek = dir => {
+    const weeks = weekBuckets();
+    if (!weeks.length) return;
+    const at = curWeekStart === null ? weeks.length : weeks.findIndex(w => w.start === curWeekStart);
+    const next = weeks[Math.max(0, Math.min(weeks.length - 1, at + dir))];
+    if (next) pickWeek(String(next.start));
+  };
+  $("#wkprev") && $("#wkprev").addEventListener("click", () => stepWeek(-1));
+  $("#wknext") && $("#wknext").addEventListener("click", () => stepWeek(1));
+  // the rows the browsing tabs may show, given the week on the header
+  const inWeek = i => {
+    if (curWeekStart == null) return true;               // ALL, or nothing chosen yet
+    const w = weekBuckets().find(x => x.start === curWeekStart);
+    return !!w && i.addedAt >= w.start && i.addedAt < w.end;
+  };
+
   function renderNew() {
     const el = $("#v-new");
     const weeks = weekBuckets().slice().reverse();          // newest first
     if (!weeks.length) { el.innerHTML = EMPTY_FEED; return; }
-    if (!weeks.some(w => w.start === curWeekStart)) curWeekStart = weeks[0].start;
-    const wk = weeks.find(w => w.start === curWeekStart);
+    if (curWeekStart === undefined ||
+        (curWeekStart !== null && !weeks.some(w => w.start === curWeekStart))) curWeekStart = weeks[0].start;
+    /* ALL is every week in one pile — the same grouping, a wider window. */
+    const wk = curWeekStart === null
+      ? { start: weeks[weeks.length - 1].start, end: weeks[0].end,
+          items: [].concat(...weeks.map(w => w.items)), count: weeks.reduce((n, w) => n + w.count, 0) }
+      : weeks.find(w => w.start === curWeekStart);
 
     /* The weeks, and nothing else — no tally on the chip. Counting what came
        in is the LAB's job and it does it properly, by brand; here the figure
@@ -1540,9 +1603,12 @@
       const f = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
       return `${f(a)}-${f(b - 1)}`;
     };
-    const chips = weeks.map(w => `<button data-w="${w.start}" class="${w.start === curWeekStart ? "on" : ""}">
-      <b>${esc(window.TrendCalc.weekId(w.start))}</b>${
-        w.start === curWeekStart ? `<i class="wkspan"> : ${esc(span(w.start, w.end))}</i>` : ""}</button>`).join("");
+    /* One chip, and it is the open week — the picker itself is on the header
+       now, where it belongs to the whole screen. This says which week the pile
+       below is, and which days that week covers. */
+    const chips = `<button data-w="${wk.start}" class="on"><b>${
+      curWeekStart === null ? "ALL WEEKS" : esc(window.TrendCalc.weekId(wk.start))
+      }</b><i class="wkspan"> : ${esc(span(wk.start, wk.end))}</i></button>`;
 
     // search first, so the brand chips' counts describe what is on screen
     const q = currentQ();
@@ -1608,8 +1674,13 @@
 
   function renderBrands() {
     const el = $("#v-brands");
-    const all = scanned();
-    if (!all.length) { el.innerHTML = EMPTY_FEED; return; }
+    // the week on the header applies here too — "what did this shop put out in
+    // W34" is the same question this tab answers, one week narrower
+    const all = scanned().filter(inWeek);
+    if (!all.length) {
+      el.innerHTML = `<div class="none">Nothing was collected in this week. Pick another on the strip above, or ALL.</div>`;
+      return;
+    }
 
     /* The Brand group is left off this tab's rail: the brand column beside the
        results IS the brand picker, and two of them would disagree. Everything

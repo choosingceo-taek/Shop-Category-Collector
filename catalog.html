@@ -287,6 +287,24 @@
   .edhead h2 { font-size:30px; font-weight:700; letter-spacing:-.03em; margin:0; line-height:1.05; }
   .weektag { font-size:11px; letter-spacing:.12em; border:1px solid var(--ink);
     padding:4px 9px; white-space:nowrap; align-self:center; }
+  /* the week scrubber on the header — a rail of weeks, arrows, and the open
+     one named at the end */
+  .weekbar { display:flex; align-items:center; gap:8px; padding:7px 0 9px;
+    border-top:1px solid var(--line); }
+  .weekbar .wkstrip { flex:1; min-width:0; display:flex; gap:4px; overflow-x:auto;
+    scrollbar-width:none; }
+  .weekbar .wkstrip::-webkit-scrollbar { display:none; }
+  .weekbar .wkstrip button { flex:none; border:1px solid var(--line); background:var(--card);
+    border-radius:var(--r-s); padding:5px 9px; font:600 10.5px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.06em; color:var(--muted); white-space:nowrap; }
+  .weekbar .wkstrip button:hover { color:var(--ink); border-color:var(--line2); }
+  .weekbar .wkstrip button.on { background:var(--ink); border-color:var(--ink); color:var(--bg); }
+  .weekbar .wkarrow { flex:none; border:1px solid var(--line); background:var(--card);
+    border-radius:var(--r-s); width:22px; height:24px; padding:0; color:var(--ink2);
+    font-size:12px; line-height:1; }
+  .weekbar .wkarrow:hover { border-color:var(--line2); color:var(--ink); }
+  .weekbar .wknow { flex:none; font:650 11px/1 Helvetica,Arial,sans-serif;
+    letter-spacing:.08em; color:var(--ink); }
   .weekchips { display:flex; gap:6px; flex-wrap:wrap; margin:14px 0 20px;
     border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:10px 0; }
   .weekchips button { border:0; background:none; padding:5px 10px; font-size:11.5px;
@@ -502,6 +520,25 @@
            is how trust goes, so that one is always said — and it is silent on
            every scan that merged nothing, which is nearly all of them. -->
       <span class="stats" id="stats"></span>
+    </div>
+    <!-- The weeks, on the header rather than inside one tab.
+
+         A designer works a week at a time — the Monday scan, the Wednesday
+         one — and "which week am I looking at" is a question about the whole
+         screen, not about one of its tabs. It is a scrubber rather than a
+         wrapping row of chips because there is one per week and a year is
+         fifty-two: it scrolls, the arrows step it, and the open week is
+         written at the end where it stays put.
+
+         It is shown on the browsing tabs, which is where a week is a
+         selection. On the analysis tab it is not drawn at all — narrowing a
+         trend to a single week would leave nothing to compare, and a control
+         that cannot act is worse than no control. -->
+    <div class="weekbar" id="weekbar" hidden>
+      <button class="wkarrow" id="wkprev" title="Earlier weeks" aria-label="Earlier weeks">‹</button>
+      <div class="wkstrip" id="wkstrip"></div>
+      <button class="wkarrow" id="wknext" title="Later weeks" aria-label="Later weeks">›</button>
+      <span class="wknow" id="wknow"></span>
     </div>
     <div class="filters">
       <!-- Grouped by what each control does, not by what fits on the line:

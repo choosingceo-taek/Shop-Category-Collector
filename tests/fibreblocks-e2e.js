@@ -104,8 +104,12 @@ for (let w = 0; w < WEEKS; w++) {
   const secs = await p.evaluate(() =>
     [...document.querySelectorAll("#v-lab .sec h3")].map(h => h.firstChild.textContent.trim()));
   const has = t => secs.some(s => s.toLowerCase().startsWith(t));
-  ok("the four axes are still there", has("fabric") && has("colour") && has("fit") && has("detail"),
+  /* Three axes now: DETAIL came off the page — it is read from the words left
+     over in a product name and the shop's copy, and its top ten was that
+     copy's furniture (COLOR, SHOW, ADD, AVAILABLE, PRESS). */
+  ok("the axes are still there", has("fabric") && has("colour") && has("fit"),
     secs.join(" | "));
+  ok("…and detail is not one of them", !has("detail"), secs.join(" | "));
   ok("what to watch now is back", has("fabric to watch"), secs.join(" | "));
   ok("the frequency ranking is back", has("most seen"), secs.join(" | "));
   ok("the volume bars are back", has("new arrivals per"), secs.join(" | "));

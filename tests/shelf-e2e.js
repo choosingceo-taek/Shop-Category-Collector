@@ -206,6 +206,24 @@ const items = Array.from({ length: 32 }, (_, n) => {
   ok("choosing a colour narrows the products",
     picked.after > 0 && picked.after < picked.before, JSON.stringify(picked));
 
+  /* The counts of the collection are off this page — how many rows there are,
+     how many weeks have any, how many arrived last, and the week table that
+     repeated the axes in percentages. What is left answers what the season is
+     made of. */
+  const home = await p.evaluate(() => {
+    const el = document.querySelector("#v-lab");
+    return { tiles: el.querySelectorAll(".labhead .tile").length,
+      heads: [...el.querySelectorAll("h3")].map(h => String((h.firstChild || {}).textContent || h.textContent).trim()),
+      text: (el.innerText || "").replace(/\s+/g, " ") };
+  });
+  ok("no count tiles on the analysis page", home.tiles === 0, String(home.tiles));
+  ok("…nor the week-by-week record table",
+    !home.heads.some(h => /record by/i.test(h)), home.heads.join(" | "));
+  ok("…and no DETAIL axis", !home.heads.some(h => /^detail$/i.test(h)), home.heads.join(" | "));
+  ok("…while FABRIC and COLOUR are still there",
+    home.heads.some(h => /^fabric$/i.test(h)) && home.heads.some(h => /^colour$/i.test(h)),
+    home.heads.join(" | "));
+
   ok("no page errors", errs.length === 0, errs.join(" | "));
   console.log(`\n${pass} passed, ${fail} failed`);
   await ctx.close();

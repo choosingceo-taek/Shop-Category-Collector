@@ -542,7 +542,14 @@
       ["fabric", "Fabric"],
       ["color", "Colour"],
       ["fit", "Fit"],
-      ["keyword", "Detail"],
+      /* DETAIL is off this page (the designer asked). It is read from the
+         words left over in a product name and the shop's own copy, and what
+         reached the top ten was the copy's furniture — COLOR, COLORS, SHOW,
+         ADD, AVAILABLE, PRESS, QUICK, ENTER, SHOP. A stoplist can keep taking
+         words out of that axis one at a time, but a ranking whose top row is
+         "COLOR 76 items" is not reporting a season. The reading still exists
+         (`keyword` in trend.js, still under test) and the words themselves are
+         in the product names, which is where they can be searched. */
     ];
     const blendMap = T.blends ? T.blends(items, { dim: "fabric" }) : {};
 
@@ -655,25 +662,18 @@
       ${AXES.map(a => axisBlock(a[0], a[1])).join("")}
       ${fibBlocks}
 
-      <div class="labhead">
-        <div class="tiles">
-          <div class="tile"><div class="tl">Products</div><div class="tv">${o.total.toLocaleString()}</div>
-            <div class="ts">${o.archived ? `+ ${o.archived.toLocaleString()} in weekly records` : `${o.brands} brands · ${o.sites} sites`}</div></div>
-          <div class="tile"><div class="tl">${unit}s recorded</div><div class="tv">${o.periodsWithData}</div>
-            <div class="ts">of ${o.periods} in the last ${months} months</div></div>
-          <div class="tile"><div class="tl">New, latest ${unit}</div>
-            <div class="tv">${o.latest ? o.latest.count : "—"}</div>
-            <div class="ts">${o.latest ? esc(o.latest.label) : ""}${
-              o.deltaVsPrev != null ? ` · vs previous ${unit} ${o.deltaVsPrev >= 0 ? "+" : ""}${o.deltaVsPrev}` : ""}</div></div>
-        </div>
-      </div>
-
-      <section class="sec"><h3>Record by ${unit} <span class="sub">at a glance</span></h3>
-      ${ledgerTable(led)}</section>
-
+      <!-- The three tiles (Products · weeks recorded · New, latest week) and
+           the Record-by-week table are off this page, as asked. Every one of
+           them was a count of the collection rather than a fact about the
+           season: how many rows there are, how many weeks have any, how many
+           arrived last — and the table repeated the axes underneath it in
+           percentages. What answers "what is the season made of" is above.
+           The figures are all still computed (overview, ledger in trend.js,
+           both under test) and the exported dashboard still draws its own. -->
       <p class="foot">
-        Each axis counts BRANDS, not products: a shop that puts out sixty of something counts once,
-        so the figure answers whether the market moved rather than whether one label was busy.
+        Each card is ranked by how many collected items carry it, and the brand figure behind that
+        (on hover) counts SHOPS, not products: one that puts out sixty of something counts once,
+        so it answers whether the market moved rather than whether one label was busy.
         The change beside it is against the previous ${unit} that had products, so skipping a
         ${unit} never reads as everything disappearing. Every figure is computed directly from what
         was collected; nothing is estimated or fetched from an outside service.${
