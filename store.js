@@ -365,6 +365,30 @@
     });
     return rows;
   });
+  /* A handful of products by key, rather than the whole table.
+
+     This is what a re-scan asks before it opens sixty product pages: which of
+     these have we already read? Point lookups, so a catalog of thirty thousand
+     costs the same as one of thirty — reading everything to answer a question
+     about sixty rows would give back the time the skip is meant to save. */
+  async function getMany(keys) {
+    const list = (keys || []).filter(Boolean);
+    if (!list.length) return {};
+    const db = await open();
+    return new Promise((res, rej) => {
+      const t = db.transaction("products", "readonly");
+      const P = t.objectStore("products");
+      const out = {};
+      list.forEach(k => {
+        const r = P.get(k);
+        r.onsuccess = () => { if (r.result) out[k] = r.result; };
+      });
+      t.oncomplete = () => res(out);
+      t.onerror = () => rej(t.error);
+      t.onabort = () => rej(t.error);
+    });
+  }
+
   const allScans = () => all("scans");
   const allProjects = () => all("projects");
   const allSnapshots = () => all("snapshots").then(r => r.sort((a, b) => a.start - b.start));
@@ -613,7 +637,7 @@
     return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   }
 
-  const API = { open, putScan, allProducts, allScans, allProjects, allSnapshots,
+  const API = { open, putScan, allProducts, getMany, allScans, allProjects, allSnapshots,
     allTrends, putTrends, clearTrends,
     appendRunRows, getRunRows, clearRunRows,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,

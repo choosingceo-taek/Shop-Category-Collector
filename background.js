@@ -736,6 +736,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     refreshUpdate(!!msg.force).then(send).catch(() => send(null));
     return true;
   }
+  /* Which of these products has this browser already read?
+
+     The page cannot reach the extension's database, so the run asks here. It
+     is a point lookup per key, not a table scan — the answer has to be cheaper
+     than the sixty product pages it is deciding whether to skip. */
+  if (msg && msg.type === "catalogKnown" && Array.isArray(msg.urls)) {
+    (async () => {
+      try {
+        const S = self.CatalogStore;
+        const keys = msg.urls.map(u => S.productKey({ product_url: u }));
+        const found = await S.getMany(keys);
+        const rows = {};
+        msg.urls.forEach((u, i) => { const r = found[keys[i]]; if (r) rows[u] = r; });
+        send({ ok: true, rows });
+      } catch (e) { send({ ok: false }); }
+    })();
+    return true;
+  }
   // A finished scan -> accumulate into the catalog.
   if (msg && msg.type === "catalogPut" && msg.scan) {
     (async () => {

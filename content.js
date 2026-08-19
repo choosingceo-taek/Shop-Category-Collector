@@ -1525,6 +1525,40 @@ async function runStep(j) {
       } else { it.fabric_composition = d || ""; }
     };
 
+    /* A product this browser has already read does not need its page opened
+       again.
+
+       The detail step is 7.8 of the 10.7 seconds a shop takes (measured), and
+       almost all of it is waiting for product pages. On a weekly re-scan most
+       of what a New In page shows was there last week, and a composition does
+       not change for a given product URL — so the fetch is pure repetition.
+
+       What is NOT reused is the price. Today's price comes off the tile on
+       every scan, and markdown pressure is one of the things the LAB reads;
+       carrying last week's forward would make the season look flat.
+
+       And it only holds for a while. Beyond a month the page is read again, so
+       a shop's edits and — more to the point — every improvement to our own
+       parsers reach rows collected before them. Anything without a
+       composition is always re-read: that is the case the fetch exists for. */
+    const FRESH_MS = 30 * 24 * 3600e3;
+    let known = {};
+    try {
+      const urls = j.items.filter(it => !it._specDone)
+        .map(it => it.product_url).filter(Boolean);
+      if (urls.length) {
+        const r = await new Promise(res => {
+          try {
+            chrome.runtime.sendMessage({ type: "catalogKnown", urls }, x => {
+              void chrome.runtime.lastError; res(x);
+            });
+          } catch (e) { res(null); }
+        });
+        if (r && r.ok) known = r.rows || {};
+      }
+    } catch (e) {}
+    let reused = 0;
+
     let done = j.specIdx || 0;
     for (let i = j.specIdx || 0; i < total; i += LANES) {
       if (!alive()) return;   // extension reloaded mid-run -> stop quietly
@@ -1533,6 +1567,18 @@ async function runStep(j) {
       const slice = j.items.slice(i, i + LANES);
       await Promise.all(slice.map(async it => {
         if (it._specDone) return;
+        const seen = known[it.product_url];
+        if (seen && seen.fabric_composition &&
+            Date.now() - (seen.updatedAt || 0) < FRESH_MS) {
+          it.fabric_composition = seen.fabric_composition;
+          if (!it.colorways && seen.colorways) it.colorways = seen.colorways;
+          if (!it.color_count && seen.color_count) it.color_count = seen.color_count;
+          if (!it.design && seen.design) it.design = seen.design;
+          if (!it.size_range && seen.size_range) it.size_range = seen.size_range;
+          if (!it.image_url && seen.image_url) it.image_url = seen.image_url;
+          it._specDone = true; reused++;
+          return;                                     // the page is not opened
+        }
         try {
           applyDetail(it, await readDetail(a, it.product_url, j.repair,
             { image: !!String(it.image_url || "").trim() }));
@@ -1542,7 +1588,8 @@ async function runStep(j) {
       }));
       done = Math.min(total, i + LANES);
       j.specIdx = done;
-      await report(`Collecting details… ${done}/${total}`);
+      await report(`Collecting details… ${done}/${total}` +
+        (reused ? ` · ${reused} already known` : ""));
       await s(j);                                   // persist each batch for resume
     }
     j.specIdx = total; j.phase = "build"; await s(j); step(); return;
