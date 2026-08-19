@@ -1,0 +1,160 @@
+/* The two shelves, on screen.
+
+   The unit test fixes what a colourway and a composition are read as. This
+   one checks that the LAB actually shows it: the COLOUR axis names colours
+   rather than sales names, the fibre blocks name fibres rather than four
+   spellings of one, and the filter rail offers twelve colours with a swatch
+   beside each — the way a shop's own colour filter is drawn, which is where
+   the list came from.
+
+   Run: NODE_PATH=/opt/node22/lib/node_modules xvfb-run -a node shelf-e2e.js */
+"use strict";
+const { chromium } = require("playwright");
+const path = require("path");
+const EXT = path.resolve(__dirname, "..");
+
+let pass = 0, fail = 0;
+const ok = (n, c, x) => { if (c) { pass++; console.log("  ok  " + n); } else { fail++; console.log("FAIL  " + n + (x ? "\n      " + x : "")); } };
+
+const DAY = 86400000;
+/* Colourways as shops actually write them, and compositions with the four
+   spellings of one fibre that used to make four rows. */
+const SHAPES = [
+  ["ALO", "Deep Sea Navy", "92% Recycled Polyester, 8% Spandex"],
+  ["GYMSHARK", "Off-White", "95% Organic Cotton, 5% Elastane"],
+  ["VUORI", "Heather Grey Marl", "100% Polyester"],
+  ["COS", "Ecru", "100% Linen"],
+  ["ATHLETA", "Washed Olive Green", "78% Nylon, 22% LYCRA®"],
+  ["VARLEY", "Blush", "100% Cotton"],
+  ["TALA", "Burgundy", "70% Modal, 30% Cotton"],
+  ["EDIKTED", "Camo Print", "100% Viscose"],
+];
+const items = Array.from({ length: 32 }, (_, n) => {
+  const s = SHAPES[n % SHAPES.length];
+  return {
+    url: `https://example.com/p/${n}`,
+    brand: s[0], category: "New In", name: "Piece " + n,
+    price: "$" + (40 + (n % 9) * 10), image_url: "",
+    colorways: s[1], fabric_composition: s[2],
+    addedAt: Date.now() - (n % 3) * DAY,
+    listIds: ["l0"],
+  };
+});
+
+(async () => {
+  const ctx = await chromium.launchPersistentContext("/tmp/pw-shelf", {
+    executablePath: "/opt/pw-browsers/chromium", headless: false,
+    args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--no-sandbox"] });
+  const sw = ctx.serviceWorkers()[0] || await ctx.waitForEvent("serviceworker");
+  const id = sw.url().split("/")[2];
+  const p = await ctx.newPage();
+  await p.setViewportSize({ width: 1280, height: 900 });
+  const errs = []; p.on("pageerror", e => errs.push(e.message));
+
+  await p.goto(`chrome-extension://${id}/catalog.html`);
+  await p.waitForTimeout(1200);
+  await p.evaluate(() => new Promise(r => chrome.storage.local.set({
+    wpb_lists: [{ id: "l0", name: "FABRIC", createdAt: 1, entries: [] }] }, r)));
+  await p.evaluate(rows => CatalogStore.putScan({ meta: { scanId: "shelf" }, items: rows }), items);
+  await p.reload();
+  await p.waitForTimeout(2800);
+
+  const COLOURS = ["Beige", "Black", "Blue", "Brown", "Green", "Grey", "Orange",
+    "Pink", "Purple", "Red", "White", "Yellow"];
+
+  // ---- the COLOUR axis --------------------------------------------------
+  const axis = await p.evaluate(() => {
+    const sec = [...document.querySelectorAll("section.sec.ax")]
+      .find(s => /Colour/i.test((s.querySelector("h3") || {}).textContent || ""));
+    return sec ? [...sec.querySelectorAll(".axk")].map(e => e.textContent.trim()) : null;
+  });
+  ok("the LAB has a COLOUR axis", Array.isArray(axis) && axis.length > 0, JSON.stringify(axis));
+  ok("…and every card on it is a shelf colour",
+    axis && axis.every(k => COLOURS.includes(k)), JSON.stringify(axis));
+  ok("…so a sales name is not a colour card",
+    axis && !axis.some(k => /navy|marl|heather|ecru|blush|olive/i.test(k)), JSON.stringify(axis));
+  ok("…and the colourways really did fold together",
+    axis && axis.includes("Blue") && axis.includes("Grey") && axis.includes("White"),
+    JSON.stringify(axis));
+
+  const axisInk = await p.evaluate(() => {
+    const sec = [...document.querySelectorAll("section.sec.ax")]
+      .find(s => /Colour/i.test((s.querySelector("h3") || {}).textContent || ""));
+    if (!sec) return null;
+    return [...sec.querySelectorAll(".axk")].map(k => {
+      const sw = k.querySelector(".sw");
+      return sw ? getComputedStyle(sw).backgroundColor : "";
+    });
+  });
+  ok("…each card shows the colour it is about",
+    axisInk && axisInk.length > 0 && axisInk.every(c => /^rgb/.test(c)),
+    JSON.stringify(axisInk));
+
+  // ---- the fibre blocks --------------------------------------------------
+  const fibres = await p.evaluate(() => {
+    const sec = [...document.querySelectorAll("section.sec")]
+      .find(s => /Most seen fabric/i.test((s.querySelector("h3") || {}).textContent || ""));
+    return sec ? [...sec.querySelectorAll(".rk, .rank-k, li, tr")]
+      .map(e => e.textContent.trim()).filter(Boolean) : null;
+  });
+  const fibreText = (fibres || []).join(" | ");
+  ok("the fibre ranking names the shelf fibre", /Polyester/.test(fibreText), fibreText);
+  ok("…not the shop's four spellings of it",
+    !/Recycled Polyester|Organic Cotton|LYCRA/i.test(fibreText), fibreText);
+  ok("…and spandex and elastane are one row",
+    !/\bSpandex\b(?!\/)/i.test(fibreText.replace(/Elastane\/Spandex/g, "")), fibreText);
+
+  // ---- the filter rail, on the browsing tabs ------------------------------
+  await p.click('.tab[data-view="new"]');
+  await p.waitForTimeout(900);
+  const rail = await p.evaluate(() => {
+    const g = [...document.querySelectorAll(".rail .rgrp")]
+      .find(d => /Colour/i.test((d.querySelector("summary") || {}).textContent || ""));
+    if (!g) return null;
+    g.open = true;
+    const more = g.querySelector(".rmore");
+    if (more) more.click();
+    return null;
+  });
+  void rail;
+  await p.waitForTimeout(400);
+  const railVals = await p.evaluate(() => {
+    const g = [...document.querySelectorAll(".rail .rgrp")]
+      .find(d => /Colour/i.test((d.querySelector("summary") || {}).textContent || ""));
+    if (!g) return null;
+    return [...g.querySelectorAll("label")].map(l => ({
+      v: (l.querySelector(".rv") || {}).textContent || "",
+      swatch: !!l.querySelector(".sw"),
+      ink: l.querySelector(".sw") ? getComputedStyle(l.querySelector(".sw")).backgroundColor : "",
+    }));
+  });
+  ok("the rail has a colour group", Array.isArray(railVals) && railVals.length > 0,
+    JSON.stringify(railVals));
+  ok("…listing shelf colours only",
+    railVals && railVals.every(r => COLOURS.includes(r.v.trim())), JSON.stringify(railVals));
+  ok("…each drawn as a colour, the way a shop's filter is",
+    railVals && railVals.every(r => r.swatch), JSON.stringify(railVals));
+  ok("…with a real ink behind it",
+    railVals && railVals.every(r => /^rgb/.test(r.ink) && r.ink !== "rgba(0, 0, 0, 0)"),
+    JSON.stringify(railVals));
+
+  /* Picking one narrows the wall — a filter that lists a value has to be able
+     to act on it, or the rail is a legend. */
+  const picked = await p.evaluate(async () => {
+    const shown = () => document.querySelectorAll("#v-new .grid .c").length;
+    const before = shown();
+    const box = [...document.querySelectorAll('.rail input[data-k="color"]')]
+      .find(i => i.dataset.v === "Blue");
+    if (!box) return { before, after: -1, value: "(no Blue)" };
+    box.click();
+    await new Promise(r => setTimeout(r, 900));
+    return { before, after: shown(), value: "Blue" };
+  });
+  ok("choosing a colour narrows the products",
+    picked.after > 0 && picked.after < picked.before, JSON.stringify(picked));
+
+  ok("no page errors", errs.length === 0, errs.join(" | "));
+  console.log(`\n${pass} passed, ${fail} failed`);
+  await ctx.close();
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.log("HARNESS ERROR: " + (e && e.message || e)); process.exit(1); });

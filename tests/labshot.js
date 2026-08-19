@@ -10,7 +10,9 @@ const EXT = require("path").resolve(__dirname, "..");
 
 const WEEKS = 6;
 const BRANDS = ["ATHLETA", "GYMSHARK", "VUORI", "ALO YOGA"];
-const FABRIC = ["95% Cotton 5% Elastane", "100% Linen", "88% Polyester 12% Spandex", "100% Cotton"];
+const FABRIC = ["95% Organic Cotton 5% Elastane", "100% Linen", "88% Recycled Polyester 12% Spandex", "100% Cotton"];
+const COLOURWAY = ["Deep Sea Navy", "Off-White", "Heather Grey Marl", "Ecru",
+  "Washed Olive Green", "Blush", "Burgundy", "Black"];
 const NAMES = ["Satin Slip Dress", "Linen Poplin Shirt", "Ribbed Tank", "Oversized Hoodie",
   "Ruched Midi Skirt", "Cropped Jersey Tee"];
 
@@ -23,6 +25,7 @@ for (let w = 0; w < WEEKS; w++) {
       url: `https://example.com/p/${n}`,
       brand: BRANDS[n % BRANDS.length],
       category: "New In",
+      colorways: COLOURWAY[n % COLOURWAY.length],
       name: NAMES[n % NAMES.length] + " " + n,
       price: "$" + (40 + (n % 9) * 10),
       image_url: "",

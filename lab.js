@@ -489,6 +489,9 @@
        FABRIC carries the blend under the name (the shops' own percentages,
        modal not averaged), so the cloth and what it is made of are read in one
        line. */
+    /* A colour card shows its colour. The names are the shelf's, so the ink is
+       a label rather than a measurement — nothing is read off it. */
+    const INK = (window.ReportCalc && window.ReportCalc.COLOUR_INK) || {};
     const AXES = [
       ["fabricfam", "Fabric"],
       ["color", "Colour"],
@@ -534,7 +537,9 @@
       const a = T.axisRows(items, Object.assign({ dim: d, top: 9 }, base));
       const roster = a.roster;
       const body = a.rows.length ? a.rows.map(r => `<article class="axc">
-          <div class="axch"><span class="axk">${esc(r.key)}</span>
+          <div class="axch"><span class="axk">${
+            d === "color" && INK[r.key] ? `<i class="sw" style="background:${INK[r.key]}"></i>` : ""
+            }${esc(r.key)}</span>
             <span class="axd ${r.delta > 0 ? "up" : r.delta < 0 ? "down" : ""}"
               title="${r.delta == null ? "no earlier " + unit + " to compare with"
                 : "against the " + a.shared + " shops that produced in both " + unit + "s"}">${

@@ -25,7 +25,7 @@
 
 ### 설치 직후 한 번만 해두면 좋은 것
 
-Market Lens를 열고 **오른쪽 위 버전 번호**(`v3.37.0`)를 누르면 상자가 열립니다.
+Market Lens를 열고 **오른쪽 위 버전 번호**(`v3.38.0`)를 누르면 상자가 열립니다.
 
 - **📂 Choose my Market Lens folder** → 2번의 그 폴더를 지정
   → 이걸 해두면 **새 버전이 나올 때 패널만 열어도 알아서 설치**됩니다.
@@ -66,6 +66,14 @@ Market Lens를 열고 **오른쪽 위 버전 번호**(`v3.37.0`)를 누르면 �
 패널 위쪽 검은 **LAB** 띠를 누르면 새 탭에서 열립니다.
 
 - **LAB** — 주차별로 원단 · 색상 · 핏 · 디테일이 어떻게 움직였는지
+  - **색상은 12개**(Beige · Black · Blue · Brown · Green · Grey · Orange · Pink ·
+    Purple · Red · White · Yellow)로 묶어서 봅니다. 몰이 `Deep Sea Navy`라고 써 둔
+    것도 **Blue 한 칸**으로 갑니다 — 안 그러면 한 번씩만 나오는 이름이 200개가 됩니다.
+  - **원단은 15개**(Polyester · Cotton · Elastane/Spandex · Nylon · Viscose ·
+    Polyamide · Silk · Linen · Acrylic · Rayon · Wool · Tencel · Polyurethane ·
+    Cupro · Acetate). `Organic Cotton`도 `Recycled Cotton`도 **Cotton 한 줄**입니다.
+    이 15개에 없는 섬유(모달·캐시미어 등)는 **엑셀과 상품 목록에는 그대로 있고**
+    이 축에만 안 나옵니다.
 - **New In / By Brand / Products** — 모은 상품을 브라우징
 - 오른쪽 위 **Data** — 백업 / 다른 사람 백업 합치기 / 공간 정리
 - **HTML로 내보내기** — 인터넷 없이도 열리는 대시보드 한 장(사진까지 파일 안에 들어갑니다)
@@ -87,7 +95,7 @@ Market Lens를 열고 **오른쪽 위 버전 번호**(`v3.37.0`)를 누르면 �
 > 한 번도 지정하지 않으신 것입니다. 그때만 폴더를 찾아 주시면 됩니다.
 
 - **스캔 중에는 절대 재시작하지 않습니다.**
-- 버전 칩이 `v3.37.0 ?`(점선)이면 GitHub에 못 닿은 것입니다 — 새 버전이 있는지
+- 버전 칩이 `v3.38.0 ?`(점선)이면 GitHub에 못 닿은 것입니다 — 새 버전이 있는지
   모른다는 뜻이지, 최신이라는 뜻이 아닙니다.
 
 ---

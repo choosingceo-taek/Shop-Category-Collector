@@ -31,6 +31,46 @@
 
 ## 현재 상태 요약 (v1.7.x)
 
+- **몰의 판매용 이름을 그대로 세고 있었다 — 색상 축에 색이 없었다**(v3.38.0, 사용자가
+  몰의 컬러 필터 스크린샷과 섬유 15개 목록을 주며 "이 키워드로 필터링하자").
+  컬러웨이는 **파는 이름**이다(`Deep Sea Navy` · `Off-White` · `Heather Grey Marl`),
+  조성은 **쓰는 이름**이다(`Recycled Polyester` · `Organic Cotton` · `BCI Cotton`).
+  그대로 세면 색상 축은 **한 번씩만 보이는 마케팅 문구 200개**가 되고, 한 섬유가
+  **네 줄로 쪼개져 넷 다 작아 보인다.** 실측(상품 4개): **색 6줄 · 섬유 6줄** →
+  수정 후 **4줄 · 3줄**.
+  - → **선반(shelf) 두 개**. 색 12개(사용자가 준 몰 필터 그대로: Beige · Black ·
+    Blue · Brown · Green · Grey · Orange · Pink · Purple · Red · White · Yellow)와
+    섬유 15개(Polyester · Cotton · **Elastane/Spandex** · Nylon · Viscose ·
+    Polyamide · Silk · Linen · Acrylic · Rayon · Wool · Tencel · Polyurethane ·
+    Cupro · Acetate). 조직·핏 어휘와 같은 이유의 **닫힌 목록**이다.
+  - **영어 색 이름의 머리는 마지막 단어다**: `Deep Sea Navy`→Blue · `Off-White`→White ·
+    `Washed Vintage Olive Green`→Green. 앞의 수식어는 처음 보는 것이어도 된다.
+    **색을 하나도 안 부르는 컬러웨이**(`Multi`·`Camo Print`)는 **아무 칸에도 안
+    넣는다** — 틀린 칸이 빈 칸보다 나쁘다.
+  - **COTTON은 부분일치**(사용자 지시): organic·recycled·BCI·Supima·cotton twill 전부
+    Cotton. 나머지는 **사용자가 준 순서대로 먼저 맞는 것**이 이긴다(`Viscose Rayon`→
+    Viscose · `Polyamide (Nylon)`→Nylon). Viscose와 Rayon, Nylon과 Polyamide는
+    **사용자가 따로 적었으므로 합치지 않는다.** Lycra→Elastane/Spandex, Lyocell→Tencel,
+    Merino→Wool.
+  - **선반에 없으면 그 축에 없다** — Modal·Cashmere·Hemp는 **수집·PRODUCTS·엑셀에는
+    그대로 있고**(엑셀은 몰이 쓴 글자 그대로라는 규칙 불변) 섬유 축에만 안 나온다.
+    `fabricfam`은 **가장 큰 비율의 섬유가 선반에 있을 때만** 답한다 — 95% 모달 5%
+    엘라스테인을 "엘라스테인 옷"이라고 부르지 않는다.
+  - **얼린 옛 주간 기록도 읽을 때 선반을 통과한다**(브랜드·카테고리 수리와 같은 규칙,
+    v3.6.0). 안 그러면 한 차트가 두 어휘를 동시에 그려서 옛 주가 붕괴로 보인다.
+    **상품 수는 더하고 브랜드 수는 최댓값**을 쓴다 — Navy와 Deep Sea Navy를 낸 몰은
+    한 몰이라, 더하면 로스터보다 큰 브랜드 수가 나온다.
+  - **색은 색으로 보여준다**: LAB 축 카드와 브라우징 레일에 **잉크 점**(`COLOUR_INK`,
+    선반 옆에 한 벌만 정의). 몰의 컬러 필터가 그렇게 생긴 이유와 같다 — 목록에서
+    눈은 단어보다 색을 먼저 찾는다. 잉크는 **라벨이지 측정값이 아니다**(아무것도
+    읽지 않는다).
+  - **사진에서 읽는 색도 같은 12개로 접힌다**(`colour.js`의 `shelfOf` — Navy→Blue ·
+    Cream→White · Light grey→Grey). 픽셀 판독은 여전히 세밀하게 읽되(스와치를 보여줄
+    자리를 위해) **축은 한 어휘**다 — 아니면 같은 옷이 한 색의 두 이름으로 두 번 센다.
+  - `shelf-test` 63건 · `shelf-e2e` 14건(수정 전 코드에서 9건 실패 — 레일에 정확히
+    `Deep Sea Navy` · `Heather Grey Marl` · `Camo Print`가 찍힌다).
+    `fibreblocks-e2e`의 `Lyocell` 기대는 **새 계약(Tencel)으로 갱신**.
+
 - **폴더에 든 것이 가장 새것이라고 가정하고 있었다**(v3.37.0, 사용자 화면 — 칩은
   `v3.33.0 → 3.36.0`인데 바로 아래 배너는 `Version 3.35.0 is in your folder, ready
   to run`). 한 화면의 두 줄이 서로 다른 버전을 말하고, **버튼을 누르면 이미 뒤처진

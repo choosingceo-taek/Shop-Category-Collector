@@ -16,7 +16,7 @@
    out was the wiring that drew it.
 
    The fixture is eight weeks that actually MOVE — cotton and polyester early,
-   linen and lyocell late — because a rotation where every week looks the same
+   linen and lyocell (the TENCEL row) late — because a rotation where every week looks the same
    produces empty risers and would let this pass while drawing nothing.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules xvfb-run -a node fibreblocks-e2e.js */
@@ -138,8 +138,10 @@ for (let w = 0; w < WEEKS; w++) {
       chartPaths: document.querySelectorAll("#v-lab svg path").length,
     };
   });
+  /* Lyocell is read onto the fifteen-fibre shelf, where the designer named
+     that row TENCEL — same fibre, one row instead of two spellings. */
   ok("linen and lyocell are named as rising — the fixture's late season",
-    read.rising.includes("Linen") && read.rising.includes("Lyocell"), read.rising.join(", "));
+    read.rising.includes("Linen") && read.rising.includes("Tencel"), read.rising.join(", "));
   ok("cotton and polyester are named as falling — its early one",
     read.falling.includes("Cotton") && read.falling.includes("Polyester"), read.falling.join(", "));
   ok("the ranking names fibres, from the compositions",

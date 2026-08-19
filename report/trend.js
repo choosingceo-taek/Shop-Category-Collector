@@ -73,11 +73,17 @@
   const DIMS = {
     fabric: {
       label: "Fabric",
-      keysOf: it => [...new Set(Calc.parseFibers(it.fabric_composition).map(f => f.fiber))],
+      /* On the fifteen-fibre shelf. Counted as the shops write them, one
+         fibre arrives as "Polyester", "Recycled Polyester" and "Poly Ester"
+         and lands in three rows that each look small. */
+      keysOf: it => Calc.fibreFamilies(it.fabric_composition),
     },
     color: {
       label: "Colour",
-      keysOf: it => [...new Set(Calc.parseColors(it.colorways).map(titleCase))],
+      /* On the twelve-colour shelf — the set a shop's own colour filter
+         offers. A colourway is a sales name ("Deep Sea Navy"), so counting it
+         as written gives a list of names seen once each and no colour at all. */
+      keysOf: it => Calc.colourFamilies(it.colorways),
     },
     /* The three things a product NAME states, kept apart on purpose — a
        season where linen doubles and a season where ruching doubles are
@@ -120,11 +126,9 @@
       keysOf: it => {
         const nk = Calc.normItem(it).nameKinds;
         if (nk.weave.length) return nk.weave.map(titleCase);
-        const fib = Calc.parseFibers(it.fabric_composition);
-        if (fib.length) {
-          const top = fib.slice().sort((a, b) => (b.pct || 0) - (a.pct || 0))[0];
-          if (top && top.fiber) return [titleCase(top.fiber)];
-        }
+        // the fibre the composition says it is mostly made of, on the shelf
+        const main = Calc.mainFibre(it.fabric_composition);
+        if (main) return [main];
         return nk.material.length ? [titleCase(nk.material[0])] : [];
       },
     },
@@ -430,7 +434,26 @@
     const src = unit === "brands"
       ? ((s.bdims && s.bdims[dim]) || null)
       : ((s.dims && s.dims[dim]) || {});
-    const counts = new Map(Object.entries(src || {}));
+    /* A week frozen before the shelves existed holds the shops' own words
+       ("Deep Sea Navy", "Recycled Polyester"). Read through the same shelf the
+       live weeks are counted on, or one chart runs two vocabularies at once
+       and the old weeks look like a collapse. Same rule as the brand and
+       category repairs: fix it on the way in as well as on the way out, so a
+       record already written comes right by being opened. */
+    const counts = new Map();
+    Object.entries(src || {}).forEach(([k, v]) => {
+      const shelf = dim === "color" ? Calc.colourFamily(k)
+        : (dim === "fabric" || dim === "fabricfam") ? (Calc.fibreFamily(k) || k)
+        : k;
+      const key = shelf || k;
+      /* Products add up; brands do not. A shop that put out both a "Navy" and
+         a "Deep Sea Navy" is one shop, and adding the two would report more
+         brands than the roster holds — so the larger of the two stands, which
+         is the most that can be true. */
+      counts.set(key, unit === "brands"
+        ? Math.max(counts.get(key) || 0, v)
+        : (counts.get(key) || 0) + v);
+    });
     const base = unit === "brands" ? (src ? (s.brands || 0) : 0) : s.products;
     const shares = new Map();
     counts.forEach((v, k) => shares.set(k, base ? (v / base) * 100 : 0));

@@ -63,6 +63,143 @@
     return s.split(/\s*[;/\n]\s*|\s*,\s*/).map(x => x.trim()).filter(Boolean);
   }
 
+  /* ---- the two shelves the analysis counts on -----------------------------
+
+     A shop names a colourway to sell it — "Deep Sea Navy", "Off White",
+     "Heather Grey Marl" — and names a fibre to describe it — "Recycled
+     Polyester", "Organic Cotton", "BCI Cotton". Counted as written, the
+     colour axis becomes two hundred marketing names each seen once, and one
+     fibre splits across four spellings. Neither answers "what is the season
+     made of", which is the only question this page exists for.
+
+     So both are read onto a shelf: the twelve colours a shop's own colour
+     filter offers, and fifteen fibres — both chosen by the designer who uses
+     this. Same reasoning as the weave and fit lists already here: trade
+     vocabulary is a closed set, and naming it is accuracy, not a limit.
+
+     What is not on a shelf is not counted on that axis. A cashmere, a modal, a
+     hemp is still collected, still in PRODUCTS, and still in the Excel exactly
+     as the shop wrote it — it simply does not appear on the fibre axis,
+     because the shelf IS the question being asked. */
+  const COLOURS = ["Beige", "Black", "Blue", "Brown", "Green", "Grey",
+    "Orange", "Pink", "Purple", "Red", "White", "Yellow"];
+
+  const COLOUR_WORDS = {
+    Beige: "beige,ecru,oat,oatmeal,sand,stone,taupe,nude,camel,tan,biscuit,latte,mushroom," +
+      "birch,almond,buff,natural,greige,wheat,straw,putty,linen,champagne,sable,fawn,dune",
+    Black: "black,jet,onyx,ebony,noir,raven,licorice,caviar",
+    Blue: "blue,navy,denim,indigo,cobalt,sky,azure,teal,aqua,turquoise,marine,midnight," +
+      "cornflower,periwinkle,petrol,slate-blue,chambray,sapphire,cerulean,ink",
+    Brown: "brown,chocolate,coffee,mocha,espresso,cocoa,tobacco,chestnut,walnut,hazel," +
+      "caramel,toffee,cognac,rust,bronze,copper,clay,cinnamon,mahogany,truffle,pecan",
+    Green: "green,olive,khaki,sage,moss,forest,emerald,mint,pistachio,lime,jade,hunter," +
+      "army,fern,matcha,avocado,basil,ivy,seafoam,eucalyptus,cactus",
+    Grey: "grey,gray,charcoal,heather,slate,graphite,silver,ash,smoke,pewter,gunmetal," +
+      "marl,steel,granite,concrete,cement",
+    Orange: "orange,tangerine,apricot,peach,amber,marigold,terracotta,pumpkin,papaya," +
+      "clementine,coral,persimmon,mandarin",
+    Pink: "pink,rose,blush,fuchsia,fuschia,magenta,salmon,peony,flamingo,bubblegum," +
+      "candy,cerise,raspberry,watermelon",
+    Purple: "purple,lilac,lavender,violet,plum,aubergine,eggplant,mauve,orchid,grape," +
+      "amethyst,iris,heliotrope",
+    Red: "red,burgundy,wine,crimson,scarlet,cherry,ruby,maroon,bordeaux,brick,tomato," +
+      "chili,chilli,garnet,claret,merlot",
+    White: "white,ivory,cream,chalk,snow,blanc,milk,pearl,coconut,alabaster,porcelain,bone",
+    Yellow: "yellow,mustard,lemon,gold,golden,butter,honey,ochre,ocher,canary,sunflower," +
+      "banana,maize,saffron,daffodil",
+  };
+  /* One ink per shelf colour, so a colour can be shown as a colour — on the
+     rail and on the axis card. It is a label for a name already decided, not a
+     measurement: nothing is read off it. */
+  const COLOUR_INK = {
+    Beige: "#e3d3b8", Black: "#111111", Blue: "#1f2fbe", Brown: "#6b3f1d",
+    Green: "#0b6b4f", Grey: "#d5d5d5", Orange: "#e8891c", Pink: "#f4a3c0",
+    Purple: "#7b1fa2", Red: "#e01b1b", White: "#ffffff", Yellow: "#ffe01b",
+  };
+
+  const COLOUR_OF = (() => {
+    const m = Object.create(null);
+    Object.keys(COLOUR_WORDS).forEach(fam =>
+      COLOUR_WORDS[fam].split(",").forEach(w => { if (w) m[w.trim()] = fam; }));
+    return m;
+  })();
+
+  /* The head of an English colour phrase is its LAST word: "Deep Sea Navy" is
+     a navy, "Off White" is a white, "Washed Olive Green" is a green. So the
+     last word that names a colour decides, and everything in front of it is
+     free to be a modifier we have never seen. A colourway that names no
+     colour at all ("Multi", "Camo Print") belongs to no shelf and is left
+     alone rather than guessed at. */
+  function colourFamily(s) {
+    const words = String(s || "").toLowerCase()
+      .replace(/[^a-z\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
+    for (let i = words.length - 1; i >= 0; i--) {
+      if (COLOUR_OF[words[i]]) return COLOUR_OF[words[i]];
+    }
+    return "";
+  }
+  // "Deep Sea Navy / Off-White" -> ["Blue","White"]
+  function colourFamilies(v) {
+    const out = [];
+    parseColors(v).forEach(c => {
+      const f = colourFamily(c);
+      if (f && out.indexOf(f) < 0) out.push(f);
+    });
+    return out;
+  }
+
+  /* The fifteen, in the order they were given — first match wins, which is
+     what decides the handful of strings that name one fibre twice ("Viscose
+     Rayon" is filed as Viscose, "Polyamide (Nylon)" as Nylon). Cotton is a
+     plain substring on purpose: organic, recycled, BCI, Supima, a cotton twill
+     — if the word cotton is in it, it is cotton. */
+  const FIBRES = ["Polyester", "Cotton", "Elastane/Spandex", "Nylon", "Viscose",
+    "Polyamide", "Silk", "Linen", "Acrylic", "Rayon", "Wool", "Tencel",
+    "Polyurethane", "Cupro", "Acetate"];
+  const FIBRE_TESTS = [
+    ["Polyester", /polyester/],
+    ["Cotton", /cotton/],
+    ["Elastane/Spandex", /elastane|elastan\b|spandex|lycra|roica|creora/],
+    ["Nylon", /nylon/],
+    ["Viscose", /viscose/],
+    ["Polyamide", /polyamide/],
+    ["Silk", /\bsilk\b|\bseide\b|\bsoie\b/],
+    ["Linen", /\blinen\b|\bflax\b|\blin\b/],
+    ["Acrylic", /acrylic|acrylique/],
+    ["Rayon", /rayon/],
+    ["Wool", /\bwool\b|woolen|woollen|merino|lambswool|\blana\b|\bwolle\b/],
+    ["Tencel", /tencel|lyocell/],
+    ["Polyurethane", /polyurethane/],
+    ["Cupro", /cupro|cuprammonium/],
+    ["Acetate", /acetate/],
+  ];
+  // "Recycled Polyester" -> "Polyester"; "Modal" -> "" (not on the shelf)
+  function fibreFamily(name) {
+    const t = String(name || "").toLowerCase();
+    if (!t.trim()) return "";
+    for (let i = 0; i < FIBRE_TESTS.length; i++) {
+      if (FIBRE_TESTS[i][1].test(t)) return FIBRE_TESTS[i][0];
+    }
+    return "";
+  }
+  // "95% Organic Cotton, 5% Spandex" -> ["Cotton","Elastane/Spandex"]
+  function fibreFamilies(comp) {
+    const out = [];
+    parseFibers(comp).forEach(f => {
+      const k = fibreFamily(f.fiber);
+      if (k && out.indexOf(k) < 0) out.push(k);
+    });
+    return out;
+  }
+  /* What the garment is mostly made of, on the shelf. The TOP fibre decides —
+     if a shop's 95% is a modal, the garment is not "elastane" because the
+     remaining 5% happens to be on the list. Nothing, in that case. */
+  function mainFibre(comp) {
+    const fib = parseFibers(comp).slice()
+      .sort((a, b) => (b.pct || 0) - (a.pct || 0));
+    return fib.length ? fibreFamily(fib[0].fiber) : "";
+  }
+
   // Key Design Details -> labelled attributes. Adapters emit either
   // "Neckline: Ribbed crewneck\nClosure: Button front" (Walmart's key item
   // features) or a prose sentence ("Features long raglan sleeves…", Inditex).
@@ -286,6 +423,9 @@
       discountPct: onSale ? Math.round((1 - price / priceWas) * 100) : null,
       colors,
       colorCount: colors.length || (parseInt(it.color_count, 10) || 0),
+      // the same colourways read onto the twelve-colour shelf; `colors` stays
+      // the shop's own words, which is what a product card shows
+      colourFams: colourFamilies(it.colorways),
       fibers,
       hasComposition: fibers.length > 0,
       designFacets: design.facets,
@@ -355,7 +495,11 @@
     const saleItems = items.filter(i => i.onSale);
     const withComp = items.filter(i => i.hasComposition);
 
-    const colorFreq = tally([].concat(...items.map(i => i.colors.map(c => [normColor(c), 1]))));
+    /* Counted on the shelves, not as the shops write them: twelve colours and
+       fifteen fibres. "Deep Sea Navy" and "Navy" are one row, "Recycled
+       Polyester" and "Polyester" are one row — otherwise every figure on this
+       page is a single shop's naming habit. */
+    const colorFreq = tally([].concat(...items.map(i => i.colourFams.map(c => [c, 1]))));
     // fibre "presence": share of products that contain each fibre
     const fiberPresence = tally([].concat(...items.map(i => uniqFibers(i.fibers).map(f => [f, 1]))))
       .map(r => ({ key: r.key, value: r.value, pct: n ? Math.round(r.value / n * 100) : 0 }));
@@ -409,7 +553,9 @@
   }
   function normColor(c) { return titleFiber(c); }
   function uniqFibers(fibers) {
-    const s = new Set(); (fibers || []).forEach(f => f.fiber && s.add(f.fiber)); return [...s];
+    const s = new Set();
+    (fibers || []).forEach(f => { const k = fibreFamily(f.fiber); if (k) s.add(k); });
+    return [...s];
   }
 
   // ---- season / point-in-time comparison of two aggregates ------------------
@@ -508,6 +654,8 @@
 
   const API = {
     parsePrice, parseFibers, parseColors, parseDesign, nameKeywords, classifyKeywords,
+    COLOURS, COLOUR_INK, colourFamily, colourFamilies,
+    FIBRES, fibreFamily, fibreFamilies, mainFibre,
     kindOf, MATERIAL, WEAVE, FIT, silhouetteOf, normItem, normScan,
     aggregate, compare, priceHistogram, mean, median, tally,
     isoWeek, weekly, weeklyTrend, inspoImages,

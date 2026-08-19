@@ -218,7 +218,27 @@
   const hex = rgb => "#" + rgb.map(v =>
     Math.max(0, Math.min(255, v | 0)).toString(16).padStart(2, "0")).join("");
 
-  const API = { familyOf, readSwatch, inSkinBand, rgbToHsl, hex };
+  /* …and onto the shelf the LAB counts on.
+
+     familyOf reads a pixel as finely as a pixel can be read — Navy is not
+     Blue, Cream is not White — and that is worth keeping where a swatch is
+     shown. But the axis has twelve names, the ones a shop's own colour filter
+     offers, and a colour read from a photograph has to land in the same twelve
+     as a colour read from a colourway word, or the same garment counts twice
+     under two spellings of one colour. One vocabulary, two ways in. */
+  const SHELF = {
+    White: "White", Cream: "White",
+    "Light grey": "Grey", Grey: "Grey",
+    Black: "Black",
+    Navy: "Blue", Blue: "Blue", Teal: "Blue",
+    Beige: "Beige", Brown: "Brown",
+    Peach: "Orange", Orange: "Orange",
+    Yellow: "Yellow", Green: "Green",
+    Pink: "Pink", Magenta: "Pink", Purple: "Purple", Red: "Red",
+  };
+  const shelfOf = name => SHELF[name] || "";
+
+  const API = { familyOf, shelfOf, SHELF, readSwatch, inSkinBand, rgbToHsl, hex };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.LensColour = API;
 })(typeof self !== "undefined" ? self : this);

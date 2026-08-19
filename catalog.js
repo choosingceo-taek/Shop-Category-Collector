@@ -1151,13 +1151,17 @@
      Nothing here touches what is collected — the charter allows attribute
      filters only after the scan, on the display side, because narrowing what
      goes INTO the catalogue is what destroys a distribution. */
+  // one ink per shelf colour, defined once beside the shelf itself
+  const COLOUR_INK = window.ReportCalc.COLOUR_INK;
   const FACETS = [
     ["category", "Category", i => [garmentOf(i)]],
     ["fabric", "Fabric", i => T().DIMS.fabricfam.keysOf(i)],
     ["silhouette", "Silhouette", i => T().DIMS.silhouette.keysOf(i)],
     ["fit", "Fit", i => T().DIMS.fit.keysOf(i)],
     ["detail", "Detail", i => T().DIMS.keyword.keysOf(i)],
-    ["color", "Colour", i => window.ReportCalc.parseColors(i && i.colorways)],
+    // the twelve-colour shelf, not the shop's sales names — a rail of two
+    // hundred colourways seen once each is not a filter
+    ["color", "Colour", i => window.ReportCalc.colourFamilies(i && i.colorways)],
     ["brand", "Brand", i => [(i && i.brand) || ""].filter(Boolean)],
   ];
   const T = () => window.TrendCalc;
@@ -1217,9 +1221,14 @@
          these counts are faceted, so a value with nothing behind it is not
          listed at all. The figure was only ever restating that, once per row,
          down a rail of forty. */
+      /* A colour is worth showing as a colour. The rail names twelve of them
+         and the eye picks a swatch out of a list faster than it reads a word —
+         which is why every shop's own colour filter is drawn this way. */
+      const swatch = v => g.key === "color" && COLOUR_INK[v]
+        ? `<i class="sw" style="background:${COLOUR_INK[v]}"></i>` : "";
       const row = ([v]) => `<label class="${chosen.has(v) ? "picked" : ""}">
         <input type="checkbox" data-k="${esc(g.key)}" data-v="${esc(v)}"${chosen.has(v) ? " checked" : ""}>
-        <span class="rv" title="${esc(v)}">${esc(v)}</span></label>`;
+        ${swatch(v)}<span class="rv" title="${esc(v)}">${esc(v)}</span></label>`;
       /* Brands sit under their tier — that is how the team names them, and a
          flat alphabetical list of thirty-two is not readable. */
       let body;
