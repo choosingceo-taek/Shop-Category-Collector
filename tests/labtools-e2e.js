@@ -170,14 +170,16 @@ const IN_L1 = items.filter(i => i.listIds.includes("l1")).length;
      work that is fine, and the Data chip is a filing cabinet in the middle of
      a report. Neither is deleted — the backup door is the only route a
      catalog has to another laptop, and the site grades are what stop a half
-     scan grading itself clean — so both moved to the tab that already answers
-     "what did the scans do". */
+     scan grading itself clean. They lived on the Scan lists tab until that tab
+     was taken off this page too, and now they sit at the FOOT of the LAB:
+     under the figures, past the footnote, behind a hairline. */
   const house = await p.evaluate(() => {
     const where = sel => {
       const e = document.querySelector(sel);
       if (!e) return "missing";
       if (e.closest("header")) return "header";
       if (e.closest("#v-lists")) return "scan lists";
+      if (e.closest(".housekeep")) return "lab foot";
       return "elsewhere";
     };
     const headerText = (document.querySelector("header") || {}).innerText || "";
@@ -188,21 +190,19 @@ const IN_L1 = items.filter(i => i.listIds.includes("l1")).length;
       headerSaysData: /\bData\b/.test(headerText),
     };
   });
-  ok("the Data chip is off the header", house.data === "scan lists", house.data);
-  ok("…and its box went with it", house.databox === "scan lists", house.databox);
-  ok("the site grades are off the header", house.check === "scan lists", house.check);
-  ok("…and their list went too", house.checkbar === "scan lists", house.checkbar);
+  ok("the Data chip is off the header", house.data === "lab foot", house.data);
+  ok("…and its box went with it", house.databox === "lab foot", house.databox);
+  ok("the site grades are off the header", house.check === "lab foot", house.check);
+  ok("…and their list went too", house.checkbar === "lab foot", house.checkbar);
   ok("nothing on the header says anything needs a look", !house.headerSaysNeedsLook);
   ok("nor offers Data there", !house.headerSaysData);
 
-  await p.click('.tab[data-view="lists"]');
-  await p.waitForTimeout(700);
   const reachable = await p.evaluate(() => {
     const e = document.querySelector("#datachip");
     const r = e && e.getBoundingClientRect();
     return { visible: !!r && r.width > 0 && r.height > 0 };
   });
-  ok("but Data is right there on Scan lists — the backup door still opens",
+  ok("but Data is right there under the report — the backup door still opens",
     reachable.visible);
   await p.click("#datachip");
   await p.waitForTimeout(500);

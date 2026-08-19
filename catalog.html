@@ -58,12 +58,12 @@
     text-transform:uppercase; color:var(--muted); margin-right:2px; }
   .fs select, .fs button { font-size:12px; padding:4px 8px; }
   .fs input[type=search] { padding:4px 9px; font-size:12px; }
-  /* The catalog's own housekeeping, on the tab about scanning: what the
-     catalog weighs and how it travels, and what each site produced. Off the
-     analysis header, where an orange "needs a look" read as an error over
-     work that was fine. */
+  /* The catalog's own housekeeping — what it weighs and how it travels, and
+     what each site produced. At the FOOT of the LAB: off the title line, where
+     an orange "needs a look" read as an error over work that was fine, and off
+     a tab of its own, which is gone. Under the figures, a hairline away. */
   .housekeep { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-    margin-bottom:12px; }
+    margin:18px 0 4px; padding-top:14px; border-top:1px solid var(--line); }
   .housekeep .databox, .housekeep .checkbar { flex-basis:100%; }
   .selbar { display:none; align-items:center; gap:10px; margin-top:10px; padding:9px 12px;
     background:var(--wash); border-radius:var(--r); font-size:13px; }
@@ -326,20 +326,26 @@
      back above the results — the same groups, no horizontal scrolling. */
   .withrail { display:grid; grid-template-columns:216px minmax(0,1fr); gap:18px; align-items:start; }
   .railmain { min-width:0; }
+  /* Drawn the way the shops draw theirs (the designer pointed at one): no box
+     around the column, no figure beside the name — a rule, a word in spaced
+     capitals, and a chevron at the far right that turns when the group opens.
+     The count is gone from the summary for the same reason it went from the
+     rows: the values are counted against the other groups, so a value with
+     nothing behind it is never listed, and the number only restated that. */
   .rail { position:sticky; top:8px; max-height:calc(100vh - 24px); overflow-y:auto;
-    background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:4px 0; }
+    background:transparent; border:0; border-radius:0; padding:2px 0; }
   .rail .rgrp { border-bottom:1px solid var(--line); }
-  .rail .rgrp:last-child { border-bottom:0; }
-  .rail summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:6px;
-    padding:9px 11px; font:700 11px/1 Helvetica,Arial,sans-serif; letter-spacing:.13em;
-    text-transform:uppercase; color:var(--muted); }
+  .rail .rgrp:last-child { border-bottom:1px solid var(--line); }
+  .rail summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px;
+    padding:15px 2px; font:600 11px/1 Helvetica,Arial,sans-serif; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--ink); }
   .rail summary::-webkit-details-marker { display:none; }
-  .rail summary:hover { color:var(--ink); }
+  .rail summary:hover { color:var(--muted); }
   .rail summary .rn { margin-left:auto; font-weight:400; letter-spacing:0; font-size:11.5px; }
-  .rail summary .rcar { font-size:10px; color:var(--line2); }
-  .rail details[open] summary .rcar { transform:rotate(90deg); }
+  .rail summary .rcar { margin-left:auto; font-size:11px; color:var(--ink2); }
+  .rail details[open] summary .rcar { transform:rotate(180deg); }
   .rail .rcar { display:inline-block; transition:transform .12s ease; }
-  .rail .rvals { padding:0 11px 9px; display:flex; flex-direction:column; gap:1px; }
+  .rail .rvals { padding:0 2px 14px; display:flex; flex-direction:column; gap:1px; }
   .rail label { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink2);
     padding:3px 0; cursor:pointer; min-width:0; }
   .rail label:hover { color:var(--ink); }
@@ -358,8 +364,9 @@
   .rail .rmore { background:none; border:0; padding:3px 0; font-size:11px; color:var(--muted);
     text-align:left; }
   .rail .rmore:hover { color:var(--ink); text-decoration:underline; }
-  .rail .rclear { background:none; border:0; padding:0; font:inherit; font-size:11.5px;
+  .rail .rclear { background:none; border:0; padding:0; font:inherit; font-size:11px;
     color:var(--muted); letter-spacing:0; text-transform:none; }
+  .rail summary .rn:has(.rclear) { margin-left:auto; }
   .rail .rclear:hover { color:var(--sale); }
   /* What is currently narrowing the screen, said once above the results —
      the rail can be scrolled away, and a filtered screen must never look
@@ -569,10 +576,14 @@
       <span class="tt">New In<i>Arrivals by week</i></span></button>
     <button class="tab" data-view="brands"><span class="ti">🏷️</span>
       <span class="tt">By Brand<i>Browse each brand</i></span></button>
-    <button class="tab" data-view="products"><span class="ti">🧺</span>
-      <span class="tt">Products<i>Everything collected</i></span></button>
-    <button class="tab" data-view="lists"><span class="ti">🗂️</span>
-      <span class="tt">Scan lists<i>Collection history</i></span></button>
+    <!-- Products and Scan lists are not tabs here any more (the designer asked
+         for them off this page). The product wall lives in the side panel,
+         beside the list it belongs to, and collecting is the panel's job
+         altogether. What could not simply go with them is the housekeeping —
+         the backup door is a catalog's only route to another laptop and the
+         site grades are what stop a half scan grading itself clean — so those
+         two sit at the foot of the LAB, under the figures rather than over
+         them. -->
   </nav>
 
   <main>
@@ -613,39 +624,10 @@
              three in your head. -->
       </div>
       <div id="labbody"></div>
-    </div>
-
-    <!-- One rail, seven questions, both browsing tabs.
-
-         Chips above a feed can only narrow by one thing at a time, and the
-         designer's question is compound: midi dresses, in satin, at the
-         contemporary brands. Each group is one question, several answers
-         inside a group are an "or", and the groups are an "and" — the shape
-         every filter rail in the trade already has. Each group is counted
-         against the OTHER groups, so a value that would empty the screen is
-         not listed at all — which is why no number is printed beside one. -->
-    <div class="withrail" id="railwrap" hidden>
-      <aside class="rail" id="rail"></aside>
-      <div class="railmain">
-        <div id="v-new" hidden></div>
-        <div id="v-brands" hidden></div>
-      </div>
-    </div>
-    <div id="v-products" hidden><div class="grid" id="grid"></div></div>
-
-    <div id="v-lists" hidden>
-      <!-- Housekeeping, on the tab that is about scanning.
-
-           Both of these used to ride the LAB's title line, and neither is
-           about the season: one is the catalog's own weight and the way it
-           travels between browsers, the other is what each SITE produced. On
-           an analysis page an orange "7 need a look" reads as an error banner
-           over work that is fine, and the Data chip is a filing cabinet in the
-           middle of a report. They are not gone — losing the backup door would
-           mean losing the only route a catalog has to another laptop, and
-           losing the site grades would let a half scan grade itself clean
-           again. They are one tab away, on the tab that already answers
-           "what did the scans do". -->
+      <!-- Housekeeping, at the foot of the report rather than over it: what
+           the catalog weighs and how it travels, and what each SITE produced.
+           Neither is a fact about the season, which is why it is down here and
+           not on the title line — but neither can be dropped either. -->
       <div class="housekeep">
       <!-- What the catalog weighs, and the one way to make it smaller. The
              weekly snapshots keep the trend after products are pruned, so this
@@ -686,6 +668,39 @@
           <div class="checkbox" id="checkbox" hidden></div>
         </div>
       </div>
+    </div>
+
+    <!-- One rail, seven questions, both browsing tabs.
+
+         Chips above a feed can only narrow by one thing at a time, and the
+         designer's question is compound: midi dresses, in satin, at the
+         contemporary brands. Each group is one question, several answers
+         inside a group are an "or", and the groups are an "and" — the shape
+         every filter rail in the trade already has. Each group is counted
+         against the OTHER groups, so a value that would empty the screen is
+         not listed at all — which is why no number is printed beside one. -->
+    <div class="withrail" id="railwrap" hidden>
+      <aside class="rail" id="rail"></aside>
+      <div class="railmain">
+        <div id="v-new" hidden></div>
+        <div id="v-brands" hidden></div>
+      </div>
+    </div>
+    <div id="v-products" hidden><div class="grid" id="grid"></div></div>
+
+    <div id="v-lists" hidden>
+      <!-- Housekeeping, on the tab that is about scanning.
+
+           Both of these used to ride the LAB's title line, and neither is
+           about the season: one is the catalog's own weight and the way it
+           travels between browsers, the other is what each SITE produced. On
+           an analysis page an orange "7 need a look" reads as an error banner
+           over work that is fine, and the Data chip is a filing cabinet in the
+           middle of a report. They are not gone — losing the backup door would
+           mean losing the only route a catalog has to another laptop, and
+           losing the site grades would let a half scan grade itself clean
+           again. They are one tab away, on the tab that already answers
+           "what did the scans do". -->
       <div class="lists-head">
         <select id="listsel"></select>
         <button id="newlist">＋ New list</button>

@@ -88,20 +88,17 @@ const shuffled = items.slice().sort((a, b) => (a.name.length - b.name.length) ||
   ok("…while the axes it is there for are still drawn",
     /FABRIC/.test(lab.text) && /COLOUR/.test(lab.text), lab.heads.join(" | "));
 
-  // ---- 2. the product wall -------------------------------------------------
-  await p.click('.tab[data-view="products"]');
-  await p.waitForTimeout(900);
-  const sortSel = await p.evaluate(() => ({
-    value: document.querySelector("#sort").value,
-    options: [...document.querySelectorAll("#sort option")].map(o => o.value),
-    first: (document.querySelector("#sort option") || {}).textContent || "",
-  }));
-  ok("the wall offers the shop's order", sortSel.options.includes("site"),
-    JSON.stringify(sortSel));
-  ok("…and opens on it", sortSel.value === "site", JSON.stringify(sortSel));
-
-  const wall = await p.evaluate(() => [...document.querySelectorAll("#grid .c .nm, #grid .c .name, #grid .c b")]
-    .map(e => (e.textContent || "").trim()).filter(t => /^(ALO|COS) \d\d$/.test(t)));
+  // ---- 2. the product wall, which lives in the side panel ------------------
+  const panel = await ctx.newPage();
+  await panel.setViewportSize({ width: 400, height: 900 });
+  const perrs = []; panel.on("pageerror", e => perrs.push(e.message));
+  await panel.goto(`chrome-extension://${id}/sidepanel.html`);
+  await panel.waitForTimeout(1500);
+  await panel.click('.tab[data-view="products"]');
+  await panel.waitForTimeout(1200);
+  /* The wall is scoped to the open list, and both shops are in it. */
+  const wall = await panel.evaluate(() => [...document.querySelectorAll("#pgrid .pc")]
+    .map(c => ((c.innerText || "").match(/(ALO|COS) \d\d/) || [""])[0]).filter(Boolean));
   const alo = wall.filter(t => t.startsWith("ALO"));
   const cos = wall.filter(t => t.startsWith("COS"));
   ok("both shops are on the wall", alo.length === 12 && cos.length === 12,
@@ -115,16 +112,7 @@ const shuffled = items.slice().sort((a, b) => (a.name.length - b.name.length) ||
   ok("…and one shop's page is not interleaved with the other's",
     wall.join(",").indexOf("COS") > wall.join(",").lastIndexOf("ALO 12") - 1,
     wall.join(" "));
-
-  /* The other orders still work — this is a default, not a lock. */
-  await p.selectOption("#sort", "priceUp");
-  await p.waitForTimeout(700);
-  const cheapFirst = await p.evaluate(() =>
-    [...document.querySelectorAll("#grid .c")].slice(0, 1)
-      .map(c => (c.textContent || "").replace(/\s+/g, " ").trim())[0] || "");
-  ok("choosing another order still reorders", /\$40\b/.test(cheapFirst), cheapFirst);
-  await p.selectOption("#sort", "site");
-  await p.waitForTimeout(600);
+  ok("no page errors in the panel", perrs.length === 0, perrs.join(" | "));
 
   // ---- 3. the browsing feeds ----------------------------------------------
   await p.click('.tab[data-view="brands"]');

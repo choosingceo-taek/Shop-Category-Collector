@@ -901,7 +901,17 @@
       if (c && p.category !== c) return false;
       if (q && ![p.name, p.brand, p.fabric_composition, p.colorways].join(" ").toLowerCase().includes(q)) return false;
       return true;
-    }).sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));
+      /* In the shop's own order — brand, then the page, then where the shop
+         had it on that page. A category page is laid out, not listed, and that
+         layout is the merchandiser's ranking; the run records it (`pos`) and
+         this puts it back, because a database returns rows in no order at all.
+         Rows collected before positions were recorded fall to the end of their
+         group rather than to the front. */
+    }).sort((x, y) =>
+      String(x.brand || "").localeCompare(String(y.brand || "")) ||
+      String(x.category || "").localeCompare(String(y.category || "")) ||
+      ((x.pos || 1e9) - (y.pos || 1e9)) ||
+      ((y.addedAt || 0) - (x.addedAt || 0)));
   }
   function renderProducts() {
     const scoped = listFilter && lists.find(l => l.id === listFilter);

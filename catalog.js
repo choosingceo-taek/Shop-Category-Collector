@@ -645,8 +645,13 @@
   let gridShown = GRID_PAGE;
 
   function render(keepShown) {
-    const rows = visible();
     const grid = $("#grid");
+    /* The product wall is not a tab here any more — it lives in the side
+       panel, beside the list it belongs to. The grid element stays because
+       `visible()` is what the report and the workbook are built from, but
+       there is no reason to lay out three hundred cards nobody can look at. */
+    if (!grid || grid.closest("[hidden]") || (grid.offsetParent === null && document.body.contains(grid))) return;
+    const rows = visible();
     if (!keepShown) gridShown = GRID_PAGE;
     if (!items.length) {
       grid.innerHTML = "";
@@ -1170,16 +1175,20 @@
      goes INTO the catalogue is what destroys a distribution. */
   // one ink per shelf colour, defined once beside the shelf itself
   const COLOUR_INK = window.ReportCalc.COLOUR_INK;
+  /* Four questions, in the order a designer asks them: who made it, what kind
+     of garment, what it is made of, what colour it is. Silhouette, Fit and
+     Detail are off the rail (the designer asked): they are read from words in
+     a product name, so they run to hundreds of values — DETAIL alone offered
+     1,172 — and a filter with a thousand answers is a list, not a filter. They
+     are still counted on the LAB's own axes, which is where that reading
+     belongs. */
   const FACETS = [
+    ["brand", "Brand", i => [(i && i.brand) || ""].filter(Boolean)],
     ["category", "Category", i => [garmentOf(i)]],
     ["fabric", "Fabric", i => T().DIMS.fabricfam.keysOf(i)],
-    ["silhouette", "Silhouette", i => T().DIMS.silhouette.keysOf(i)],
-    ["fit", "Fit", i => T().DIMS.fit.keysOf(i)],
-    ["detail", "Detail", i => T().DIMS.keyword.keysOf(i)],
     // the twelve-colour shelf, not the shop's sales names — a rail of two
     // hundred colourways seen once each is not a filter
     ["color", "Colour", i => window.ReportCalc.colourFamilies(i && i.colorways)],
-    ["brand", "Brand", i => [(i && i.brand) || ""].filter(Boolean)],
   ];
   const T = () => window.TrendCalc;
   const facetPick = {};                       // key -> Set of chosen values
@@ -1264,10 +1273,15 @@
       } else body = head.map(row).join("");
       const more = list.length > head.length
         ? `<button class="rmore" data-more="${esc(g.key)}">Show all ${list.length}</button>` : "";
+      /* The name, then a chevron at the far end — the shape of a shop's own
+         filter column. No figure beside the name: the values are counted
+         against the other groups, so one with nothing behind it is never
+         listed at all, and the number only ever restated that. What does
+         appear is the way out of a group that IS narrowing the screen. */
       return `<details class="rgrp"${open ? " open" : ""} data-g="${esc(g.key)}">
-        <summary><span class="rcar">▶</span>${esc(g.label)}${
+        <summary>${esc(g.label)}${
           chosen.size ? `<span class="rn"><button class="rclear" data-clear="${esc(g.key)}">clear ${chosen.size}</button></span>`
-            : `<span class="rn">${list.length}</span>`}</summary>
+            : ""}<span class="rcar">⌄</span></summary>
         <div class="rvals">${body}${more}</div></details>`;
     }).join("");
   }

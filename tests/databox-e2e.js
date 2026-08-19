@@ -29,12 +29,11 @@ const ok = (n, c, x) => { if (c) { pass++; console.log("  ok  " + n); } else { f
 
   ok("the box costs no height until it is asked for",
     await lab.locator("#databox").isHidden());
-  /* Housekeeping moved off the analysis header onto the tab that is about
-     scanning — an orange "needs a look" over a report reads as an error, and
-     the catalog's weight is not a fact about the season. It is one tab away,
-     and this walks the same road a designer does. */
-  await lab.click('.tab[data-view="lists"]');
-  await lab.waitForTimeout(600);
+  /* Housekeeping is off the analysis header — an orange "needs a look" over a
+     report reads as an error, and the catalog's weight is not a fact about the
+     season. It lived on the Scan lists tab until that tab was taken off this
+     page too; now it is at the foot of the LAB, under the figures. This walks
+     the same road a designer does. */
   await lab.click("#datachip");
   await lab.waitForTimeout(700);
   const facts = await lab.locator("#datafacts").innerText();
