@@ -1044,10 +1044,21 @@
      already existed, collapsed into the one the designer reaches for. */
   let newerNow = null;                       // last answer from the worker
   let latestSeen = "";                       // ...and the version it named
-  function checkNewer() {
+  /* Ask the repo, do not read yesterday's answer.
+
+     The worker keeps a six-hour cache, which is right for the timer that runs
+     while nobody is looking. It is wrong here. Opening this panel IS the
+     question, and the cache made the box say "v3.26.0 is the latest" for six
+     hours after v3.27.0 was published — with the person looking straight at
+     the sentence. A stale answer that reads as a confident one is worse than
+     no answer, which is the same rule the dashed "v3.26.0 ?" chip already
+     follows for a check that could not reach GitHub.
+
+     It costs a few hundred bytes on a panel that is opened a few times a day. */
+  function checkNewer(force) {
     return new Promise(res => {
       try {
-        chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
+        chrome.runtime.sendMessage({ type: "updateStatus", force: force !== false }, r => {
           void chrome.runtime.lastError;
           newerNow = !!(r && r.newer);
           latestSeen = (r && r.ok && r.latest) || "";
@@ -1224,7 +1235,7 @@
         foot.textContent = `v${ready.onDisk} is already in your folder — step 3 is all that is left.`;
         return;
       }
-      chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
+      chrome.runtime.sendMessage({ type: "updateStatus", force: true }, r => {
         void chrome.runtime.lastError;
         foot.textContent = !r || !r.ok
           ? `You are running v${running}. Could not reach GitHub to check for a newer one.`
@@ -1360,7 +1371,23 @@
     } catch (e) {
       const m = (e && e.message) || String(e);
       if (/abort/i.test(m)) { /* the picker was dismissed — say nothing */ }
-      else { $("#uautonote").textContent = "Could not finish: " + m + " — try the manual steps below."; said = true; }
+      else {
+        /* "Failed to fetch" is what a blocked origin looks like from in here,
+           and on its own it sent three rounds of guessing at the wrong thing.
+           The download crosses hosts — github.com answers with a redirect to
+           its asset host — so a bare network failure names where it was going
+           and what that means. A reason that does not name the host makes the
+           next round a guess too. */
+        let host = "";
+        try { host = new URL(ZIP_URL).host; } catch (e) {}
+        const why = /failed to fetch|networkerror|load failed/i.test(m)
+          ? `Could not reach the download. It starts at ${host} and GitHub ` +
+            `redirects it to its asset host — if this browser is offline or ` +
+            `something blocks either one, this is what it looks like.`
+          : "Could not finish: " + m + ".";
+        $("#uautonote").textContent = why + " The manual steps below still work.";
+        said = true;
+      }
     } finally {
       btn.disabled = false;
       if (btn.textContent === "Downloading…" || btn.textContent === "Installing…") btn.textContent = was;
@@ -1810,7 +1837,7 @@
         /* A new version has to be visible without going looking for it. The
            banner is the whole update: one button, the same one the version
            chip carries, so nobody has to know where GitHub is. */
-        chrome.runtime.sendMessage({ type: "updateStatus" }, r => {
+        chrome.runtime.sendMessage({ type: "updateStatus", force: true }, r => {
           void chrome.runtime.lastError;
           if (!r || !r.newer) return;
           $("#upver").textContent = "v" + r.latest;
