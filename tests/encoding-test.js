@@ -1,4 +1,13 @@
-/* Unicode noncharacters in a source file brick the whole extension.
+/* What must never be inside a file this extension ships.
+
+   Two things, both of which stop the extension reaching anybody, and neither
+   of which shows up when the code runs:
+
+     · a Unicode noncharacter, which Chrome rejects outright
+     · a line that reads like a script downloader, which an antivirus flags —
+       and a virus scanner reads characters, not intent, so a COMMENT counts
+
+   Unicode noncharacters in a source file brick the whole extension.
 
    U+FFFF, U+FFFE and U+FDD0–U+FDEF are tempting as sort sentinels ("always
    last"), and nothing in Node complains about them. Chrome does: it rejects
@@ -43,6 +52,38 @@ files.forEach(f => {
   }
 });
 ok("no shipped file carries a Unicode noncharacter", dirty.length === 0, dirty.join(" | "));
+
+/* Nothing in a shipped file may read like a script downloader.
+
+   v3.53.0 removed update.bat because Windows Defender flagged it — and the
+   commit explaining why quoted the offending command line into installer.js,
+   which ships. The zip then carried the flagged string itself and the download
+   was blocked as a virus. The fix for one scanner complaint had created
+   another, in the same release.
+
+   So the vocabulary is banned from the files we author. It is a closed list of
+   the tokens scanners key on for the download-and-run family: name the shell,
+   the fetch verb, and the switch that turns script safety off, and the file
+   looks like a dropper however innocent the sentence around it is.
+
+   exceljs.min.js is exempt: it is a third-party bundle, its minifier emits
+   `new Function` and `fromCharCode` as a matter of course, and it has shipped
+   unchanged since long before any of this. Ours is the half we control. */
+const BAIT = /powershell|invoke-webrequest|executionpolicy|cmd\.exe|ActiveXObject|WScript|ADODB|SaveToFile|Scripting\.FileSystemObject|\beval\(|new Function\(/i;
+const VENDOR = /exceljs\.min\.js$/;
+const baited = [];
+files.filter(f => !VENDOR.test(f)).forEach(f => {
+  const p = path.join(ROOT, f);
+  if (!fs.existsSync(p)) return;
+  const m = fs.readFileSync(p, "utf8").match(BAIT);
+  if (m) baited.push(`${f}: "${m[0]}"`);
+});
+ok("no shipped file of ours reads like a script downloader",
+  baited.length === 0, baited.join(" | "));
+ok("…and the detector really catches it",
+  BAIT.test('powershell -NoProfile -ExecutionPolicy Bypass -Command "x"'));
+ok("…while leaving ordinary prose alone",
+  !BAIT.test("the shell was asked to fetch an archive and unpack it"));
 
 // every shipped file exists — a whitelist naming a file that is gone ships a broken zip
 ok("every file on the ship list is present", !dirty.some(d => /MISSING/.test(d)),

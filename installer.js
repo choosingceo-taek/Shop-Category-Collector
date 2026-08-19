@@ -171,17 +171,18 @@
      holds update.bat and update.command.
 
      Those two are why Windows Security says "threats found" after an update.
-     update.bat runs
+     The .bat asked the shell to fetch an archive from the internet, unpack it
+     and copy it over a folder, with the script-execution policy turned off for
+     the duration. That is the shape of a script downloader and Defender's
+     heuristics treat it as one; the file does not have to run to be flagged,
+     it only has to be sitting there when the folder is rescanned, which is
+     exactly what an update causes. Hence: every update, the same alert.
 
-         powershell -NoProfile -ExecutionPolicy Bypass -Command
-           "Invoke-WebRequest -Uri <url> -OutFile %TEMP%\\marketlens.zip"
-
-     then expands it and copies it over a folder — download, unpack, overwrite,
-     with the execution policy turned off. That is the shape of a script
-     downloader and Defender's heuristics treat it as one; the file does not
-     have to run to be flagged, it only has to be sitting there when the folder
-     is rescanned, which is exactly what an update causes. Hence: every update,
-     the same alert.
+     Described rather than quoted, deliberately. Writing that command line out
+     in full put the flagged string INSIDE a file this project ships — the zip
+     carries installer.js — so the fix for one scanner complaint created
+     another. A scanner reads the characters, not the intent, and a comment is
+     characters.
 
      They are also dead. The panel has installed updates by itself since
      v3.17.0, and the double-click scripts were the road before that.
