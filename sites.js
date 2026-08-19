@@ -1462,13 +1462,47 @@
     // price. Heading beats alt because alt is often a generic repeated label
     // ("Product photo") while a title/name-class element is usually the one
     // place the specific product name actually lives.
+    /* A rating badge sitting in the title block is not part of the title.
+
+       Markup puts no space between two elements, so the title block's text
+       runs them together: a card whose title holds a star badge beside the
+       name comes back as "4.3Everyday Seamless Ribbed Tank" — reported from
+       Gymshark, and reproduced. It is the third time this exact shape has
+       cost us a column: "Style Number 1" + "89,00 €" welded into "189,00 €"
+       (v2.7.0) and "New In" + "48 items" welded into "New In48 items"
+       (v2.8.0). The answer is the same one both times — read the SMALLEST
+       element that says the thing.
+
+       So: if a smaller element inside the candidate carries the whole name and
+       what is left over is a leading rating, take the smaller element. The
+       leftover has to LOOK like a rating — one digit and one decimal, at most
+       five, optionally starred — because names legitimately end in numbers
+       (Air Max 90, 501, Tee 2.0) and dropping a real word off a title is worse
+       than carrying a badge. Only a LEADING badge: a trailing number is far
+       more often part of the name. */
+    const RATING_BADGE = /^[\s(★☆⭐*·|/-]*[0-5][.,]\d[\s)★☆⭐*·|/-]*$/;
+    function unbadge(h, text) {
+      const t = String(text || "");
+      if (!/^[\s(★☆⭐*·|/-]*[0-5][.,]\d/.test(t)) return t;    // nothing badge-shaped in front
+      let best = t;
+      const kids = (h && h.querySelectorAll) ? h.querySelectorAll("*") : [];
+      for (const k of kids) {
+        const kt = textOf(k);
+        if (!kt || kt.length < 3 || kt.length >= best.length) continue;
+        if (!t.endsWith(kt)) continue;                  // same words, fewer neighbours
+        if (!RATING_BADGE.test(t.slice(0, t.length - kt.length))) continue;
+        best = kt;
+      }
+      return best;
+    }
+
     function bestName(el, priceText, url) {
       // every heading/title candidate, not just the first — the first one is
       // often a hidden a11y label sitting above the real title
       const heads = (el.querySelectorAll ? el.querySelectorAll(
         'h1,h2,h3,h4,h5,h6,[class*="title" i],[class*="name" i],[class*="heading" i]') : []);
       for (const h of heads) {
-        const ht = textOf(h);
+        const ht = unbadge(h, textOf(h));
         if (ht !== priceText && goodName(ht, h, el)) return ht;
       }
 

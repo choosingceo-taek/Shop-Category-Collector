@@ -754,6 +754,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     })();
     return true;
   }
+  /* An address taken out of a list -> take out what it collected.
+
+     The panel asks twice: once with dry:true for the number it puts in front
+     of the person, then for real. Same call both times, so the number shown is
+     the number removed. */
+  if (msg && msg.type === "catalogForgetPage" && msg.spec) {
+    (async () => {
+      try {
+        const r = await self.CatalogStore.forgetPage(msg.spec);
+        send({ ok: true, ...r });
+      } catch (e) { send({ ok: false, error: String((e && e.message) || e) }); }
+    })();
+    return true;
+  }
   // A finished scan -> accumulate into the catalog.
   if (msg && msg.type === "catalogPut" && msg.scan) {
     (async () => {

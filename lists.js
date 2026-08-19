@@ -264,6 +264,43 @@
     catch (e) { return String(u || "").trim().toLowerCase(); }
   }
 
+  /* Which listing page a product came off.
+
+     A row has to know this or removing an address from a list cannot remove
+     what it collected — and until now nothing did, so a page taken out of the
+     list left its products in the catalog and in the LAB for good.
+
+     The identity is the shop plus the collection, on the same terms
+     collectionSig already uses in the scan: every query parameter counts
+     except a page cursor or a tracking tag, and a key=value fragment counts
+     too (Gap-family SPAs put the real filters there). The host is part of it
+     here because two shops can share a path — the scan only ever compares
+     within one site, this does not.
+
+     Kept in step with content.js's collectionSig on purpose: a copy drifts,
+     so the scan calls THIS one. */
+  const SIG_SKIP = /^(page|pageid|pagenum|pageno|nao|start|offset|begin|mlink|utm_[a-z]+|gclid|fbclid|msclkid|srsltid|icid)$/i;
+  function pageSig(url) {
+    try {
+      const u = new URL(url);
+      const parts = [];
+      u.searchParams.forEach((v, k) => {
+        if (!SIG_SKIP.test(k)) parts.push(k.toLowerCase() + "=" + String(v).trim().toLowerCase());
+      });
+      parts.sort();
+      const h = (u.hash || "").replace(/^#/, "");
+      let frag = "";
+      if (h.includes("=")) {
+        const fp = new URLSearchParams(h);
+        [...fp.keys()].forEach(k => { if (SIG_SKIP.test(k)) fp.delete(k); });
+        fp.sort();
+        frag = fp.toString().toLowerCase();
+      }
+      return u.host.toLowerCase().replace(/^www\./, "") +
+        u.pathname.replace(/\/$/, "").toLowerCase() + "|" + parts.join("&") + "|" + frag;
+    } catch (e) { return String(url || "").trim().toLowerCase(); }
+  }
+
   // ---- storage -------------------------------------------------------------
   const load = () => new Promise(r => {
     try { chrome.storage.local.get(KEY, o => r((o && o[KEY]) || [])); } catch (e) { r([]); }
@@ -459,7 +496,7 @@
     return `${when} at ${s.time}`;
   }
 
-  const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl,
+  const API = { parseList, parseGrid, parseCsv, mergeEntries, normUrl, pageSig,
     toText, toGrid, GRID_HEADER, tierOf, tierMap, load, save, KEY,
     brandFromHost, cleanLabel, brandFor, PLATFORM_LABEL, labelFromUrl, looksLikeUrl,
     isCodeWord, stripCodes,

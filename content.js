@@ -78,38 +78,14 @@ function myTabId() {
 // noisy tracking params. A job only auto-resumes on pages with the SAME
 // signature, so an abandoned job from a different category can never resurface
 // its old items on a new page.
+/* Every query parameter is part of the collection's identity unless it is a
+   page cursor or a tracking tag; a key=value fragment counts too. The rule
+   lives in lists.js (ScanLists.pageSig) because the panel needs the same
+   answer — a row records the page it came off, and removing that page from a
+   list has to find those rows. Two copies of this rule would drift, and a
+   drifted signature deletes the wrong products. */
 function collectionSig(url) {
-  try {
-    const u = new URL(url);
-    const p = u.searchParams;
-    /* Every query parameter is part of the collection's identity unless it is
-       a page cursor or a tracking tag. Naming the meaningful ones one site at
-       a time does not scale and gets it wrong quietly: Abercrombie splits
-       Tees, Tanks and Dresses with categoryId + facet on ONE path, so a
-       short list of known keys made three categories look like one and the
-       second and third were skipped as "already scanning that". Dropping the
-       cursor keys is what keeps a paginated page recognisable as the same
-       collection. */
-    const SKIP = /^(page|pageid|pagenum|pageno|nao|start|offset|begin|mlink|utm_[a-z]+|gclid|fbclid|msclkid|srsltid|icid)$/i;
-    const parts = [];
-    p.forEach((v, k) => { if (!SKIP.test(k)) parts.push(k.toLowerCase() + "=" + String(v).trim().toLowerCase()); });
-    parts.sort();
-    const query = parts.join("&");
-    // Gap-family SPAs put the real category filters in the FRAGMENT
-    // (#pageId=0&style=…&neckline=…) — hoodies and zip-ups share the exact
-    // same path and query. Fold key=value fragments into the signature (minus
-    // the page number and tracking) so they count as different collections;
-    // a plain #anchor has no "=" and changes nothing.
-    const h = (u.hash || "").replace(/^#/, "");
-    let frag = "";
-    if (h.includes("=")) {
-      const fp = new URLSearchParams(h);
-      [...fp.keys()].forEach(k => { if (SKIP.test(k)) fp.delete(k); });
-      fp.sort();
-      frag = fp.toString().toLowerCase();
-    }
-    return u.pathname + "|" + query + "|" + frag;
-  } catch (e) { return url; }
+  try { return self.ScanLists.pageSig(url); } catch (e) { return String(url || ""); }
 }
 
 // Ask the service worker to fetch image bytes (it has cross-origin host access;
@@ -184,6 +160,10 @@ async function catalogSave(j, a, kept, total, queue) {
       brand: (j.items[0] && j.items[0].brand) || "",
       category: (j.items[0] && j.items[0].category) || "",
       url: j.startUrl || location.href,
+      /* Which listing page these rows came off. Without it, taking an address
+         out of a list leaves everything it collected in the catalog and in the
+         LAB — the list says the page is gone and every number still counts it. */
+      pageSig: collectionSig(j.startUrl || location.href),
       scannedAt: new Date().toISOString(),
       count: total,
       listId: inList ? fromList.listId : "",
@@ -1224,19 +1204,38 @@ async function runStep(j) {
          cap, the hard press ceiling, and this bonus's own ceiling. */
       let bonus = 0;
       const BONUS_MAX = 60;
+      /* ONE round = walk to the end of the page, then look.
+
+         v2.8.0 replaced the jump to the bottom with a step-a-screen-at-a-time
+         walk, because a grid loads more when its sentinel enters the viewport
+         and jumping past it — a long footer is enough — leaves the sentinel
+         behind us for good. What it did not change is the test that ends the
+         sweep: count and height unchanged twice. Those two disagreed. Two
+         steps into a long page the count was of course unchanged, so the grid
+         was called stable, the sweep restarted from the top, and it did that
+         four times without ever getting far enough down to load anything.
+         Measured on the Gymshark fixture: it reached y=1296 of 3628 and
+         stopped at 16 of 51, then graded itself "the grid did not hand over
+         the rest" — which was our own walk giving up, not the grid.
+
+         So the walk belongs INSIDE a round, not spread across rounds: a round
+         arrives at the end of the document and only then asks whether anything
+         changed. The steps on the way down are travel and cost a frame or two
+         each; the look at the end gets the full wait. The walk is bounded by
+         its own step count, so a page that grows faster than we walk still
+         stops walking, takes its look, sees the growth and comes round again. */
+      const WALK_STEPS = 40;
       let i = 0;
       for (; i < rounds + bonus && stable < 2; i++) {
-        /* Step down a screen at a time rather than jumping to the bottom.
-           A grid loads more when its sentinel enters the viewport, and jumping
-           straight to the end of the document skips past that sentinel
-           whenever anything tall sits below the grid — a long footer is
-           enough. Measured (harden-probe): a 48-tile grid gave up 16 and the
-           scan called itself complete. Stepping walks the sentinel through the
-           viewport; the last step still lands on the bottom, for the grids
-           that listen there. */
-        const y = window.scrollY, bottom = document.body.scrollHeight;
-        const next = Math.min(y + Math.round(window.innerHeight * 0.9), bottom);
-        window.scrollTo(0, next <= y ? bottom : next);
+        for (let step = 0; step < WALK_STEPS; step++) {
+          if (window.scrollY + window.innerHeight >= document.body.scrollHeight - 4) break;
+          const y = window.scrollY, bottom = document.body.scrollHeight;
+          const next = Math.min(y + Math.round(window.innerHeight * 0.9), bottom);
+          window.scrollTo(0, next <= y ? bottom : next);
+          await sleep(180);
+          const mid = await g();
+          if (!mid || !mid.active || mid.paused) return;     // honor pause/stop mid-scroll
+        }
         await sleep(450);
         const live = await g();
         if (!live || !live.active || live.paused) return;   // honor pause/stop mid-scroll
@@ -1251,7 +1250,9 @@ async function runStep(j) {
           if (n > lastPressN) { pressed = Math.max(0, pressed - 1); bonus = Math.min(BONUS_MAX, bonus + 3); }
           lastPressN = -1;
         }
-        if (n === lastN && h === lastH) stable++; else { stable = 0; if (lastN >= 0 && n > lastN) grew = true; }
+        // measured at the end of the page, where the walk above has left us
+        if (n === lastN && h === lastH) stable++;
+        else { stable = 0; if (lastN >= 0 && n > lastN) grew = true; }
         lastN = n; lastH = h;
         /* Still nothing, and there is time left: keep looking instead of
            calling the page empty. The round budget is not spent on waiting —

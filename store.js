@@ -312,6 +312,13 @@
     const ids = new Set([].concat(oldRec && oldRec.listIds || [], incoming && incoming.listIds || []));
     if (meta && meta.listId) { ids.add(meta.listId); out.listName = meta.listName || out.listName || ""; }
     if (ids.size) out.listIds = [...ids];
+    /* …and which listing page(s) it was seen on. A union for the same reason:
+       two saved addresses can show the same garment (a shop's New In and its
+       Tops), and taking one of them out of a list must not remove a product
+       the other one still collects. */
+    const pages = new Set([].concat(oldRec && oldRec.pages || [], incoming && incoming.pages || []));
+    if (meta && meta.pageSig) pages.add(meta.pageSig);
+    if (pages.size) out.pages = [...pages];
     out.addedAt = (oldRec && oldRec.addedAt) || Date.now();
     out.updatedAt = Date.now();
     out.seenCount = ((oldRec && oldRec.seenCount) || 0) + 1;
@@ -487,6 +494,68 @@
     keys.forEach(k => P.delete(k));
     return new Promise((res, rej) => { t.oncomplete = res; t.onerror = () => rej(t.error); });
   }
+  /* Take an address out of a list, and take out what it collected.
+
+     Until now removing a row from a list removed only the plan: the products
+     that address had already scraped stayed in the catalog, so the LAB kept
+     counting a page the list says is gone, and there was no way to undo a
+     scan except to empty the whole catalog. A list is one research question
+     (v1.71) — an address that is no longer part of it is no longer part of
+     the answer.
+
+     Two ways a row can belong to the address, and they are not the same kind
+     of fact:
+
+       · `pages` — the row records the listing page(s) it was seen on. This is
+         exact, and it is a UNION: a garment that another saved address still
+         collects keeps that address in the list and survives here.
+       · brand + category, for rows scanned before `pages` existed. That pair
+         is what the list row itself shows (ADANOLA / activewear) and what the
+         spreadsheet and the LAB group by, so it is the same claim the screen
+         makes — but it is a NAME, not a record of where the row came from, so
+         it only applies when no surviving address anywhere claims that pair.
+         Deleting a product another page still collects would be worse than
+         leaving one behind: the first is silent data loss, the second is a
+         stale row a re-scan corrects.
+
+     `keepSigs` / `keepPairs` are what the rest of the lists still hold, sent
+     by the caller because only the panel knows the lists. */
+  function pairKey(brand, category) {
+    return String(brand || "").trim().toLowerCase() + " :: " +
+      String(category || "").trim().toLowerCase();
+  }
+  async function forgetPage(spec) {
+    const sig = String((spec && spec.sig) || "");
+    const listId = String((spec && spec.listId) || "");
+    const keepSigs = new Set([].concat((spec && spec.keepSigs) || []).filter(Boolean));
+    const keepPairs = new Set([].concat((spec && spec.keepPairs) || []).filter(Boolean));
+    const pair = pairKey(spec && spec.brand, spec && spec.category);
+    const named = pair !== pairKey("", "") && !keepPairs.has(pair);
+    const items = await all("products");
+    const doomed = [];
+    (items || []).forEach(p => {
+      if (!p || !p.key) return;
+      const pages = [].concat(p.pages || []).filter(Boolean);
+      if (pages.length) {
+        if (!pages.includes(sig)) return;
+        // seen on another page this list (or another list) still holds
+        if (pages.some(s => s !== sig && keepSigs.has(s))) return;
+        doomed.push(p.key);
+        return;
+      }
+      // collected before rows recorded their page — go by what the list row says
+      if (!named) return;
+      if (listId && !([].concat(p.listIds || []).includes(listId))) return;
+      if (pairKey(cleanBrand(p.brand, p.product_url || p.url), cleanCategory(p.category)) !== pair) return;
+      doomed.push(p.key);
+    });
+    /* Counting and removing are the same question asked twice, so they are one
+       function: the number the panel puts in front of the person before they
+       press Remove has to be the number that is actually removed. */
+    if (doomed.length && !(spec && spec.dry)) await removeProducts(doomed);
+    return { removed: doomed.length, kept: (items || []).length - doomed.length };
+  }
+
   /* ---- keeping the catalog from growing without end -----------------------
 
      Measured on this database: about 283 bytes per product once IndexedDB has
@@ -641,7 +710,7 @@
     allTrends, putTrends, clearTrends,
     appendRunRows, getRunRows, clearRunRows,
     putSnapshots, stats, saveProject, deleteProject, projectItems, removeProducts,
-    pruneOlderThan, usage, exportAll, importAll,
+    pruneOlderThan, forgetPage, usage, exportAll, importAll,
     clearAll, productKey, merge, dedupe, cleanImage, cleanBrand, cleanCategory };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   root.CatalogStore = API;

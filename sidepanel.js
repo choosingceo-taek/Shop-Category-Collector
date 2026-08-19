@@ -507,7 +507,7 @@
       el.querySelector(".go").addEventListener("click", () =>
         chrome.tabs.create({ url: curList.entries[i].url }));
       el.querySelector(".del").addEventListener("click", async () => {
-        curList.entries.splice(i, 1); await L.save(lists); renderList(); paintNow();
+        await removeEntry(i);
       });
       el.querySelector(".ren").addEventListener("click", async () => {
         const e = curList.entries[i];
@@ -519,6 +519,54 @@
         await L.save(lists); renderList();
       });
     });
+  }
+
+  /* Taking an address out of a list takes out what it collected.
+
+     Removing the row used to remove only the plan: everything that address had
+     already scraped stayed in the catalog, so PRODUCTS and the LAB went on
+     counting a page the list says is gone, and there was no way to undo a scan
+     short of emptying the whole catalog. A list is one research question
+     (v1.71) — an address that is no longer in it is no longer part of the
+     answer.
+
+     It says the number first, because this is the one place in the tool where
+     pressing ✕ can lose a season's rows, and a number that quietly shrinks is
+     what makes a team stop trusting it. */
+  function forgetPage(spec) {
+    return new Promise(res => {
+      try {
+        chrome.runtime.sendMessage({ type: "catalogForgetPage", spec }, r => {
+          void chrome.runtime.lastError; res((r && r.ok && r.removed) || 0);
+        });
+      } catch (e) { res(0); }
+    });
+  }
+  async function removeEntry(i) {
+    const e = (curList && curList.entries || [])[i];
+    if (!e) return;
+    /* What the rest of the lists still hold. A garment two saved addresses
+       both collect stays — the other one is still asking for it. */
+    const pairOf = x => String(x.brand || "").trim().toLowerCase() + " :: " +
+      String(x.label || "").trim().toLowerCase();
+    const keepSigs = [], keepPairs = [];
+    lists.forEach(l => (l.entries || []).forEach((x, j) => {
+      if (l.id === curList.id && j === i) return;
+      keepSigs.push(L.pageSig(x.url));
+      keepPairs.push(pairOf(x));
+    }));
+    const spec = { sig: L.pageSig(e.url), listId: curList.id,
+      brand: e.brand || "", category: e.label || "", keepSigs, keepPairs };
+    const what = `${e.brand || hostOf(e.url)}${e.label ? " · " + e.label : ""}`;
+    const n = await forgetPage(Object.assign({ dry: true }, spec));
+    const text = n
+      ? `Remove ${what}? The ${n} product${n === 1 ? "" : "s"} it collected ${n === 1 ? "goes" : "go"} too — out of PRODUCTS, out of the LAB, out of the next spreadsheet.`
+      : `Remove ${what}?`;
+    if (!await confirmIn(text)) return;
+    const gone = n ? await forgetPage(spec) : 0;
+    curList.entries.splice(i, 1);
+    await L.save(lists); renderList(); paintNow();
+    toast(gone ? `Removed · ${gone} product${gone === 1 ? "" : "s"} gone` : "Removed");
   }
 
   function fillListSelect() {
