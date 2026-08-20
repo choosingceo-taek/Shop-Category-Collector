@@ -793,18 +793,14 @@
            brands above is the only thing that moves. -->
       <div class="runbar">
         <div class="qstate" id="qstate" hidden></div>
-        <!-- What the list holds, and nothing to press.
+        <!-- The count that used to sit here is gone (asked for).
 
-             There were two buttons here and both said something the screen
-             already offers: the transport bar directly below makes the
-             spreadsheet, and the tab above opens this list's products (that
-             is what DROPS shows — the list open in RADAR, v3.31.0). Two ways
-             to the same place drift apart and neither ends up being the one
-             people learn. The sentence stays because it is a fact, not a
-             control. -->
-        <div class="result" id="listresult" hidden>
-          <span id="resulttext"></span>
-        </div>
+             The run bar is a transport, and a sentence above it was a line of
+             chrome between the thumb and the list of addresses — which is the
+             thing a person is actually working in. The number is not lost: the
+             DROPS tab counts what this list holds, beside the products it is
+             counting. Height given back to #listbody, which now runs to the
+             bar. -->
         <!-- Three round controls, nothing else: run, hold, stop. Icons
              because the bar is a transport, not a form — and because at this
              size a glyph is read faster than a word. Every scan reads the
@@ -839,7 +835,16 @@
                every photo in the run, so it waits for this. Asleep until a
                finished run has rows to put in it. -->
           <button id="jxlsx" class="rbtn" title="Take the last run as an Excel file" aria-label="Excel">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.6h6.2L18 7.4v4.1h-2V8.4h-3.6V4.6H7v14.8h3.1v2H7a2 2 0 0 1-2-2V4.6a2 2 0 0 1 2-2z"/><path d="M15.9 12.9h2.2v4.4l1.9-1.9 1.5 1.5-4.5 4.5-4.5-4.5 1.5-1.5 1.9 1.9z"/></svg>
+            <!-- A spreadsheet file, drawn in the idiom people know that file
+                 type by: a sheet with a folded corner and the X on it. Drawn
+                 here rather than copied from anyone's logo artwork.
+
+                 It carries its own colour, which is a deliberate exception to
+                 "colour is for state only" — the whole point of the request is
+                 that this button be recognisable as the spreadsheet at a
+                 glance, and the mark is the only thing on the bar that names a
+                 file type rather than an action. The other three stay in ink. -->
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#1D6F42" d="M4.4 2.4h9.3L20 8.7v12.1c0 1-.8 1.8-1.8 1.8H4.4c-1 0-1.8-.8-1.8-1.8V4.2c0-1 .8-1.8 1.8-1.8z"/><path fill="#93D6AE" d="M13.7 2.4 20 8.7h-4.5c-1 0-1.8-.8-1.8-1.8z"/><path fill="#fff" d="M6.9 10.5h2.5l1.7 2.9 1.7-2.9h2.5l-2.9 4.6 3 4.8h-2.5l-1.8-3-1.8 3H6.8l3-4.8z"/></svg>
           </button>
         </div>
       </div>

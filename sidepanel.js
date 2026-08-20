@@ -681,16 +681,11 @@
   const productsOfList = id =>
     id ? products.filter(p => [].concat(p.listIds || []).includes(id)) : [];
 
-  function paintListResult() {
-    const box = $("#listresult");
-    const rows = productsOfList(curList && curList.id);
-    box.hidden = !rows.length;
-    if (!rows.length) return;
-    const brands = new Set(rows.map(r => r.brand).filter(Boolean));
-    $("#resulttext").innerHTML =
-      `<b>${rows.length.toLocaleString()}</b> products collected by this list` +
-      (brands.size ? ` · ${brands.size} brands` : "");
-  }
+  /* The run bar no longer says how many products the list holds — that line
+     stood between the thumb and the addresses, and DROPS counts them where
+     they can be seen. Kept as a no-op so the three callers stay honest about
+     when list membership changes; it is one line to put back. */
+  function paintListResult() {}
 
 
   /* Which tab is doing the work.
