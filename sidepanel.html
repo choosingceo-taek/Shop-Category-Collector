@@ -237,7 +237,14 @@
   .addrow button[aria-expanded="true"] { background:var(--ink); color:var(--cta-ink);
     border-color:var(--ink); }
 
-  .listwrap { padding:0 12px 10px; }
+  /* The card of addresses runs down to the transport bar.
+     Nothing separated them but 22px of page showing through — the card's own
+     bottom margin and this wrapper's padding — and the bar already draws a
+     rule along its top, so the separation survives without the gap. Those
+     pixels are a row of the list instead. */
+  .listwrap { padding:0 12px 0; }
+  #v-collector .listwrap > .panelcard { margin-bottom:0; }
+  #v-collector .listwrap .fs.sites { margin-bottom:0; }
   .panelcard { background:none; border:0; padding:0; margin:0; }
   .panelcard > .cap { display:block; color:var(--muted); margin-bottom:8px; }
   /* The lists, drawn as browser tabs (user request, pointing at Chrome's own

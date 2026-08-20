@@ -413,16 +413,25 @@ const products = Array.from({ length: 24 }, (_, i) => ({
   ok("…and still route on the same values",
     named.views.join("|") === "collector|products", JSON.stringify(named.views));
 
+  /* The box above the transport is gone entirely now, not merely emptied of
+     its two buttons. It counted what the list holds, and that sentence stood
+     between the thumb and the addresses; DROPS counts the same products beside
+     the products. So the height belongs to the list, and what this checks is
+     that the list actually got it. */
   const box = await p.evaluate(() => {
-    const b = document.querySelector("#listresult");
-    return { hidden: !b || b.hidden,
-      text: b ? (b.textContent || "").replace(/\s+/g, " ").trim() : "",
-      buttons: b ? b.querySelectorAll("button").length : -1,
-      gone: document.querySelectorAll("#listxlsx, #listview").length };
+    const bar = document.querySelector(".runbar");
+    const body = document.querySelector("#listbody");
+    const r = body ? body.getBoundingClientRect() : null;
+    const br = bar ? bar.getBoundingClientRect() : null;
+    return { box: document.querySelectorAll("#listresult, #resulttext").length,
+      buttons: document.querySelectorAll("#listxlsx, #listview").length,
+      listBottom: r ? Math.round(r.bottom) : 0, barTop: br ? Math.round(br.top) : 0 };
   });
-  ok("the result box still says what the list holds",
-    box.hidden || /products collected by this list/.test(box.text), JSON.stringify(box));
-  ok("…and has no buttons in it", box.buttons === 0 && box.gone === 0, JSON.stringify(box));
+  ok("the count above the run bar is gone", box.box === 0, JSON.stringify(box));
+  ok("…and so are the two buttons that used to sit under it",
+    box.buttons === 0, JSON.stringify(box));
+  ok("…and the address list runs all the way down to the bar",
+    box.listBottom > 0 && box.barTop - box.listBottom <= 2, JSON.stringify(box));
   ok("the spreadsheet is still one press away on the transport bar",
     await p.evaluate(() => !!document.querySelector(".runbar #jxlsx")));
 
