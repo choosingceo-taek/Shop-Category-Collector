@@ -1868,6 +1868,22 @@ async function runStep(j) {
 // ---- job controls, shared by the popup (via messages) and the on-page FAB ----
 async function startJob(opts) {
   opts = opts || {};
+  /* A run that was stopped stays stopped.
+
+     This writes an ACTIVE job with the status "Starting…", and it is reached
+     from the page-load path — so a navigation already in flight when STOP was
+     pressed would land, start a job, and put that line back on a panel the
+     person had just cleared. The stop is recorded on the queue, so a queued
+     job asks whether the run it belongs to is still running before claiming
+     the screen.
+
+     Not the confirmed cause of the report — that was never reproduced here —
+     but it is the one path by which a stopped run can revive itself, and it
+     costs a read. */
+  if (opts.queued) {
+    const q = await getQueue();
+    if (!q || !q.active) return;
+  }
   // bind the job to THIS tab so browsing in other tabs can't stop or divert it
   const tabId = await myTabId();
   // always a FRESH job tagged with this page's collection signature. startUrl is

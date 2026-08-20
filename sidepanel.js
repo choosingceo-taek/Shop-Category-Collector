@@ -698,6 +698,29 @@
     if (queue && queue.active && queue.tabId != null) return queue.tabId;
     return tab && tab.id;
   }
+  /* A transport button acts on the RECORD, then tells the tab.
+
+     It used to only send a message, and a message is the one thing that is not
+     reliable at the moment these buttons are pressed: the working tab is
+     navigating to the next address, so nothing is listening, the message is
+     dropped, and the panel goes on painting a run that the person just stopped.
+     Measured — press STOP at "Starting…" and the status line still read
+     "1/2 EVERLANE · New In" twelve seconds later.
+
+     Both records live in chrome.storage.local, which this page can write. The
+     scan re-reads them every round and bails on !active or paused, so writing
+     the flag IS the stop; the message only saves a round trip. And the panel
+     repaints from storage.onChanged, so the screen changes on the press
+     instead of waiting for an answer that may never come. */
+  function writeState(key, patch) {
+    return new Promise(res => chrome.storage.local.get(key, o => {
+      const rec = (o && o[key]) || null;
+      if (!rec) return res(null);
+      Object.assign(rec, patch);
+      chrome.storage.local.set({ [key]: rec }, () => res(rec));
+    }));
+  }
+
   function sendEngine(type, cb) {
     const id = engineTab();
     if (id == null) return cb && cb(null);
@@ -1847,32 +1870,39 @@
   });
 
   // Hold / resume. The scan keeps its place, so resuming never re-scrapes.
-  $("#jpause").addEventListener("click", () => {
-    if (job && job.paused) return sendEngine("resume", () => toast("Resumed"));
-    sendEngine("pause", () => toast("On hold — press again to resume"));
+  $("#jpause").addEventListener("click", async () => {
+    const goPaused = !(job && job.paused);
+    await writeState(JOB, goPaused
+      ? { paused: true, status: "Paused (resumable)" }
+      : { paused: false, status: "Resuming…" });
+    toast(goPaused ? "On hold — press again to resume" : "Resumed");
+    // the tab picks the flag up on its own next round; this only makes it sooner
+    sendEngine(goPaused ? "pause" : "resume", () => {});
   });
 
   /* Stop. One button, and the question is asked at the moment it matters with
      the safe answer — keep what was collected — as the default action. */
   $("#jreset").addEventListener("click", async () => {
     const running = !!(queue && queue.active);
-    const rows = (queue && (queue.rows || []).length) || 0;
+    /* rowCount, not rows. The rows array moved into IndexedDB in v1.82.0 and
+       this line went on reading the field it left behind — always zero, so the
+       run never took the branch that actually stops it and the dialog never
+       said how much was at stake. */
+    const rows = (queue && queue.rowCount) || 0;
     const ok = await confirmIn(running && rows
       ? `Stop the run?\nThe ${rows} products collected so far will be saved to Excel.`
       : "Stop the scan?\nProducts already in the catalog are kept.");
     if (!ok) return;
-    const clearStorage = () => chrome.storage.local.get(QUEUE, o => {
-      const q = o && o[QUEUE];
-      if (q) { q.active = false; q.rows = []; chrome.storage.local.set({ [QUEUE]: q }); }
-    });
-    if (running && rows) {
-      return sendEngine("queueStop", r => {
-        if (!r) { clearStorage(); return toast("Stopped (tab was gone — nothing saved)"); }
-        toast("Stopping — saving what was collected to Excel");
-      });
-    }
-    clearStorage();
-    sendEngine("reset", () => toast("Stopped"));
+    /* Stop the records first, both of them. The queue is what the run walks;
+       the job is the scan of the current address, and it is the one whose
+       status line said "Starting…" long after the run was over. Whether the
+       tab answers or not, the scan reads these on its next round and stops. */
+    await writeState(QUEUE, { active: false, finishedAt: Date.now() });
+    await writeState(JOB, { active: false, paused: false, status: "Stopped" });
+    toast(rows ? "Stopping — saving what was collected to Excel" : "Stopped");
+    // and let the tab do the parts only it can: the spreadsheet and the health
+    // report. Nothing depends on this arriving — ⬇ can still build the file.
+    sendEngine(running ? "queueStop" : "reset", () => {});
   });
 
   /* One site, or all of them, through the same machinery.
