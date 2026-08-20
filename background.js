@@ -846,7 +846,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
         if (!bytes.length || bytes.length > 8000000) { send({ ok: false, error: "size" }); return; }
         send({ ok: true, base64: toBase64(bytes), ext: detectExt(bytes) });
       } catch (e) {
-        send({ ok: false, error: String((e && e.message) || e) });
+        /* Our own abort must not be quoted back as the shop's answer. The
+           DOMException reads "signal is aborted without reason", which sends
+           whoever reads it looking for a shop that said something it never
+           said — the failure has to name what actually happened (v1.99.0). */
+        const abort = e && (e.name === "AbortError" || /abort/i.test(String(e.message || "")));
+        send({ ok: false, error: abort ? "no answer in 10s" : String((e && e.message) || e) });
       }
     })();
     return true;   // keep the message channel open for the async reply

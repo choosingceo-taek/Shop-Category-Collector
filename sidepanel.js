@@ -860,17 +860,12 @@
       });
       const rows = (got && got.rows) || [];
       if (!rows.length) { say("That run's rows are gone — scan again to rebuild it."); return; }
-      const fetchImage = url => new Promise(r => {
-        try {
-          chrome.runtime.sendMessage({ type: "fetchImage", url }, x => {
-            void chrome.runtime.lastError;
-            r(x && x.ok ? x : null);
-          });
-        } catch (e) { r(null); }
-      });
+      await Photos.warm(rows.map(r => r.image_url),
+        (n, total) => say(`Building the Excel… photos ${n}/${total}`));
+      const fetchImage = url => Photos.get(url);
       const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
         ExcelJS: window.ExcelJS, fetchImage, filters: q.filters || {},
-        onProgress: (i, total) => say(`Building the Excel… photos ${i}/${total}`),
+        onProgress: (i, total) => say(`Building the Excel… rows ${i}/${total}`),
       });
       const tag = String(q.name || "list").replace(/[^\w가-힣]+/g, "_").slice(0, 30);
       const stamp = new Date().toISOString().slice(0, 10);
@@ -2013,13 +2008,11 @@
     if (!rows.length) return toast("Nothing selected");
     const btn = $("#selexport"); btn.disabled = true;
     try {
+      await Photos.warm(rows.map(r => r.image_url),
+        (n, total) => { $("#selcount").textContent = `Photos ${n}/${total}`; });
       const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
         ExcelJS: window.ExcelJS,
-        fetchImage: url => new Promise(res => {
-          if (!url) return res(null);
-          try { chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
-            void chrome.runtime.lastError; res(r && r.ok ? r : null); }); } catch (e) { res(null); }
-        }),
+        fetchImage: url => Photos.get(url),
         filters: {},
         onProgress: (i, total) => { $("#selcount").textContent = `Images ${i}/${total}`; },
       });

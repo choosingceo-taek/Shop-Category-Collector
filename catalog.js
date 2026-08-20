@@ -834,17 +834,13 @@
      read and sent on rather than served. */
   const THUMB_W = 480, THUMB_Q = 0.8;
 
-  function fetchImage(url) {
-    return new Promise(res => {
-      if (!url) return res(null);
-      try {
-        chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
-          void chrome.runtime.lastError;
-          res(r && r.ok ? r : null);
-        });
-      } catch (e) { res(null); }
-    });
-  }
+  /* Photos.get / Photos.warm replace the private copy that used to live here.
+     There were six copies of that three-line wrapper across this file and the
+     panel, so the loop was serial in six places at once and a fix reached one
+     screen. The shared one fetches eight at a time, asks each address once,
+     and stops asking a host that will not answer. */
+  const scaled = new Map();     // the same photograph, fitted once
+
   function downscale(dataUrl) {
     return new Promise(res => {
       const img = new Image();
@@ -863,25 +859,45 @@
     });
   }
 
-  async function makeReport() {
+  /* say(text) goes to whichever control was pressed. The builder used to write
+     its progress onto #report, which is not drawn in the LAB — so the button a
+     designer actually presses said "Building…" and then nothing at all for as
+     long as it took. Ten minutes of an unchanging button is indistinguishable
+     from a dead one, and that is what was reported. */
+  async function makeReport(onProgress) {
     const rows = visible();
     if (!rows.length) return alert("No products to put in a report.");
     const btn = $("#report");
     const label = btn.textContent;
     btn.disabled = true;
+    const say = t => { btn.textContent = t; if (onProgress) { try { onProgress(t); } catch (e) {} } };
 
+    /* A build that throws used to end in silence: the button re-enabled and
+       nothing was said, which reads exactly like a button that does nothing.
+       Whatever went wrong, it says so. */
+    try {
     const images = {};
-    let done = 0, ok = 0;
-    for (const r of rows) {
-      btn.textContent = `Embedding images… ${++done}/${rows.length}`;
-      if (!r.image_url || !r.product_url) continue;
-      const got = await fetchImage(r.image_url);
-      if (!got) continue;
-      const small = await downscale("data:image/" + (got.ext || "jpeg") + ";base64," + got.base64);
+    let ok = 0;
+    const wanted = rows.filter(r => r.image_url && r.product_url);
+    say(wanted.length ? "Photos 0/" + wanted.length : "Building…");
+    await window.Photos.warm(wanted.map(r => r.image_url),
+      (n, total) => say(`Photos ${n}/${total}`));
+
+    let done = 0;
+    for (const r of wanted) {
+      if (++done % 20 === 0 || done === wanted.length) say(`Fitting ${done}/${wanted.length}`);
+      let small = scaled.get(r.image_url);
+      if (small === undefined) {
+        const got = await window.Photos.get(r.image_url);
+        small = got
+          ? await downscale("data:image/" + (got.ext || "jpeg") + ";base64," + got.base64)
+          : null;
+        scaled.set(r.image_url, small);
+      }
       if (small) { images[r.product_url] = small; ok++; }
     }
 
-    btn.textContent = "Building the report…";
+    say("Building the report…");
     /* The LAB section of the file is the LAB — rendered by the same function
        that draws the screen, into an element nobody sees.
 
@@ -936,17 +952,26 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 8000);
 
-    btn.disabled = false; btn.textContent = label;
     const mb = (blob.size / 1048576).toFixed(1);
+    // a picture that is missing says which host and why, or the next round of
+    // looking for it starts from a guess (v1.99.0)
+    const trouble = window.Photos.troubleLine();
     alert(`Report saved.\n${rows.length} products · ${ok} images embedded · ${mb} MB\n\n` +
-      `Images and figures live inside the file, so it opens the same with no internet, even after the shop removes the products.`);
+      `Images and figures live inside the file, so it opens the same with no internet, even after the shop removes the products.` +
+      (trouble ? `\n\nSome photos did not come:\n${trouble}` : ""));
+    } catch (e) {
+      alert("The report could not be built.\n" + ((e && e.message) || e) +
+        `\n\n${rows.length} products were in it. Narrowing the list, or the period, makes a smaller one.`);
+    } finally { btn.disabled = false; btn.textContent = label; }
   }
   $("#report").addEventListener("click", makeReport);
 
   /* The LAB's own button. It presses the one above rather than calling the
      builder again — a second caller is a second thing to keep in step, and
-     this is the same file either way. The progress the builder writes goes on
-     the hidden button, so this one carries its own. */
+     this is the same file either way. The builder's progress used to be
+     written only onto that hidden button — so the one being looked at said
+     "Building…" and then nothing for as long as it took. It now hands the
+     builder a place to say it, and that place is the button that was pressed. */
   const labXlsxBtn = $("#labxlsx");
   if (labXlsxBtn) {
     labXlsxBtn.addEventListener("click", async () => {
@@ -954,7 +979,7 @@
       const was = em ? em.textContent : "";
       labXlsxBtn.disabled = true;
       if (em) em.textContent = "Building…";
-      try { await exportXlsx(); }
+      try { await exportXlsx(t => { if (em) em.textContent = t; }); }
       finally {
         labXlsxBtn.disabled = false;
         if (em) em.textContent = was || "EXCEL";
@@ -972,7 +997,7 @@
       try {
         const t = $("#tmpl");
         if (t) t.value = "standard";          // the dashboard, which is the LAB
-        await makeReport();
+        await makeReport(s => { if (em) em.textContent = s; });
       } finally {
         labHtmlBtn.disabled = false;
         if (em) em.textContent = was || "HTML";
@@ -986,12 +1011,13 @@
   // brands and categories collected over weeks — through the same 12-column
   // builder the scans use, so the sourcing rules (real value / red "정보 확인")
   // and embedded thumbnails are identical.
-  async function exportXlsx() {
+  async function exportXlsx(onProgress) {
     const rows = visible();
     if (!rows.length) return alert("Nothing to export.");
     const btn = $("#xlsx");
     const label = btn.textContent;
     btn.disabled = true;
+    const say = t => { btn.textContent = t; if (onProgress) { try { onProgress(t); } catch (e) {} } };
     try {
       /* One tab per list. A list is one research question, and a single
          sheet with every list poured into it answers none of them — reading
@@ -1008,20 +1034,20 @@
         [].concat(r.listIds || []).includes(l.id)));
       if (unfiled.length) groups.push({ name: "Unfiled", items: unfiled });
 
+      /* The photographs come first, eight at a time. The workbook builder puts
+         one row at a time, so if it also FETCHED one at a time the wait would
+         be the whole catalog end to end; warming first turns its fetch into a
+         lookup that is already answered. */
+      await window.Photos.warm(rows.map(r => r.image_url),
+        (n, total) => say(`Photos ${n}/${total}`));
+
       const { bytes } = await window.WPBExcel.buildKnitWorkbook(rows, {
         ExcelJS: window.ExcelJS,
         groups,
         // the service worker holds the host access needed to read shop CDNs
-        fetchImage: url => new Promise(res => {
-          if (!url) return res(null);
-          try {
-            chrome.runtime.sendMessage({ type: "fetchImage", url }, r => {
-              void chrome.runtime.lastError; res(r && r.ok ? r : null);
-            });
-          } catch (e) { res(null); }
-        }),
+        fetchImage: url => window.Photos.get(url),
         filters: {},
-        onProgress: (i, total) => { btn.textContent = `Embedding images… ${i}/${total}`; },
+        onProgress: (i, total) => say(`Rows ${i}/${total}`),
       });
       const b = $("#brand").value, c = $("#cat").value;
       const proj = projects.find(p => p.id === $("#projf").value);
@@ -1033,10 +1059,12 @@
       a.href = url; a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 8000);
+      const trouble = window.Photos.troubleLine();
       alert(`Exported to Excel.\n${rows.length} products · ${(blob.size / 1048576).toFixed(1)} MB\n\n` +
         (groups.length > 1
           ? `One tab per list: ${groups.map(g => `${g.name} (${g.items.length})`).join(" · ")}`
-          : `One tab: ${(groups[0] && groups[0].name) || "Products"}`));
+          : `One tab: ${(groups[0] && groups[0].name) || "Products"}`) +
+        (trouble ? `\n\nSome photos did not come:\n${trouble}` : ""));
     } catch (e) {
       alert("Export failed: " + (e && e.message || e));
     } finally { btn.disabled = false; btn.textContent = label; }

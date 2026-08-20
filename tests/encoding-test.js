@@ -89,6 +89,37 @@ ok("…while leaving ordinary prose alone",
 ok("every file on the ship list is present", !dirty.some(d => /MISSING/.test(d)),
   dirty.filter(d => /MISSING/.test(d)).join(" | "));
 
+/* Every script a shipped page asks for is itself shipped.
+
+   The ship list is hand-kept, so adding a file means remembering two places.
+   Forget the second and the zip is not merely missing a feature: the page
+   loads, the script 404s, and everything after it in that page is gone — a
+   LAB that opens to nothing. Nothing here caught that, which is why it is
+   here now. The same goes for what the worker importScripts. */
+const asked = new Set();
+/* the pages come from the ship list too — popup.html is still in the repo and
+   is NOT shipped, and a hand-kept list here would have made that a failure
+   about a page nobody installs */
+files.filter(f => f.endsWith(".html")).forEach(page => {
+  const p = path.join(ROOT, page);
+  if (!fs.existsSync(p)) return;
+  const html = fs.readFileSync(p, "utf8");
+  let m;
+  const re = /<script[^>]*\ssrc="([^"]+)"/gi;
+  while ((m = re.exec(html))) if (!/^[a-z]+:/i.test(m[1])) asked.add(m[1].replace(/^\.\//, ""));
+});
+const wk = fs.readFileSync(path.join(ROOT, "background.js"), "utf8");
+let im;
+const imre = /importScripts\(\s*"([^"]+)"/g;
+while ((im = imre.exec(wk))) asked.add(im[1]);
+
+const shipSet = new Set(files);
+const orphans = [...asked].filter(f => !shipSet.has(f));
+ok("every script the shipped pages load is on the ship list", orphans.length === 0,
+  orphans.join(" | "));
+const gone = [...asked].filter(f => !fs.existsSync(path.join(ROOT, f)));
+ok("…and every one of them exists", gone.length === 0, gone.join(" | "));
+
 // the manifest still parses — the one file whose loss takes everything with it
 let mf = null;
 try { mf = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8")); } catch (e) {}
