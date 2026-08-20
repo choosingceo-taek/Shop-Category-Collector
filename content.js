@@ -1003,6 +1003,37 @@ async function noteRedirect(asked, landed) {
 }
 
 // Called when a scan finishes. Advances the queue, or ends it.
+/* Send this tab to an address — once.
+
+   Three ways an assignment behaves, and the old code handled the middle one by
+   doing BOTH things:
+
+     · a different address        -> assigning navigates. One load.
+     · differs only after the #   -> assigning is a same-document move and no
+                                     load happens, so a reload is needed.
+     · exactly the same address   -> assigning ALREADY reloads, and the reload
+                                     that followed it was a second fetch of the
+                                     same page 3ms later.
+
+   Measured on a two-address list: the first address was fetched three times,
+   the rest once each. `here` is the third case — the run starts on the page it
+   is about to scan — so it does not navigate at all: the queue is written, and
+   the block that a load would have run is simply called.
+
+   `mayStay` is only true at the start of a run. Mid-run the queue has advanced
+   and re-entering in place would re-scan the address we just finished. */
+function goTo(url, mayStay) {
+  const here = location.href;
+  if (url === here) {
+    if (mayStay) { bootQueue(); return; }
+    location.reload();
+    return;
+  }
+  const sameDoc = String(url).split("#")[0] === here.split("#")[0];
+  location.href = url;
+  if (sameDoc) location.reload();
+}
+
 async function queueAdvance() {
   const q = await getQueue();
   if (!q || !q.active) return false;
@@ -1063,14 +1094,7 @@ async function queueAdvance() {
   /* Long enough for the caller's reply to leave before the page is torn down.
      It was 1500ms, which is a second of nothing per URL — twenty seconds
      across the team's list — and the ack does not need that long. */
-  setTimeout(() => { try {
-    // A fragment-only step (Gap: next category differs only after the #) never
-    // fires a page load on href assignment, so nothing would restart the scan
-    // and the queue would stall here — force the reload.
-    const here = location.href.split("#")[0];
-    location.href = next.url;
-    if (String(next.url).split("#")[0] === here) location.reload();
-  } catch (e) {} }, 400);
+  setTimeout(() => { try { goTo(next.url); } catch (e) {} }, 400);
   return true;
 }
 
@@ -1981,14 +2005,7 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
         maxItems: m.maxItems == null ? DEFAULT_MAX_ITEMS : m.maxItems,
         withSpec: m.withSpec !== false, filters: m.filters || {}, startedAt: Date.now() });
       send({ ok: true, count: m.list.length });
-      setTimeout(() => { try {
-        // same fragment-only guard as queueAdvance: starting a run from the
-        // page it already shows (or one that differs only after the #) must
-        // still reload so maybeResumeQueue fires
-        const here = location.href.split("#")[0];
-        location.href = m.list[0].url;
-        if (String(m.list[0].url).split("#")[0] === here) location.reload();
-      } catch (e) {} }, 60);
+      setTimeout(() => { try { goTo(m.list[0].url, true); } catch (e) {} }, 60);
     })();
     return true;
   }
@@ -2033,7 +2050,15 @@ function ownsAndMatches(job, myTab, sig) {
   if (job.phase && job.phase !== "list") return true;
   return !!job.sig && job.sig === sig;                                          // same collection only
 }
-(async () => {
+/* What a page load does when it arrives: pick up a running job, or pick up the
+   list run that is waiting for this address.
+
+   Named, because a reload was the only way to reach it. Starting a run on the
+   page it already shows had to throw the page away and fetch it again purely
+   to re-enter here — measured on a two-address list, the first address was
+   fetched THREE times and every other address once. Calling it is one load
+   instead of three. */
+async function bootQueue() {
   const j = await g();
   const me = await myTabId();
   if (j && j.active) {
@@ -2079,4 +2104,5 @@ function ownsAndMatches(job, myTab, sig) {
   if (!adapter()) return;                       // unsupported page — leave it alone
   startJob({ withSpec: q.withSpec !== false, filters: q.filters || {}, queued: true,
     maxItems: q.maxItems });
-})();
+}
+bootQueue();
