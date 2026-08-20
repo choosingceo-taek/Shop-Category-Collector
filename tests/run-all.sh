@@ -19,6 +19,7 @@ for t in $PLAIN; do
     echo "$out" | grep -E "passed,|clean ·" | tail -1
   else
     echo "$out" | grep -E "passed,|failing|HARNESS" | tail -1
+    echo "$out" | grep -A1 "^FAIL" | head -6 | sed 's/^/                   /'
     fails="$fails $t"
   fi
 done
@@ -29,6 +30,10 @@ for t in $BROWSER; do
     echo "$out" | grep "passed," | tail -1
   else
     echo "$out" | grep -E "passed,|HARNESS" | tail -1
+    # and WHICH assertion, with the line under it that says what was measured.
+    # Without this a failure is only a count, and answering "which one" meant
+    # running the whole suite again to find out.
+    echo "$out" | grep -A1 "^FAIL" | head -6 | sed 's/^/                   /'
     fails="$fails $t"
   fi
 done
