@@ -748,6 +748,28 @@
     return Date.now() - beat <= STALL_MS;
   }
 
+  /* The same rule for the job.
+
+     v3.37.0 gave the QUEUE a heartbeat because a run that ended without
+     clearing itself left the panel showing progress for ever. The job — the
+     scan of one address — was left trusting its own `active` flag, and it is
+     the record behind the "Starting…" line and the filling gauge. So a job
+     that stopped writing keeps that line on screen, keeps the gauge moving,
+     and keeps ▶ disabled: the screen says a scan is running and the one
+     control that could start a new one is asleep.
+
+     Every write stamps `at` (v1.93.0), and a scan writes constantly — a grid
+     scroll, a product page, a saved row. Four quiet minutes is a leftover, not
+     a scan. Same number as the queue, the worker's watchdog and the restart
+     guard. */
+  function jobLive(j) {
+    if (!j || !j.active) return false;
+    if (j.paused) return true;                   // held on purpose
+    const beat = j.at || 0;
+    if (!beat) return true;                      // written before heartbeats existed
+    return Date.now() - beat <= STALL_MS;
+  }
+
   function paintQueue() {
     const box = $("#qstate");
     const running = queueLive(queue);
@@ -771,7 +793,7 @@
     paintLive();          // the controls depend on BOTH the job and the queue
   }
   function paintLive() {
-    const on = !!(job && job.active);
+    const on = jobLive(job);
     $("#live").classList.toggle("on", on);
     // clear it when the run ends — a leftover "저장됨…" line with a progress bar
     // reads as "still working" long after the scan is done

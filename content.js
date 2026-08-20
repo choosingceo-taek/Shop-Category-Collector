@@ -2021,6 +2021,16 @@ chrome.runtime.onMessage.addListener((m, _s, send) => {
         maxItems: m.maxItems == null ? DEFAULT_MAX_ITEMS : m.maxItems,
         withSpec: m.withSpec !== false, filters: m.filters || {}, startedAt: Date.now() });
       send({ ok: true, count: m.list.length });
+      /* A new run does not inherit the last one's job.
+
+         bootQueue steps aside when a job is already active — correctly, since
+         two scans in one tab would fight. But a job left behind by a run that
+         ended badly is still "active", so the next ▶ wrote a fresh queue,
+         found that ghost, and stepped aside from a run that had not started.
+         The panel then showed "Starting…" and a filling gauge for a scan that
+         did not exist, with ▶ disabled because it believed one was running.
+         Pressing STOP could not help: STOP is what had failed to close it. */
+      await clear();
       setTimeout(() => { try { goTo(m.list[0].url, true); } catch (e) {} }, 60);
     })();
     return true;
